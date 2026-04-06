@@ -2,9 +2,11 @@
 
 ## 0.3.0
 - separate skill directories for each command: `skillweave-promptchain-generate`, `-validate`, `-execute`
-- multi-agent installer script `scripts/install-skills.sh`
+- multi-agent installer script `scripts/install-skills.sh` with correct paths and formats for each agent type
+- **Opencode support**: installs as single `.md` files to `~/.config/opencode/commands/`
+- **Claude Code/Codex/Antigravity support**: installs as directory symlinks to correct paths
 - license changed from MIT to Apache 2.0
-- updated README with automated installation instructions
+- updated README with correct installation paths and formats
 - improved badges and documentation
 
 ## 0.2.0

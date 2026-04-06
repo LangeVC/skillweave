@@ -193,7 +193,7 @@ SkillWeave v0.3.0+ provides separate skill directories for each command with dir
 
 ### Recommended: Automated Installation (All Agents)
 
-Use the installer script to automatically install skills to all detected AI agent directories:
+Use the installer script to automatically install skills to all detected AI agent directories with correct formats for each agent type:
 
 ```bash
 # Clone the repository
@@ -205,49 +205,68 @@ cd skillweave
 ```
 
 The installer will:
-1. Detect all AI agent skill directories on your system
-2. Install all SkillWeave skills as symlinks for easy updates
-3. Create directories for agents that don't exist yet
-4. Provide a summary of installed skills
+1. Detect AI agents on your system with correct paths for each agent type
+2. Install skills in appropriate format for each agent (single files for Opencode, directories for others)
+3. Create symlinks for easy updates
+4. Create directories for agents that don't exist yet
+5. Provide a summary of installed skills
 
 ### Manual Installation (Individual Agents)
 
-If you prefer manual installation or want to install to specific agents:
+If you prefer manual installation or need to install to specific agents:
 
+#### For Opencode (single .md files in commands directory)
 ```bash
 # Clone the repository
 git clone https://github.com/typelicious/skillweave.git
 
-# Install individual skills to any agent directory
-# Replace ~/.config/opencode/skills with your agent's skill directory
+# Create commands directory if it doesn't exist
+mkdir -p ~/.config/opencode/commands
 
-# Generate command
-cp -r skillweave/skills/skillweave-promptchain-generate ~/.config/opencode/skills/
+# Install as single .md files (symlinks recommended for updates)
+ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-generate.md
+ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-validate.md
+ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-execute.md
 
-# Validate command  
-cp -r skillweave/skills/skillweave-promptchain-validate ~/.config/opencode/skills/
-
-# Execute command
-cp -r skillweave/skills/skillweave-promptchain-execute ~/.config/opencode/skills/
-
-# Legacy skill (optional, for compatibility)
-cp -r skillweave/skills/prompt-chain ~/.config/opencode/skills/
+# Legacy skill (optional, requires /load)
+ln -sf $PWD/skillweave/skills/prompt-chain/SKILL.md ~/.config/opencode/commands/prompt-chain.md
 ```
 
-### Common Agent Skill Directories
+#### For Claude Code, Codex, Antigravity (directory structure)
+```bash
+# Clone the repository
+git clone https://github.com/typelicious/skillweave.git
 
-- **Opencode**: `~/.config/opencode/skills/`
-- **Claude Code**: `~/.config/claude-code/skills/`
-- **Codex**: `~/.config/codex/skills/`
-- **Gemini CLI**: `~/.config/gemini-cli/skills/`
-- **Antigravity**: `~/.config/antigravity/skills/`
-- **OpenClaw**: `~/.config/openclaw/skills/`
-- **Aider**: `~/.config/aider/skills/`
-- **Windsurf**: `~/.config/windsurf/skills/`
+# Create skills directories
+mkdir -p ~/.claude/skills ~/.codex/skills ~/.antigravity/skills
+
+# Install as directory symlinks
+ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate ~/.claude/skills/
+ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate ~/.claude/skills/
+ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute ~/.claude/skills/
+ln -sf $PWD/skillweave/skills/prompt-chain ~/.claude/skills/
+
+# Repeat for other agents with their respective paths
+```
+
+### Correct Agent Directories
+
+The installer supports these agent paths with correct formats:
+
+| Agent | Type | Path | Format |
+|-------|------|------|--------|
+| **Opencode** | Single file | `~/.config/opencode/commands/` | `.md` files |
+| **Claude Code** | Directory | `~/.claude/skills/` | Directory structure |
+| **Codex** | Directory | `~/.codex/skills/` | Directory structure |
+| **Gemini CLI** | Directory | `~/.config/gemini-cli/skills/` | Directory structure |
+| **Antigravity** | Directory | `~/.antigravity/skills/` | Directory structure |
+| **OpenClaw** | Directory | `~/.config/openclaw/skills/` | Directory structure |
+| **Aider** | Directory | `~/.config/aider/skills/` | Directory structure |
+| **Windsurf** | Directory | `~/.config/windsurf/skills/` | Directory structure |
 
 ### Using the Skills
 
-Direct commands without `/load`:
+Direct commands without `/load` (for separate skill installations):
 - `/skillweave-promptchain-generate topic="[topic]" domain="[domain]"`
 - `/skillweave-promptchain-validate sequence="[sequence]"`
 - `/skillweave-promptchain-execute sequence="[sequence]" inputs="[JSON]"`
@@ -261,10 +280,14 @@ Direct commands without `/load`:
 
 ### Legacy: prompt-chain (v0.1.0)
 
-The original `prompt-chain` skill remains available for compatibility:
+The original `prompt-chain` skill remains available for compatibility (requires `/load`):
 
 ```bash
-cp -r skillweave/skills/prompt-chain ~/.config/opencode/skills/
+# Install as directory for directory-based agents
+ln -sf $PWD/skillweave/skills/prompt-chain ~/.claude/skills/
+
+# Or as single file for Opencode
+ln -sf $PWD/skillweave/skills/prompt-chain/SKILL.md ~/.config/opencode/commands/prompt-chain.md
 ```
 
 Usage with `/load`:
