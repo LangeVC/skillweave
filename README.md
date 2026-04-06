@@ -1,10 +1,10 @@
 # SkillWeave
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.2.0)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.3.0)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
-[![Skill](https://img.shields.io/badge/skill-skillweave--promptchain-blue)](skills/skillweave-promptchain/SKILL.md)
+[![Skills](https://img.shields.io/badge/skills-4%20commands-blue)](skills/)
 [![Status](https://img.shields.io/badge/status-early%20MVP-yellow)](https://github.com/typelicious/skillweave)
 [![Repo Safety](https://img.shields.io/badge/repo%20safety-checked-green.svg)](SECURITY.md)
 
@@ -189,71 +189,85 @@ If this direction is relevant to your work, the best starting point is:
 
 ## Multi-Agent Quickstart
 
-SkillWeave provides two skill formats for structured prompt sequence workflows. The new `skillweave-promptchain` skill offers direct commands with `/skillweave-*` prefixes, while `prompt-chain` is the original skill format.
+SkillWeave v0.3.0+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
 
-### Recommended: skillweave-promptchain (v0.2.0+)
-Direct commands with `/skillweave-*` prefixes for faster access:
+### Recommended: Automated Installation (All Agents)
 
-#### Opencode
+Use the installer script to automatically install skills to all detected AI agent directories:
+
+```bash
+# Clone the repository
+git clone https://github.com/typelicious/skillweave.git
+cd skillweave
+
+# Run the multi-agent installer
+./scripts/install-skills.sh
+```
+
+The installer will:
+1. Detect all AI agent skill directories on your system
+2. Install all SkillWeave skills as symlinks for easy updates
+3. Create directories for agents that don't exist yet
+4. Provide a summary of installed skills
+
+### Manual Installation (Individual Agents)
+
+If you prefer manual installation or want to install to specific agents:
+
 ```bash
 # Clone the repository
 git clone https://github.com/typelicious/skillweave.git
 
-# Copy the new skill to opencode skills directory
-cp -r skillweave/skills/skillweave-promptchain ~/.config/opencode/skills/
+# Install individual skills to any agent directory
+# Replace ~/.config/opencode/skills with your agent's skill directory
+
+# Generate command
+cp -r skillweave/skills/skillweave-promptchain-generate ~/.config/opencode/skills/
+
+# Validate command  
+cp -r skillweave/skills/skillweave-promptchain-validate ~/.config/opencode/skills/
+
+# Execute command
+cp -r skillweave/skills/skillweave-promptchain-execute ~/.config/opencode/skills/
+
+# Legacy skill (optional, for compatibility)
+cp -r skillweave/skills/prompt-chain ~/.config/opencode/skills/
 ```
 
-#### Claude Code
-```bash
-# Copy new skill to Claude Code skills directory
-cp -r skillweave/skills/skillweave-promptchain ~/.config/claude-code/skills/
-```
-*Note: Check Claude Code documentation for exact skill path.*
+### Common Agent Skill Directories
 
-#### Codex
-```bash
-# Copy new skill to Codex skills directory
-cp -r skillweave/skills/skillweave-promptchain ~/.config/codex/skills/
-```
+- **Opencode**: `~/.config/opencode/skills/`
+- **Claude Code**: `~/.config/claude-code/skills/`
+- **Codex**: `~/.config/codex/skills/`
+- **Gemini CLI**: `~/.config/gemini-cli/skills/`
+- **Antigravity**: `~/.config/antigravity/skills/`
+- **OpenClaw**: `~/.config/openclaw/skills/`
+- **Aider**: `~/.config/aider/skills/`
+- **Windsurf**: `~/.config/windsurf/skills/`
 
-#### Gemini CLI
-```bash
-# Copy new skill to Gemini CLI skills directory
-cp -r skillweave/skills/skillweave-promptchain ~/.config/gemini-cli/skills/
-```
+### Using the Skills
 
-#### Antigravity
-```bash
-# Copy new skill to Antigravity skills directory
-cp -r skillweave/skills/skillweave-promptchain ~/.config/antigravity/skills/
-```
-
-#### OpenClaw
-```bash
-# Copy new skill to OpenClaw skills directory
-cp -r skillweave/skills/skillweave-promptchain ~/.config/openclaw/skills/
-```
-
-#### Using the New Skill
 Direct commands without `/load`:
 - `/skillweave-promptchain-generate topic="[topic]" domain="[domain]"`
 - `/skillweave-promptchain-validate sequence="[sequence]"`
 - `/skillweave-promptchain-execute sequence="[sequence]" inputs="[JSON]"`
 
-Example:
+**Examples:**
 ```
 /skillweave-promptchain-generate topic="Wellness business evaluation" domain="wellness"
+/skillweave-promptchain-validate sequence="[paste your prompt sequence here]"
+/skillweave-promptchain-execute sequence="[valid sequence]" inputs='{"business_idea": "Yoga studio"}'
 ```
 
 ### Legacy: prompt-chain (v0.1.0)
-Original skill format with `/load` requirement:
+
+The original `prompt-chain` skill remains available for compatibility:
 
 ```bash
-# Copy the original skill (if needed for compatibility)
 cp -r skillweave/skills/prompt-chain ~/.config/opencode/skills/
 ```
 
-Usage:
+Usage with `/load`:
 ```
 /load prompt-chain
 /generate topic="Wellness business evaluation" domain="wellness"
@@ -263,4 +277,4 @@ Usage:
 
 ## License
 
-MIT
+Apache 2.0 - See [LICENSE](LICENSE) for details.
