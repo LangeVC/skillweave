@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkflowContext",
+  "type": "object",
+  "required": [
+    "sequence_id",
+    "mode",
+    "status",
+    "current_step_id",
+    "completed_steps",
+    "step_outputs",
+    "inputs",
+    "usage_notes",
+    "validation_findings",
+    "errors",
+    "final_output"
+  ],
+  "properties": {
+    "sequence_id": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "generate",
+        "validate",
+        "execute"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "blocked",
+        "failed",
+        "completed"
+      ]
+    },
+    "current_step_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "completed_steps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "step_outputs": {
+      "type": "object"
+    },
+    "inputs": {
+      "type": "object"
+    },
+    "usage_notes": {
+      "type": "object"
+    },
+    "validation_findings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "final_output": {}
+  }
+}

@@ -1,9 +1,10 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.2.0)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
-[![Skill](https://img.shields.io/badge/skill-prompt--chain-blue)](skills/prompt-chain/SKILL.md)
+[![Skill](https://img.shields.io/badge/skill-skillweave--promptchain-blue)](skills/skillweave-promptchain/SKILL.md)
 [![Status](https://img.shields.io/badge/status-early%20MVP-yellow)](https://github.com/typelicious/skillweave)
 [![Repo Safety](https://img.shields.io/badge/repo%20safety-checked-green.svg)](SECURITY.md)
 
@@ -188,58 +189,71 @@ If this direction is relevant to your work, the best starting point is:
 
 ## Multi-Agent Quickstart
 
-SkillWeave's `prompt-chain` skill can be installed in various AI agent tools to enable structured prompt sequence workflows. Below are installation instructions for popular multi-agent platforms:
+SkillWeave provides two skill formats for structured prompt sequence workflows. The new `skillweave-promptchain` skill offers direct commands with `/skillweave-*` prefixes, while `prompt-chain` is the original skill format.
 
-### Opencode
+### Recommended: skillweave-promptchain (v0.2.0+)
+Direct commands with `/skillweave-*` prefixes for faster access:
+
+#### Opencode
 ```bash
 # Clone the repository
 git clone https://github.com/typelicious/skillweave.git
 
-# Copy the skill to opencode skills directory
-cp -r skillweave/skills/prompt-chain ~/.config/opencode/skills/
+# Copy the new skill to opencode skills directory
+cp -r skillweave/skills/skillweave-promptchain ~/.config/opencode/skills/
 ```
 
-### Claude Code
+#### Claude Code
 ```bash
-# Copy skill to Claude Code skills directory (typical location)
-cp -r skillweave/skills/prompt-chain ~/.config/claude-code/skills/
+# Copy new skill to Claude Code skills directory
+cp -r skillweave/skills/skillweave-promptchain ~/.config/claude-code/skills/
 ```
 *Note: Check Claude Code documentation for exact skill path.*
 
-### Codex
+#### Codex
 ```bash
-# Copy skill to Codex skills directory
-cp -r skillweave/skills/prompt-chain ~/.config/codex/skills/
+# Copy new skill to Codex skills directory
+cp -r skillweave/skills/skillweave-promptchain ~/.config/codex/skills/
 ```
 
-### Gemini CLI
+#### Gemini CLI
 ```bash
-# Copy skill to Gemini CLI skills directory
-cp -r skillweave/skills/prompt-chain ~/.config/gemini-cli/skills/
+# Copy new skill to Gemini CLI skills directory
+cp -r skillweave/skills/skillweave-promptchain ~/.config/gemini-cli/skills/
 ```
 
-### Antigravity
+#### Antigravity
 ```bash
-# Copy skill to Antigravity skills directory
-cp -r skillweave/skills/prompt-chain ~/.config/antigravity/skills/
+# Copy new skill to Antigravity skills directory
+cp -r skillweave/skills/skillweave-promptchain ~/.config/antigravity/skills/
 ```
 
-### OpenClaw
+#### OpenClaw
 ```bash
-# Copy skill to OpenClaw skills directory
-cp -r skillweave/skills/prompt-chain ~/.config/openclaw/skills/
+# Copy new skill to OpenClaw skills directory
+cp -r skillweave/skills/skillweave-promptchain ~/.config/openclaw/skills/
 ```
 
-### General Installation
-For any agent tool that supports skills, copy the `prompt-chain` folder to the tool's skills directory. The skill will be automatically detected on next launch.
+#### Using the New Skill
+Direct commands without `/load`:
+- `/skillweave-promptchain-generate topic="[topic]" domain="[domain]"`
+- `/skillweave-promptchain-validate sequence="[sequence]"`
+- `/skillweave-promptchain-execute sequence="[sequence]" inputs="[JSON]"`
 
-### Using the Skill
-Once installed, you can invoke the skill with:
-- `generate`: Create a new prompt sequence
-- `validate`: Review and improve an existing sequence  
-- `execute`: Run a validated sequence step by step
+Example:
+```
+/skillweave-promptchain-generate topic="Wellness business evaluation" domain="wellness"
+```
 
-Example usage in Opencode:
+### Legacy: prompt-chain (v0.1.0)
+Original skill format with `/load` requirement:
+
+```bash
+# Copy the original skill (if needed for compatibility)
+cp -r skillweave/skills/prompt-chain ~/.config/opencode/skills/
+```
+
+Usage:
 ```
 /load prompt-chain
 /generate topic="Wellness business evaluation" domain="wellness"
