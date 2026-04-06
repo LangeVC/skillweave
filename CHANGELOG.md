@@ -1,13 +1,18 @@
 # Changelog
 
+## 0.3.1
+- **FIX**: Multi-agent installer with correct paths and formats for all agents
+- **FIX**: Opencode installation as single `.md` files to `~/.config/opencode/commands/`
+- **FIX**: Claude Code/Codex/Antigravity paths to correct locations (`~/.claude/skills/`, `~/.codex/skills/`, `~/.antigravity/skills/`)
+- **FIX**: Different installation formats per agent type (single files vs directories)
+- **FIX**: Updated README with correct manual installation instructions
+- **IMPROVEMENT**: Better error handling and logging in installer script
+
 ## 0.3.0
 - separate skill directories for each command: `skillweave-promptchain-generate`, `-validate`, `-execute`
-- multi-agent installer script `scripts/install-skills.sh` with correct paths and formats for each agent type
-- **Opencode support**: installs as single `.md` files to `~/.config/opencode/commands/`
-- **Claude Code/Codex/Antigravity support**: installs as directory symlinks to correct paths
+- initial multi-agent installer script (had incorrect paths for some agents)
 - license changed from MIT to Apache 2.0
-- updated README with correct installation paths and formats
-- improved badges and documentation
+- initial README updates for multi-agent installation
 
 ## 0.2.0
 - new `skillweave-promptchain` skill with direct `/skillweave-*` commands
