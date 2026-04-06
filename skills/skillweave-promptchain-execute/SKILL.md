@@ -1,7 +1,7 @@
 ---
 name: skillweave-promptchain-execute
 description: Execute a valid SkillWeave prompt sequence step by step using its own rules and inputs
-argument-hint: sequence="[valid prompt sequence]" inputs='{"key": "value"}'
+argument-hint: sequence="[valid prompt sequence]" inputs="[JSON]"
 ---
 
 # /skillweave-promptchain-execute
