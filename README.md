@@ -1,7 +1,7 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.2-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.3.2)
+[![Version](https://img.shields.io/badge/version-0.3.3-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.3.3)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
 [![Skills](https://img.shields.io/badge/skills-4%20commands-blue)](skills/)
@@ -189,7 +189,7 @@ If this direction is relevant to your work, the best starting point is:
 
 ## Multi-Agent Quickstart
 
-SkillWeave v0.3.2+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
+SkillWeave v0.3.3+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
 
 ### Recommended: Automated Installation (All Agents)
 

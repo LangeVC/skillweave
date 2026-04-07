@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+- **FEATURE**: Attachment detection for `skillweave-promptchain-execute` and `skillweave-promptchain-validate`
+- Skills now accept prompt sequences as .md/.txt file attachments
+- Updated descriptions, usage examples, and parameters
+- Added attachment detection logic description
+- Clarified that generate uses parameters only (no attachments)
+
 ## 0.3.2
 - **FIX**: YAML parsing in `skillweave-promptchain-execute` argument-hint
 - Changed `inputs='{\"key\": \"value\"}'` to `inputs=\"[JSON]\"` to avoid YAML parser errors
