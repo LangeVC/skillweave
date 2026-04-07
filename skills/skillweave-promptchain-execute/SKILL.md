@@ -1,7 +1,7 @@
 ---
 name: skillweave-promptchain-execute
-description: Execute a valid SkillWeave prompt sequence step by step using its own rules and inputs
-argument-hint: sequence="[valid prompt sequence]" inputs="[JSON]"
+description: Execute a valid SkillWeave prompt sequence step by step using its own rules and inputs. Accepts sequence as parameter or .md/.txt attachment.
+argument-hint: sequence="[prompt sequence]" inputs="[JSON]" (or attach .md/.txt file)
 ---
 
 # /skillweave-promptchain-execute
@@ -10,16 +10,27 @@ Run a prompt sequence step by step using its own rules.
 
 **Usage:**
 ```
-/skillweave-promptchain-execute sequence="[valid prompt sequence]" inputs="[JSON inputs]"
+/skillweave-promptchain-execute sequence="[prompt sequence text]" inputs="[JSON inputs]"
 ```
+**Or attach a .md or .txt file** containing the prompt sequence.
 
 **Parameters:**
-- `sequence` (required): Valid prompt sequence to execute
+- `sequence` (optional if file attached): Prompt sequence text to execute
 - `inputs` (required): JSON string containing required inputs
 
-**Example:**
+**Attachment detection:** If no `sequence` parameter is provided, check for attached .md/.txt files. If multiple options exist, ask for clarification.
+
+**Examples:**
+
+**With inline sequence:**
 ```
 /skillweave-promptchain-execute sequence="[sequence]" inputs='{"business_idea": "Yoga studio", "target_region": "Berlin"}'
+```
+
+**With attached file:**
+Attach `sequence.md` or `sequence.txt` and use:
+```
+/skillweave-promptchain-execute inputs='{"business_idea": "Yoga studio"}'
 ```
 
 **Output:**

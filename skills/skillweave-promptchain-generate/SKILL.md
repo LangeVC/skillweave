@@ -1,6 +1,6 @@
 ---
 name: skillweave-promptchain-generate
-description: Generate a standardized SkillWeave prompt sequence from a topic, domain, and goal
+description: Generate a standardized SkillWeave prompt sequence from a topic, domain, and goal. Uses parameters only (no file attachments).
 argument-hint: topic="[topic]" domain="[domain]" goal="[goal]"
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: skillweave-promptchain-validate
-description: Validate an existing SkillWeave prompt sequence against the standard and improve it if needed
-argument-hint: sequence="[prompt sequence]"
+description: Validate an existing SkillWeave prompt sequence against the standard and improve it if needed. Accepts sequence as parameter or .md/.txt attachment.
+argument-hint: sequence="[prompt sequence]" (or attach .md/.txt file)
 ---
 
 # /skillweave-promptchain-validate
@@ -12,14 +12,25 @@ Review an existing prompt sequence against the SkillWeave standard and improve i
 ```
 /skillweave-promptchain-validate sequence="[prompt sequence text]"
 ```
+**Or attach a .md or .txt file** containing the prompt sequence.
 
 **Parameters:**
-- `sequence` (required): Existing prompt sequence to validate
+- `sequence` (optional if file attached): Prompt sequence text to validate
 - `strictness` (optional): Validation strictness level (basic, standard, strict)
 
-**Example:**
+**Attachment detection:** If no `sequence` parameter is provided, check for attached .md/.txt files. If multiple options exist, ask for clarification.
+
+**Examples:**
+
+**With inline sequence:**
 ```
 /skillweave-promptchain-validate sequence="[paste sequence here]"
+```
+
+**With attached file:**
+Attach `sequence.md` or `sequence.txt` and use:
+```
+/skillweave-promptchain-validate
 ```
 
 **Output:**
