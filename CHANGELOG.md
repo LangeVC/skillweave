@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.5
+- **FEATURE**: Intelligent `skillweave-promptchain-execute` with plan/build/mixed mode detection
+- **NEW**: `skillweave-releasechain` development pipeline skill
+- Execute skill now detects sequence type and adapts outputs accordingly
+- Post-execution options: target audience (humanize/machinize/mixed)
+- Build components can trigger automated development pipeline
+- Releasechain handles: review, testing, iteration, commit, push, PR, release, changelog
+- Better integration between execute and releasechain skills
+
 ## 0.3.4
 - **IMPROVEMENT**: Enhanced `skillweave-promptchain-validate` with better output handling
 - Added user prompts for output format: Validation Report, Improved sequence only, Both separate files

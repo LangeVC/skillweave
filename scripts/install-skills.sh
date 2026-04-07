@@ -41,6 +41,7 @@ declare -a SKILLS=(
     "skillweave-promptchain-generate"
     "skillweave-promptchain-validate"
     "skillweave-promptchain-execute"
+    "skillweave-releasechain"
     "prompt-chain"  # Legacy skill for compatibility
 )
 

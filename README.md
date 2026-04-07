@@ -1,10 +1,10 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.4-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.3.4)
+[![Version](https://img.shields.io/badge/version-0.3.5-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.3.5)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
-[![Skills](https://img.shields.io/badge/skills-4%20commands-blue)](skills/)
+[![Skills](https://img.shields.io/badge/skills-5%20commands-blue)](skills/)
 [![Status](https://img.shields.io/badge/status-early%20MVP-yellow)](https://github.com/typelicious/skillweave)
 [![Repo Safety](https://img.shields.io/badge/repo%20safety-checked-green.svg)](SECURITY.md)
 
@@ -189,7 +189,7 @@ If this direction is relevant to your work, the best starting point is:
 
 ## Multi-Agent Quickstart
 
-SkillWeave v0.3.4+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
+SkillWeave v0.3.5+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
 
 ### Recommended: Automated Installation (All Agents)
 
@@ -227,6 +227,7 @@ mkdir -p ~/.config/opencode/commands
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-generate.md
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-validate.md
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-execute.md
+ln -sf $PWD/skillweave/skills/skillweave-releasechain/SKILL.md ~/.config/opencode/commands/skillweave-releasechain.md
 
 # Legacy skill (optional, requires /load)
 ln -sf $PWD/skillweave/skills/prompt-chain/SKILL.md ~/.config/opencode/commands/prompt-chain.md
@@ -270,12 +271,14 @@ Direct commands without `/load` (for separate skill installations):
 - `/skillweave-promptchain-generate topic="[topic]" domain="[domain]"`
 - `/skillweave-promptchain-validate sequence="[sequence]"`
 - `/skillweave-promptchain-execute sequence="[sequence]" inputs="[JSON]"`
+- `/skillweave-releasechain inputs="[JSON]" target="[humanize/machinize/mixed]"`
 
 **Examples:**
 ```
 /skillweave-promptchain-generate topic="Wellness business evaluation" domain="wellness"
 /skillweave-promptchain-validate sequence="[paste your prompt sequence here]"
 /skillweave-promptchain-execute sequence="[valid sequence]" inputs='{"business_idea": "Yoga studio"}'
+/skillweave-releasechain inputs='{"files": ["src/app.js"], "context": "webapp update"}' target="mixed"
 ```
 
 ### Legacy: prompt-chain (v0.1.0)
