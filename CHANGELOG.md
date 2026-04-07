@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4
+- **IMPROVEMENT**: Enhanced `skillweave-promptchain-validate` with better output handling
+- Added user prompts for output format: Validation Report, Improved sequence only, Both separate files
+- Added sequence type detection: plan mode, build mode, mixed
+- Improved sequence must be complete (no placeholder references)
+- Output format adaptation based on sequence type
+- Better documentation of validation interaction process
+
 ## 0.3.3
 - **FEATURE**: Attachment detection for `skillweave-promptchain-execute` and `skillweave-promptchain-validate`
 - Skills now accept prompt sequences as .md/.txt file attachments
