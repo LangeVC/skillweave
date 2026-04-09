@@ -414,6 +414,34 @@ SkillWeave now includes an interactive installer with multiple modes:
 - **Dry-run option**: Preview changes with `--dry-run`
 - **Agent status**: List detected agents with `--list`
 
+### For Developers & Contributors
+
+If you maintain a local fork or development repository, use the update script:
+
+```bash
+./scripts/update-local-skills.sh
+```
+
+This script:
+1. **Copies skills** from your development repo to `~/.skillweave`
+2. **Updates installer** and configuration files
+3. **Checks repository status** (git branch, latest commit)
+4. **Warns if** `~/.skillweave` is a git repository (should be plain directory)
+5. **Offers to run installer** automatically after update
+
+**Typical workflow:**
+```bash
+# 1. Update your development repo
+cd ~/Documents/repositories/github/SkillWeave
+git pull
+
+# 2. Copy to local installation directory
+./scripts/update-local-skills.sh
+
+# 3. Install to agents (interactive selection)
+./scripts/install-skills.sh --interactive
+```
+
 ### Using the Skills
 
 Direct commands without `/load` (for separate skill installations):
