@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.2
+- **FEATURE**: Interactive installer with agent selection modes (`--interactive`, `--uninstall`, `--update`, `--troubleshoot`)
+- **FIX**: Correct agent paths for Gemini CLI (`~/.gemini/skills`) and Qwen Code (`~/.qwen/skills`)
+- **FIX**: Prevent creating directories for non-existent agents (no "file-leichen")
+- **IMPROVEMENT**: Smart agent detection with numeric selection, `all`, or `none` options
+- **DOCS**: Updated README with interactive installation section and corrected agent paths
+
+## 0.4.1
+- **DOCS**: Complete README overhaul with "Product development flow on steroids" branding
+- **DOCS**: Added DEVELOPMENT_WORKFLOW.md with standardized release process
+- **DOCS**: Release conventions and "SkillWeave vX.Y.Z" naming standardization
+- **IMPROVEMENT**: ASCII workflow diagram and enhanced architecture documentation
+- **IMPROVEMENT**: Repository structure updates and clearer onboarding guidance
+
+## 0.4.0
+- **FEATURE**: Blueprint Skill (`/skillweave-blueprint`) for structured PRD creation
+- **FEATURE**: Enhanced Execute Skill with parallel execution and dependency analysis
+- **FEATURE**: Enhanced ReleaseChain Skill with dual-mode (REX/Ralph Loop) execution
+- **ARCHITECTURE**: Parallel execution core with dependency graph analysis
+- **ARCHITECTURE**: Capability-based agent-agnostic design for any AI coding agent
+- **DOCS**: Full workflow example and comprehensive testing suite
+- **PERFORMANCE**: Optimizations for large projects (50+ tasks)
+
 ## 0.3.5
 - **FEATURE**: Intelligent `skillweave-promptchain-execute` with plan/build/mixed mode detection
 - **NEW**: `skillweave-releasechain` development pipeline skill

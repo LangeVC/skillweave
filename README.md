@@ -1,7 +1,7 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.1-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.1)
+[![Version](https://img.shields.io/badge/version-0.4.2-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.2)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
 [![Skills](https://img.shields.io/badge/skills-5%20skills-blue)](skills/)
