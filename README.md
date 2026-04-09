@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/badge/version-0.4.1-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.1)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
-[![Skills](https://img.shields.io/badge/skills-6%20skills-blue)](skills/)
+[![Skills](https://img.shields.io/badge/skills-5%20skills-blue)](skills/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](https://github.com/typelicious/skillweave)
 [![Repo Safety](https://img.shields.io/badge/repo%20safety-checked-green.svg)](SECURITY.md)
 
@@ -200,8 +200,7 @@ skillweave/
 │   ├── skillweave-promptchain-generate/    # Sequence generation
 │   ├── skillweave-promptchain-validate/    # Sequence validation  
 │   ├── skillweave-promptchain-execute/     # Parallel execution engine
-│   ├── skillweave-releasechain/  # Ralph Loop development pipeline
-│   └── prompt-chain/             # Legacy skill (v0.1.0 compatibility)
+│   └── skillweave-releasechain/  # Ralph Loop development pipeline
 ├── src/skillweave/               # Core Python library
 │   ├── orchestrator.py           # Dependency analysis & execution planning
 │   ├── executor.py               # Parallel execution engine
@@ -362,9 +361,6 @@ ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate/SKILL.md ~/.config
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-validate.md
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-execute.md
 ln -sf $PWD/skillweave/skills/skillweave-releasechain/SKILL.md ~/.config/opencode/commands/skillweave-releasechain.md
-
-# Legacy skill (optional, requires /load)
-ln -sf $PWD/skillweave/skills/prompt-chain/SKILL.md ~/.config/opencode/commands/prompt-chain.md
 ```
 
 #### For Claude Code, Codex, Antigravity (directory structure)
@@ -379,7 +375,6 @@ mkdir -p ~/.claude/skills ~/.codex/skills ~/.antigravity/skills
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate ~/.claude/skills/
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate ~/.claude/skills/
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute ~/.claude/skills/
-ln -sf $PWD/skillweave/skills/prompt-chain ~/.claude/skills/
 
 # Repeat for other agents with their respective paths
 ```
@@ -402,6 +397,7 @@ The installer supports these agent paths with correct formats:
 ### Using the Skills
 
 Direct commands without `/load` (for separate skill installations):
+- `/skillweave-blueprint` - Create structured PRD with complexity analysis
 - `/skillweave-promptchain-generate topic="[topic]" domain="[domain]"`
 - `/skillweave-promptchain-validate sequence="[sequence]"`
 - `/skillweave-promptchain-execute sequence="[sequence]" inputs="[JSON]"`
@@ -409,29 +405,14 @@ Direct commands without `/load` (for separate skill installations):
 
 **Examples:**
 ```
+/skillweave-blueprint
 /skillweave-promptchain-generate topic="Wellness business evaluation" domain="wellness"
 /skillweave-promptchain-validate sequence="[paste your prompt sequence here]"
 /skillweave-promptchain-execute sequence="[valid sequence]" inputs='{"business_idea": "Yoga studio"}'
 /skillweave-releasechain inputs='{"files": ["src/app.js"], "context": "webapp update"}' target="mixed"
 ```
 
-### Legacy: prompt-chain (v0.1.0)
 
-The original `prompt-chain` skill remains available for compatibility (requires `/load`):
-
-```bash
-# Install as directory for directory-based agents
-ln -sf $PWD/skillweave/skills/prompt-chain ~/.claude/skills/
-
-# Or as single file for Opencode
-ln -sf $PWD/skillweave/skills/prompt-chain/SKILL.md ~/.config/opencode/commands/prompt-chain.md
-```
-
-Usage with `/load`:
-```
-/load prompt-chain
-/generate topic="Wellness business evaluation" domain="wellness"
-```
 
 ---
 
