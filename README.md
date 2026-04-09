@@ -393,11 +393,31 @@ The installer supports these agent paths with correct formats:
 | **Opencode** | Single file | `~/.config/opencode/commands/` | `.md` files |
 | **Claude Code** | Directory | `~/.claude/skills/` | Directory structure |
 | **Codex** | Directory | `~/.codex/skills/` | Directory structure |
-| **Gemini CLI** | Directory | `~/.config/gemini-cli/skills/` | Directory structure |
+| **Gemini CLI** | Directory | `~/.gemini/skills/` | Directory structure |
 | **Antigravity** | Directory | `~/.antigravity/skills/` | Directory structure |
 | **OpenClaw** | Directory | `~/.config/openclaw/skills/` | Directory structure |
 | **Aider** | Directory | `~/.config/aider/skills/` | Directory structure |
 | **Windsurf** | Directory | `~/.config/windsurf/skills/` | Directory structure |
+| **Qwen Code** | Directory | `~/.qwen/skills/` | Directory structure |
+
+### Interactive Installation
+
+SkillWeave now includes an interactive installer with multiple modes:
+
+```bash
+./scripts/install-skills.sh --interactive
+./scripts/install-skills.sh --uninstall
+./scripts/install-skills.sh --update
+./scripts/install-skills.sh --troubleshoot
+./scripts/install-skills.sh --list
+```
+
+**Features:**
+- **Interactive selection**: Choose which agents to install/update/uninstall
+- **Smart detection**: Only installs to existing agent directories (no file-leichen)
+- **Multiple modes**: Install, uninstall, update, troubleshoot
+- **Dry-run option**: Preview changes with `--dry-run`
+- **Agent status**: List detected agents with `--list`
 
 ### Using the Skills
 
