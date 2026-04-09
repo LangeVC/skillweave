@@ -6,9 +6,73 @@
 
 set +e
 
-SKILLWEAVE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SKILLS_DIR="$SKILLWEAVE_DIR/skills"
-INSTALL_LOG="$SKILLWEAVE_DIR/install.log"
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET_DIR="$HOME/.skillweave"
+SKILLS_DIR="$TARGET_DIR/skills"
+INSTALL_LOG="$TARGET_DIR/install.log"
+
+# Determine if we're running from target directory
+if [ "$SOURCE_DIR" = "$TARGET_DIR" ]; then
+    IS_FROM_TARGET=true
+else
+    IS_FROM_TARGET=false
+fi
+
+# Copy skills from source to target directory if needed
+copy_skills_to_target() {
+    if [ "$IS_FROM_TARGET" = "true" ]; then
+        log "Running from target directory ($TARGET_DIR), no copy needed"
+        return 0
+    fi
+    
+    log "Copying skills from source to target directory..."
+    log "  Source: $SOURCE_DIR"
+    log "  Target: $TARGET_DIR"
+    
+    # Check if target directory is a git repository (should not be)
+    if [ -d "$TARGET_DIR/.git" ]; then
+        log "  WARNING: Target directory ($TARGET_DIR) appears to be a git repository"
+        log "  This may cause issues. Consider removing the .git directory:"
+        log "    rm -rf $TARGET_DIR/.git"
+        log "  Or backing up and starting fresh:"
+        log "    mv $TARGET_DIR $TARGET_DIR.backup && mkdir -p $TARGET_DIR"
+    fi
+    
+    # Create target directory if it doesn't exist
+    [ -z "$DRY_RUN" ] && mkdir -p "$TARGET_DIR"
+    [ -z "$DRY_RUN" ] && mkdir -p "$TARGET_DIR/skills"
+    [ -z "$DRY_RUN" ] && mkdir -p "$TARGET_DIR/scripts"
+    
+    # Copy skills directory
+    if [ -d "$SOURCE_DIR/skills" ]; then
+        log "  Copying skills directory..."
+        if [ -z "$DRY_RUN" ]; then
+            # Remove old skills if they exist
+            rm -rf "$TARGET_DIR/skills"/*
+            # Copy new skills
+            cp -r "$SOURCE_DIR/skills"/* "$TARGET_DIR/skills/"
+        else
+            log "  Would copy: $SOURCE_DIR/skills/* -> $TARGET_DIR/skills/"
+        fi
+    else
+        log "  ERROR: Skills directory not found in source: $SOURCE_DIR/skills"
+        return 1
+    fi
+    
+    # Copy installer script
+    if [ -f "$SOURCE_DIR/scripts/install-skills.sh" ]; then
+        log "  Copying installer script..."
+        if [ -z "$DRY_RUN" ]; then
+            cp "$SOURCE_DIR/scripts/install-skills.sh" "$TARGET_DIR/scripts/"
+            chmod +x "$TARGET_DIR/scripts/install-skills.sh"
+        else
+            log "  Would copy: $SOURCE_DIR/scripts/install-skills.sh -> $TARGET_DIR/scripts/"
+        fi
+    fi
+    
+    log "  Skills copied successfully to target directory"
+    return 0
+}
 
 # Agent configuration arrays (Bash 3.x compatible)
 # Using parallel arrays instead of associative arrays for compatibility
@@ -657,9 +721,16 @@ main() {
     
     log "Starting SkillWeave multi-agent skill installation"
     [ -n "$DRY_RUN" ] && log "DRY RUN MODE - simulating installation only"
-    log "SkillWeave directory: $SKILLWEAVE_DIR"
+    log "Source directory: $SOURCE_DIR"
+    log "Target directory: $TARGET_DIR"
     log "Skills available: ${SKILLS[*]}"
     log ""
+    
+    # Copy skills to target directory if needed
+    if ! copy_skills_to_target; then
+        log "ERROR: Failed to copy skills to target directory"
+        exit 1
+    fi
     
     case "$MODE" in
         interactive)
