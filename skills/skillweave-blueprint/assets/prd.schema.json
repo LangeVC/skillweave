@@ -1,0 +1,524 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Product Requirements Document (PRD)",
+  "description": "Structured PRD format adapted from Ralph Loop principles for multi-agent AI development",
+  "type": "object",
+  "required": ["project", "tasks"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project name"
+        },
+        "version": {
+          "type": "string",
+          "description": "PRD version (semantic versioning recommended)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief project description"
+        },
+        "domain": {
+          "type": "string",
+          "description": "Business domain (e.g., saas, ecommerce, healthcare)"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Git repository URL",
+          "format": "uri"
+        },
+        "created": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "format": "date-time"
+        },
+        "updated": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "review", "approved", "active", "completed", "archived"],
+          "description": "PRD status"
+        }
+      },
+      "additionalProperties": false
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "max_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum iterations for Ralph Loop"
+        },
+        "timeout_minutes": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 1440,
+          "description": "Timeout in minutes for execution"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["planning", "code_generation", "testing", "review", "research", "automation", "infrastructure", "any"]
+          },
+          "description": "Required agent capabilities for execution (planning, code_generation, testing, review, etc.)"
+        },
+        "verification_level": {
+          "type": "string",
+          "enum": ["basic", "standard", "strict", "production"],
+          "description": "Verification strictness level"
+        },
+        "completion_promise": {
+          "type": "string",
+          "description": "Completion promise format",
+          "default": "<skillweave-complete>\nstatus: success\ntask: {task_id}\ntimestamp: {timestamp}\n</skillweave-complete>"
+        },
+        "memory_format": {
+          "type": "string",
+          "enum": ["yaml", "json", "markdown"],
+          "description": "Memory file format",
+          "default": "yaml"
+        }
+      },
+      "additionalProperties": false
+    },
+    "objectives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "priority"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Objective ID"
+          },
+          "description": {
+            "type": "string",
+            "description": "Objective description"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Priority level"
+          },
+          "success_metrics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["metric", "target", "measurement"],
+              "properties": {
+                "metric": {
+                  "type": "string",
+                  "description": "Metric name"
+                },
+                "target": {
+                  "type": "string",
+                  "description": "Target value"
+                },
+                "measurement": {
+                  "type": "string",
+                  "description": "How to measure"
+                },
+                "baseline": {
+                  "type": "string",
+                  "description": "Current baseline value"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "description", "acceptance_criteria", "priority", "type"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Z]+-\\d+$",
+            "description": "Task ID (e.g., INFRA-001, API-001)"
+          },
+          "title": {
+            "type": "string",
+            "description": "Task title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed task description"
+          },
+          "agent_type": {
+            "type": "string",
+            "enum": ["plan", "build", "mixed", "test", "review"],
+            "description": "Type of agent work required"
+          },
+          "target_agent": {
+            "type": "string",
+            "description": "Preferred agent name for this task (e.g., 'opencode', 'claude-code', 'gemini', 'any'). Use 'any' for agent-agnostic execution."
+          },
+          "estimated_tokens": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 100000,
+            "description": "Estimated token usage"
+          },
+          "estimated_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 480,
+            "description": "Estimated minutes to complete"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "Priority level"
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]+-\\d+$"
+            },
+            "description": "Task IDs this task depends on"
+          },
+          "acceptance_criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "description": "Binary, testable acceptance criterion"
+            }
+          },
+          "verification_steps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Steps to verify task completion"
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["infrastructure", "database", "api", "ui", "integration", "testing", "documentation", "devops", "security", "performance"],
+            "description": "Task type"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Files involved in this task"
+            }
+          },
+          "resources": {
+            "type": "object",
+            "properties": {
+              "docs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "examples": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "templates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional context or constraints"
+          },
+          "passes": {
+            "type": "boolean",
+            "description": "Whether task has passed verification",
+            "default": false
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of attempts made",
+            "default": 0
+          },
+          "last_attempt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of last attempt"
+          },
+          "best_practice": {
+            "type": "string",
+            "description": "Reference to best practice in agents.md"
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "impact_if_wrong"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Assumption description"
+          },
+          "impact_if_wrong": {
+            "type": "string",
+            "description": "Impact if assumption is incorrect"
+          },
+          "validation_method": {
+            "type": "string",
+            "description": "How to validate this assumption"
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "timeline": {
+          "type": "object",
+          "properties": {
+            "start": {
+              "type": "string",
+              "format": "date"
+            },
+            "end": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number",
+              "minimum": 0
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            }
+          }
+        },
+        "technical": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Technical constraints"
+          }
+        },
+        "regulatory": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Regulatory constraints"
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "properties": {
+        "external": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "owner", "timeline"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Dependency name"
+              },
+              "owner": {
+                "type": "string",
+                "description": "Owner/team responsible"
+              },
+              "timeline": {
+                "type": "string",
+                "description": "Expected timeline"
+              },
+              "risk_level": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"]
+              }
+            }
+          }
+        },
+        "internal": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["team", "deliverable"],
+            "properties": {
+              "team": {
+                "type": "string",
+                "description": "Internal team"
+              },
+              "deliverable": {
+                "type": "string",
+                "description": "What they need to deliver"
+              },
+              "due_date": {
+                "type": "string",
+                "format": "date"
+              }
+            }
+          }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "probability", "impact"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Risk description"
+          },
+          "probability": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "Probability of occurrence"
+          },
+          "impact": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "description": "Impact if occurs"
+          },
+          "mitigation": {
+            "type": "string",
+            "description": "Mitigation strategy"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Risk owner"
+          }
+        }
+      }
+    }
+    },
+    "execution_recommendation": {
+      "type": "object",
+      "description": "Recommended execution strategy based on complexity assessment",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["simple", "standard", "complex"],
+          "description": "Recommended execution mode"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Explanation for the recommendation"
+        },
+        "suggested_workflow": {
+          "type": "string",
+          "enum": ["rex-simple", "ralph-loop-attended", "ralph-loop-overnight", "direct-execution"],
+          "description": "Suggested workflow type"
+        },
+        "estimated_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Estimated number of iterations needed"
+        },
+        "parallel_opportunities": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tasks that could run in parallel"
+        },
+        "recommended_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["planning", "code_generation", "testing", "review", "research", "automation", "infrastructure"]
+          },
+          "description": "Recommended agent capabilities for this project"
+        },
+        "complexity_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Complexity score (0-100)"
+        }
+      }
+    },
+    "additionalProperties": false,
+  "examples": [
+    {
+      "project": {
+        "name": "Todo API",
+        "version": "1.0.0",
+        "description": "REST API for task management",
+        "domain": "productivity",
+        "repository": "https://github.com/example/todo-api",
+        "created": "2024-01-15T10:00:00Z",
+        "status": "draft"
+      },
+      "settings": {
+        "max_iterations": 30,
+        "timeout_minutes": 240,
+        "required_capabilities": ["code_generation", "infrastructure"],
+        "verification_level": "standard"
+      },
+      "tasks": [
+        {
+          "id": "INFRA-001",
+          "title": "Set up project structure",
+          "description": "Initialize repository with TypeScript, Express, and testing setup",
+          "agent_type": "build",
+          "target_agent": "opencode",
+          "estimated_tokens": 1500,
+          "estimated_minutes": 15,
+          "priority": "critical",
+          "dependencies": [],
+          "acceptance_criteria": [
+            "package.json exists with Express and TypeScript dependencies",
+            "tsconfig.json configured with strict mode",
+            "src/index.ts exists with basic Express server",
+            "npm run build compiles without errors",
+            "npm test runs test suite"
+          ],
+          "verification_steps": [
+            "Run: npm run typecheck",
+            "Run: npm run lint",
+            "Run: npm test",
+            "Run: npm run build"
+          ],
+          "type": "infrastructure",
+          "passes": false,
+          "attempts": 0
+        }
+      ],
+      "execution_recommendation": {
+        "mode": "standard",
+        "reason": "1 task, 15 minutes total, simple infrastructure setup",
+        "suggested_workflow": "ralph-loop-attended",
+        "estimated_iterations": 2,
+        "parallel_opportunities": 0,
+        "recommended_capabilities": ["code_generation", "infrastructure"],
+        "complexity_score": 25
+      }
+    }
+  ]
+}

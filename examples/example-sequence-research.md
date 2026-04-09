@@ -7,6 +7,7 @@
 - domain: research
 - intent: execute-target-sequence
 - complexity: medium
+- mode: plan
 
 ## Objective
 Create a structured sequence for a research task.

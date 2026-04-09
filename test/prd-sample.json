@@ -1,0 +1,303 @@
+{
+  "project": {
+    "name": "AI Meeting Notes Summarizer",
+    "version": "1.0.0",
+    "description": "Automatic meeting transcription and AI-powered summary generation",
+    "domain": "saas",
+    "repository": "https://github.com/skillweave/meeting-summarizer",
+    "created": "2025-04-07T10:00:00Z",
+    "status": "draft"
+  },
+  "settings": {
+    "max_iterations": 50,
+    "timeout_minutes": 180,
+    "required_agents": ["opencode", "claude-code"],
+    "verification_level": "standard",
+    "completion_promise": "<skillweave-complete>\nstatus: success\ntask: {task_id}\ntimestamp: {timestamp}\n</skillweave-complete>",
+    "memory_format": "yaml"
+  },
+  "objectives": [
+    {
+      "id": "OBJ-001",
+      "description": "Enable automatic meeting transcription with >90% accuracy",
+      "priority": "critical",
+      "success_metrics": [
+        {
+          "metric": "Transcription accuracy",
+          "target": ">90%",
+          "measurement": "Manual sampling of 100 transcript segments"
+        }
+      ]
+    },
+    {
+      "id": "OBJ-002",
+      "description": "Generate concise summaries within 2 minutes of meeting end",
+      "priority": "high",
+      "success_metrics": [
+        {
+          "metric": "Summary generation time",
+          "target": "<2 minutes",
+          "measurement": "Performance monitoring"
+        }
+      ]
+    },
+    {
+      "id": "OBJ-003",
+      "description": "Extract action items with assignees and deadlines",
+      "priority": "high",
+      "success_metrics": [
+        {
+          "metric": "Action item extraction rate",
+          "target": ">80%",
+          "measurement": "Comparison with human-labeled data"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "INFRA-001",
+      "title": "Set up project structure",
+      "description": "Initialize repository with React frontend and Node.js backend",
+      "agent_type": "build",
+      "target_agent": "opencode",
+      "estimated_tokens": 2000,
+      "estimated_minutes": 20,
+      "priority": "critical",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "package.json exists with React and Express dependencies",
+        "tsconfig.json configured for frontend and backend",
+        "Basic folder structure: src/frontend, src/backend, tests",
+        "npm run dev starts development server",
+        "Git repository initialized with README"
+      ],
+      "verification_steps": [
+        "Run: npm run typecheck",
+        "Run: npm run lint",
+        "Run: npm run build",
+        "Run: npm test"
+      ],
+      "type": "infrastructure",
+      "files": ["package.json", "tsconfig.json", "README.md"],
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "AUTH-001",
+      "title": "Implement user authentication",
+      "description": "Create signup, login, and JWT-based authentication",
+      "agent_type": "build",
+      "target_agent": "opencode",
+      "estimated_tokens": 2500,
+      "estimated_minutes": 30,
+      "priority": "high",
+      "dependencies": ["INFRA-001"],
+      "acceptance_criteria": [
+        "Users can register with email/password",
+        "Users can login and receive JWT token",
+        "Protected routes require authentication",
+        "Password reset flow works",
+        "Tests cover 90% of auth logic"
+      ],
+      "verification_steps": [
+        "Run authentication tests",
+        "Verify JWT token generation/validation",
+        "Test protected API endpoints"
+      ],
+      "type": "security",
+      "files": ["src/backend/auth/*", "src/frontend/components/auth/*"],
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-001",
+      "title": "Implement WebRTC audio capture",
+      "description": "Create frontend component to capture meeting audio via WebRTC",
+      "agent_type": "build",
+      "target_agent": "opencode",
+      "estimated_tokens": 3000,
+      "estimated_minutes": 40,
+      "priority": "high",
+      "dependencies": ["INFRA-001"],
+      "acceptance_criteria": [
+        "Audio capture works in Chrome, Safari, Firefox",
+        "Real-time audio visualization displayed",
+        "Audio streams to backend via WebSocket",
+        "Permissions handling for microphone access",
+        "Stop/start recording controls work"
+      ],
+      "verification_steps": [
+        "Test audio capture in different browsers",
+        "Verify audio quality metrics",
+        "Test WebSocket streaming"
+      ],
+      "type": "ui",
+      "files": ["src/frontend/components/audio/*", "src/backend/websocket/*"],
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-002",
+      "title": "Integrate Whisper transcription",
+      "description": "Connect to OpenAI Whisper API for speech-to-text",
+      "agent_type": "build",
+      "target_agent": "claude-code",
+      "estimated_tokens": 1800,
+      "estimated_minutes": 25,
+      "priority": "critical",
+      "dependencies": ["FEAT-001"],
+      "acceptance_criteria": [
+        "Audio sent to Whisper API returns transcription",
+        "Speaker diarization identifies at least 3 speakers",
+        "Transcription accuracy >90% on test audio",
+        "Real-time transcription with <5 second delay",
+        "Error handling for API failures"
+      ],
+      "verification_steps": [
+        "Run transcription tests with sample audio",
+        "Measure accuracy against known transcripts",
+        "Test error recovery"
+      ],
+      "type": "api",
+      "files": ["src/backend/services/transcription/*"],
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-003",
+      "title": "Implement GPT summarization",
+      "description": "Use GPT to generate meeting summaries from transcripts",
+      "agent_type": "build",
+      "target_agent": "claude-code",
+      "estimated_tokens": 2200,
+      "estimated_minutes": 30,
+      "priority": "high",
+      "dependencies": ["FEAT-002"],
+      "acceptance_criteria": [
+        "Summaries capture main discussion points",
+        "Summary length <20% of original transcript",
+        "Key decisions highlighted",
+        "Generated within 2 minutes of meeting end",
+        "Supports different summary formats (bullet points, paragraphs)"
+      ],
+      "verification_steps": [
+        "Test summarization on sample transcripts",
+        "Evaluate summary quality with human judgment",
+        "Measure generation time"
+      ],
+      "type": "api",
+      "files": ["src/backend/services/summarization/*"],
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-004",
+      "title": "Create action item extraction",
+      "description": "Extract action items with assignees and deadlines from transcripts",
+      "agent_type": "build",
+      "target_agent": "claude-code",
+      "estimated_tokens": 2400,
+      "estimated_minutes": 35,
+      "priority": "high",
+      "dependencies": ["FEAT-002"],
+      "acceptance_criteria": [
+        "Extracts at least 80% of action items mentioned",
+        "Correctly identifies assignees from participant list",
+        "Captures deadlines when mentioned",
+        "Exports to task management tools (Slack, Asana, Jira)",
+        "Action items displayed in UI with assignee tags"
+      ],
+      "verification_steps": [
+        "Test extraction on sample meeting transcripts",
+        "Compare with human-labeled action items",
+        "Verify export functionality"
+      ],
+      "type": "api",
+      "files": ["src/backend/services/action-items/*"],
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "UI-001",
+      "title": "Build meeting dashboard",
+      "description": "Create dashboard to view past meetings, transcripts, and summaries",
+      "agent_type": "build",
+      "target_agent": "opencode",
+      "estimated_tokens": 2800,
+      "estimated_minutes": 45,
+      "priority": "medium",
+      "dependencies": ["AUTH-001"],
+      "acceptance_criteria": [
+        "Dashboard shows list of user's meetings",
+        "Clicking meeting shows transcript and summary",
+        "Action items displayed with status",
+        "Search/filter functionality works",
+        "Responsive design works on mobile/desktop"
+      ],
+      "verification_steps": [
+        "Test dashboard with sample data",
+        "Verify responsive design",
+        "Test search functionality"
+      ],
+      "type": "ui",
+      "files": ["src/frontend/components/dashboard/*"],
+      "passes": false,
+      "attempts": 0
+    }
+  ],
+  "assumptions": [
+    {
+      "description": "Users have reliable internet connection for real-time transcription",
+      "impact_if_wrong": "Need fallback to upload recording",
+      "validation_method": "User survey on internet reliability"
+    },
+    {
+      "description": "Meetings have clear speaker separation",
+      "impact_if_wrong": "Lower transcription accuracy",
+      "validation_method": "Test with overlapping speaker audio"
+    }
+  ],
+  "constraints": {
+    "timeline": {
+      "start": "2025-04-07",
+      "end": "2025-07-07"
+    },
+    "budget": {
+      "amount": 10000,
+      "currency": "USD"
+    },
+    "technical": [
+      "Must support Chrome, Safari, Firefox",
+      "No desktop app initially",
+      "Mobile web responsive design"
+    ]
+  },
+  "dependencies": {
+    "external": [
+      {
+        "name": "OpenAI API (Whisper, GPT)",
+        "owner": "OpenAI",
+        "timeline": "ongoing",
+        "risk_level": "medium"
+      }
+    ],
+    "internal": []
+  },
+  "risks": [
+    {
+      "description": "Transcription accuracy below 90%",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Multiple transcription engines, manual correction option",
+      "owner": "ML Team"
+    },
+    {
+      "description": "Data privacy concerns",
+      "probability": "high",
+      "impact": "medium",
+      "mitigation": "Clear privacy policy, encryption, opt-in consent",
+      "owner": "Security Team"
+    }
+  ]
+}

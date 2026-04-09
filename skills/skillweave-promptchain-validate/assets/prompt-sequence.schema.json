@@ -18,7 +18,33 @@
   ],
   "properties": {
     "metadata": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["plan", "build", "mixed"]
+        },
+        "domain": {
+          "type": "string"
+        },
+        "intent": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "complexity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        }
+      },
+      "additionalProperties": true
     },
     "objective": {
       "type": "string"

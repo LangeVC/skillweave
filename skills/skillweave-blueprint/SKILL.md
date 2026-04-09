@@ -1,0 +1,414 @@
+---
+name: skillweave-blueprint
+description: Create structured PRD (Product Requirements Document) through guided interview. Adapts Ralph Loop concepts for multi-agent AI development. Creates blueprint for promptchain and releasechain workflows.
+argument-hint: idea="[your project idea]" domain="[domain]" (optional parameters)
+---
+
+# /skillweave-blueprint
+
+**Structured product development from idea to blueprint.**  
+Create a complete PRD (Product Requirements Document) through guided interview, adapting Ralph Loop concepts for multi-agent AI development.
+
+**Usage:**
+```
+/skillweave-blueprint idea="[your project idea]" domain="[domain]"
+```
+**Or start interactive interview:**
+```
+/skillweave-blueprint
+```
+
+**Parameters:**
+- `idea` (optional): Initial project idea or concept
+- `domain` (optional): Domain context (e.g., saas, mobile, web, enterprise)
+- `complexity` (optional): Complexity level (simple, medium, complex)
+- `output_format` (optional): Output format (json, markdown, both)
+
+**Example:**
+```
+/skillweave-blueprint idea="AI-powered task management tool" domain="saas"
+```
+
+## Interactive PRD Creation Process
+
+### Phase 1: Discovery Interview
+The skill conducts a structured interview to understand your project:
+
+1. **Project Vision & Goals**
+   - What problem are you solving?
+   - Who are the target users?
+   - What's the core value proposition?
+   - What makes this unique?
+
+2. **Functional Requirements**
+   - Core features and functionality
+   - User workflows and interactions
+   - Integration requirements
+   - Data and storage needs
+
+3. **Technical Considerations**
+   - Preferred tech stack (if any)
+   - Performance requirements
+   - Scalability needs
+   - Security considerations
+
+4. **Success Criteria**
+   - How will you measure success?
+   - What are the key metrics?
+   - What's the timeline?
+   - What are the constraints?
+
+### Phase 2: PRD Generation
+Based on interview responses, creates a structured PRD with:
+
+```
+# Product Requirements Document
+
+## 1. Executive Summary
+- Project overview and vision
+- Business objectives
+- Key differentiators
+
+## 2. Problem Statement
+- Problem being solved
+- Current alternatives and their limitations
+- Opportunity size and impact
+
+## 3. Target Users & Personas
+- Primary user personas
+- Secondary stakeholders
+- User needs and pain points
+
+## 4. Solution Overview
+- Core solution description
+- Key features and capabilities
+- User journey mapping
+
+## 5. Functional Requirements
+### 5.1 Core Features
+- [Feature 1]: Description, acceptance criteria
+- [Feature 2]: Description, acceptance criteria
+
+### 5.2 User Stories
+- As a [user], I want to [action] so that [benefit]
+- Priority: [High/Medium/Low]
+
+## 6. Non-Functional Requirements
+- Performance requirements (response times, load capacity)
+- Security requirements (authentication, data protection)
+- Scalability requirements (growth projections)
+- Compliance requirements (regulations, standards)
+
+## 7. Technical Architecture
+- Proposed tech stack
+- System architecture diagram
+- Data model overview
+- Integration points
+
+## 8. Success Metrics (Binary & Testable)
+- [Metric 1]: Target value, measurement method
+- [Metric 2]: Target value, measurement method
+
+## 9. Scope & Constraints
+### In Scope
+- What WILL be built (Phase 1)
+- What WILL be built (Future phases)
+
+### Out of Scope
+- What WILL NOT be built
+- Explicit limitations
+
+## 10. Timeline & Milestones
+- Development phases
+- Key deliverables
+- Dependencies and risks
+
+## 11. Resource Requirements
+- Development resources
+- Infrastructure needs
+- Third-party services
+
+## 12. Assumptions & Dependencies
+- Key assumptions
+- External dependencies
+- Risk factors and mitigation
+```
+
+### Phase 3: Task Breakdown (prd.json)
+Creates a task list in Ralph Loop format for execution:
+
+```json
+{
+  "projectName": "Project Name",
+  "version": "1.0",
+  "status": "draft",
+  "tasks": [
+    {
+      "id": "ARCH-001",
+      "title": "Set up project structure",
+      "description": "Initialize repository, configure build tools, set up CI/CD",
+      "acceptanceCriteria": [
+        "Repository exists with README",
+        "Package.json/requirements.txt configured",
+        "Build script runs without errors",
+        "CI pipeline passes"
+      ],
+      "priority": "high",
+      "estimatedEffort": "2",
+      "dependsOn": [],
+      "type": "infrastructure",
+      "passes": false
+    },
+    {
+      "id": "FEAT-001",
+      "title": "Implement user authentication",
+      "description": "Create signup, login, password reset functionality",
+      "acceptanceCriteria": [
+        "Users can register with email/password",
+        "Users can login and receive JWT token",
+        "Password reset flow works",
+        "Tests cover 90% of auth logic"
+      ],
+      "priority": "high",
+      "estimatedEffort": "5",
+      "dependsOn": ["ARCH-001"],
+      "type": "feature",
+      "passes": false
+    }
+  ]
+}
+```
+
+### Phase 4: Memory System Setup
+Creates memory files for Ralph Loop execution:
+
+**progress.txt template:**
+```
+## Project: [Project Name]
+## Created: [Date]
+## Status: Planning
+
+### Iteration History
+[Will be populated during execution]
+
+### Key Decisions
+[Will track architectural and implementation decisions]
+
+### Learnings & Patterns
+[Will accumulate knowledge across iterations]
+```
+
+**agents.md template:**
+```
+# Project Patterns & Guidelines
+
+## Architecture Patterns
+- [Patterns discovered during development]
+
+## Code Standards
+- [Coding conventions for this project]
+
+## Gotchas & Solutions
+- [Common issues and their solutions]
+
+## Integration Notes
+- [External service integration details]
+```
+
+## Output Options
+
+The blueprint skill can generate:
+
+1. **Complete PRD Package** (Recommended)
+   - `prd.md` - Full PRD document
+   - `prd.json` - Task list for execution
+   - `progress.txt` - Progress tracking template
+   - `agents.md` - Knowledge base template
+   - `README.md` - Project overview
+
+2. **PRD Only** - Just the PRD document
+3. **Task List Only** - Just the prd.json for execution
+4. **Custom Selection** - Choose specific components
+
+## Integration with SkillWeave Workflow
+
+The blueprint creates the foundation for the complete SkillWeave development flow:
+
+```
+Blueprint → PromptChain → ReleaseChain
+```
+
+1. **Blueprint** creates structured PRD and task list
+2. **PromptChain** uses PRD to generate execution sequences
+3. **ReleaseChain** executes tasks with Ralph Loop principles
+
+## Ralph Loop Adaptations
+
+This blueprint skill adapts key Ralph Loop concepts:
+
+### 1. **Binary Success Criteria**
+- All acceptance criteria must be testable (pass/fail)
+- No subjective criteria like "looks good" or "feels right"
+- Every requirement has a verification method
+
+### 2. **Atomic Task Design**
+- Each task completes in one AI iteration
+- Tasks fit within context window limits
+- Clear dependencies between tasks
+- Natural stopping points for verification
+
+### 3. **Memory Architecture**
+- Short-term memory (`progress.txt`) for iteration tracking
+- Long-term memory (`agents.md`) for accumulated knowledge
+- Structured format for AI readability
+
+### 4. **Feedback Loops**
+- Built-in verification steps for each task
+- Automated testing requirements
+- Quality gates before task completion
+
+## Complexity Assessment & Execution Recommendation
+
+Based on analysis of your PRD tasks, the blueprint provides recommendations for execution strategy:
+
+### Assessment Criteria
+1. **Task Count**: Number of tasks in PRD
+2. **Estimated Duration**: Sum of `estimated_minutes` across tasks
+3. **Dependency Complexity**: Depth of dependency graph, cycles
+4. **Agent Diversity**: Number of different agent types required
+5. **Risk Level**: Based on risk assessment in PRD
+6. **Task Type Variety**: Different categories (infrastructure, API, UI, etc.)
+
+### Recommended Execution Strategies
+
+#### 1. **Simple Mode (REX-style)**
+- **When**: 1-3 tasks, <60 minutes total, simple dependencies
+- **Workflow**: Plan → Implement → Review → Done
+- **Best for**: Quick fixes, small features, prototype validation
+- **Tools**: Direct execution with simple feedback loop
+
+#### 2. **Standard Mode (Ralph Loop Attended)**
+- **When**: 4-10 tasks, 1-4 hours total, moderate complexity
+- **Workflow**: Ralph Loop with human checkpoints
+- **Best for**: Feature development, moderate refactoring
+- **Tools**: Full Ralph Loop with progress tracking and memory
+
+#### 3. **Complex Mode (Ralph Loop Overnight)**
+- **When**: 10+ tasks, >4 hours, complex dependencies
+- **Workflow**: Fully autonomous Ralph Loop execution
+- **Best for**: Major features, system overhauls, new projects
+- **Tools**: Overnight execution with comprehensive verification
+
+### Automatic Recommendation
+The blueprint analyzes your PRD and includes an `execution_recommendation` in the generated `prd.json`:
+
+```json
+"execution_recommendation": {
+  "mode": "standard",
+  "reason": "5 tasks, 2.5 hours total, moderate dependencies",
+  "suggested_workflow": "ralph-loop-attended",
+  "estimated_iterations": 8,
+  "parallel_opportunities": 2
+}
+```
+
+### REX vs Ralph Loop Decision Guide
+
+| Aspect | REX (Simple) | Ralph Loop (Standard/Complex) |
+|--------|--------------|-------------------------------|
+| **Task Count** | 1-3 tasks | 4+ tasks |
+| **Duration** | <1 hour | >1 hour |
+| **Dependencies** | Simple, linear | Complex, branching |
+| **Risk** | Low | Medium/High |
+| **Learning Value** | Low (one-off) | High (accumulates knowledge) |
+| **Setup Overhead** | Minimal | Moderate (memory system) |
+| **Best For** | Quick wins, proofs of concept | Production features, systems |
+
+**Rule of thumb**: When in doubt, start with REX for speed, switch to Ralph Loop when complexity emerges.
+
+## Usage Examples
+
+### Example 1: Complete SaaS Application
+```
+/skillweave-blueprint idea="AI-powered content planning platform for marketers" domain="saas"
+```
+
+### Example 2: Internal Tool
+```
+/skillweave-blueprint idea="Employee onboarding automation system" domain="enterprise"
+```
+
+### Example 3: Mobile App
+```
+/skillweave-blueprint idea="Fitness tracking app with social features" domain="mobile"
+```
+
+## Next Steps
+
+After creating the blueprint:
+
+1. **Review the PRD** - Ensure it captures your vision
+2. **Adjust task priorities** - Reorder based on dependencies
+3. **Set up your repository** - Initialize with the generated files
+4. **Run PromptChain** - Generate execution sequences from the PRD
+5. **Execute with ReleaseChain** - Start autonomous development
+
+## Agent-Agnostic Design
+
+SkillWeave Blueprint is designed to be **agent-agnostic** – it works with any AI coding agent, not just specific ones like OpenCode, Claude Code, or Gemini.
+
+### How It Works
+
+1. **Capability-Based Assignment**: Instead of specifying concrete agents, the blueprint defines **required capabilities**:
+   - `planning`: Strategic thinking, architecture design
+   - `code_generation`: Writing and modifying code
+   - `testing`: Creating and running tests
+   - `review`: Code review and quality assessment
+   - `research`: Information gathering and analysis
+   - `automation`: Scripting and workflow automation
+   - `infrastructure`: System setup and configuration
+
+2. **Runtime Agent Mapping**: During execution, the SkillWeave runtime maps these capabilities to available agents based on:
+   - Agent registry and capability declarations
+   - Historical performance data
+   - Current availability and load
+   - User preferences and configurations
+
+3. **Flexible Configuration**: You can still specify preferred agents if needed, but the system defaults to capability-based routing:
+   ```json
+   {
+     "target_agent": "any",  // Let system choose (recommended)
+     "target_agent": "opencode",  // Specific agent preference
+     "required_capabilities": ["code_generation", "testing"]
+   }
+   ```
+
+### Benefits
+
+- **Future-Proof**: Works with new agents as they emerge
+- **Flexible**: Can use different agents for different tasks
+- **Resilient**: Falls back to available agents if preferred ones are unavailable
+- **Optimized**: Routes tasks to best-suited agents automatically
+
+### Integration with SkillWeave Runtime
+
+The blueprint generates PRDs that work with the SkillWeave agent orchestration layer, which handles:
+- Agent discovery and capability registration
+- Task routing based on capabilities
+- Load balancing across multiple agents
+- Fallback strategies and error recovery
+
+This ensures your development plans remain executable regardless of which specific AI coding agents you have access to.
+
+## Companion Files
+
+This skill works with:
+- `references/prd-template.md` - PRD structure template
+- `references/task-breakdown-guide.md` - Task decomposition guidelines
+- `references/ralph-loop-adaptation.md` - Ralph Loop principles for multi-agent
+- `references/complexity-assessment.md` - Complexity scoring and execution recommendations
+- `assets/prd.schema.json` - JSON schema for prd.json
+
+---
+
+**The blueprint skill turns vague ideas into executable development plans, bridging the gap between concept and implementation with AI-assisted structured planning.**

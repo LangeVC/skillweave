@@ -63,6 +63,7 @@ What should be saved as .md?
    - Analyze if sequence is **plan mode** (conceptual, business planning, strategy)
    - Analyze if sequence is **build mode** (development, coding, implementation)  
    - Analyze if sequence is **mixed** (combination of plan and build)
+   - Use detailed heuristics from `references/sequence-type-detection.md` for accurate detection
    - Adapt output structure based on detected type
 
 2. **Complete Improved Sequence:**
@@ -114,5 +115,6 @@ The expected prompt-sequence structure is:
 Use these files if present:
 - `references/format-spec.md`
 - `references/validation-rules.md`
+- `references/sequence-type-detection.md`
 - `assets/prompt-sequence.schema.json`
 - `assets/workflow-context.schema.json`

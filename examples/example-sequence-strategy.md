@@ -7,6 +7,7 @@
 - domain: strategy
 - intent: validate
 - complexity: medium
+- mode: plan
 
 ## Objective
 Prüfe eine Strategie-Idee in einer klaren Schrittlogik.

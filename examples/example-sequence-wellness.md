@@ -7,6 +7,7 @@
 - domain: wellness
 - intent: generate
 - complexity: medium
+- mode: plan
 
 ## Objective
 Erstelle eine strukturierte Prompt-Abfolge zur Bewertung einer Wellness-Geschäftsidee.

@@ -1,0 +1,274 @@
+[2026-04-07 20:42:06] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:42:06] DRY RUN MODE - simulating installation only
+[2026-04-07 20:42:06] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:42:06] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:42:06] 
+[2026-04-07 20:42:06] Processing agent: opencode (single)
+[2026-04-07 20:42:06]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:42:06]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:42:06]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:42:06]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:42:06]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:42:06]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:42:06]   Installed 5 skills for opencode
+[2026-04-07 20:42:07] 
+[2026-04-07 20:42:07] Installation complete
+[2026-04-07 20:42:07] Processed 0 agents
+[2026-04-07 20:42:07] Installed 0 skill instances total
+[2026-04-07 20:42:07] WARNING: No agent directories found. Installing to opencode as default.
+[2026-04-07 20:42:07] Processing agent: opencode (single)
+[2026-04-07 20:42:07]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:42:07]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:42:07]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:42:07]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:42:07]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:42:07]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:42:07]   Installed 5 skills for opencode
+[2026-04-07 20:42:07] Created default opencode installation
+[2026-04-07 20:42:51] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:42:51] DRY RUN MODE - simulating installation only
+[2026-04-07 20:42:51] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:42:51] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:42:51] 
+[2026-04-07 20:42:51] Processing agent: opencode (single)
+[2026-04-07 20:42:51]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:42:51]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:42:51]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:42:51]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:42:51]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:42:51]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:42:51]   Installed 5 skills for opencode
+[2026-04-07 20:43:14] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:43:14] DRY RUN MODE - simulating installation only
+[2026-04-07 20:43:14] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:43:14] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:43:14] 
+[2026-04-07 20:43:14] Processing agent: opencode (single)
+[2026-04-07 20:43:14]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:43:14]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:43:14]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:43:14]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:43:14]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:43:14]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:43:14]   Installed 5 skills for opencode
+[2026-04-07 20:43:24] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:43:24] DRY RUN MODE - simulating installation only
+[2026-04-07 20:43:25] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:43:25] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:43:25] 
+[2026-04-07 20:43:25] Processing agent: opencode (single)
+[2026-04-07 20:43:25]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:43:25]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:43:25]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:43:25]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:43:25]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:43:25]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:43:25]   Installed 5 skills for opencode
+[2026-04-07 20:43:37] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:43:37] DRY RUN MODE - simulating installation only
+[2026-04-07 20:43:37] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:43:37] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:43:37] 
+[2026-04-07 20:43:37] Processing agent: opencode (single)
+[2026-04-07 20:43:37]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:43:38]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:43:38]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:43:38]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:43:38]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:43:38]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:43:38]   Installed 5 skills for opencode
+[2026-04-07 20:43:51] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:43:51] DRY RUN MODE - simulating installation only
+[2026-04-07 20:43:51] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:43:51] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:43:51] 
+[2026-04-07 20:43:51] Processing agent: opencode (single)
+[2026-04-07 20:43:51]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:43:51]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:43:51]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:43:51]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:43:51]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:43:51]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:43:52]   Installed 5 skills for opencode
+[2026-04-07 20:44:33] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:44:33] DRY RUN MODE - simulating installation only
+[2026-04-07 20:44:33] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:44:33] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:44:33] 
+[2026-04-07 20:44:33] Processing agent: opencode (single)
+[2026-04-07 20:44:33]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:44:33]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:44:33]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:44:33]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:44:33]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:44:33]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:44:33]   Installed 5 skills for opencode
+[2026-04-07 20:45:21] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:45:21] DRY RUN MODE - simulating installation only
+[2026-04-07 20:45:21] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:45:21] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:45:21] 
+[2026-04-07 20:45:21] Processing agent: opencode (single)
+[2026-04-07 20:45:21]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:45:21]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:45:21]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:45:21]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:45:21]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:45:21]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:45:21]   Installed 5 skills for opencode
+[2026-04-07 20:45:44] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:45:44] DRY RUN MODE - simulating installation only
+[2026-04-07 20:45:44] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:45:44] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:45:44] 
+[2026-04-07 20:45:44] Processing agent: opencode (single)
+[2026-04-07 20:45:44]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:45:45]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:45:45]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:45:45]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:45:45]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:45:45]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:45:45]   Installed 5 skills for opencode
+[2026-04-07 20:45:45] 
+[2026-04-07 20:45:45] Installation complete
+[2026-04-07 20:45:45] Processed 1 agents
+[2026-04-07 20:45:45] Installed 5 skill instances total
+[2026-04-07 20:46:17] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:46:17] DRY RUN MODE - simulating installation only
+[2026-04-07 20:46:17] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:46:17] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:46:17] 
+[2026-04-07 20:46:17] Processing agent: opencode (single)
+[2026-04-07 20:46:17]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:46:17]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:46:17]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:46:17]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:46:17]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:46:17]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:46:17]   Installed 5 skills for opencode
+[2026-04-07 20:46:37] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:46:37] DRY RUN MODE - simulating installation only
+[2026-04-07 20:46:37] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:46:37] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:46:37] 
+[2026-04-07 20:46:37] Processing agent: opencode (single)
+[2026-04-07 20:46:37]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:46:37]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:46:37]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:46:37]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:46:37]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:46:37]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:46:37]   Installed 5 skills for opencode
+[2026-04-07 20:47:16] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:47:16] DRY RUN MODE - simulating installation only
+[2026-04-07 20:47:16] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:47:16] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:47:16] 
+[2026-04-07 20:47:16] Processing agent: opencode (single)
+[2026-04-07 20:47:16]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:47:16]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:47:16]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:47:16]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:47:16]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:47:16]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:47:16]   Installed 5 skills for opencode
+[2026-04-07 20:47:24] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:47:24] DRY RUN MODE - simulating installation only
+[2026-04-07 20:47:24] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:47:24] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:47:24] 
+[2026-04-07 20:47:24] Processing agent: opencode (single)
+[2026-04-07 20:47:24]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:47:24]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:47:45] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:47:45] DRY RUN MODE - simulating installation only
+[2026-04-07 20:47:45] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:47:45] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:47:45] 
+[2026-04-07 20:47:45] Processing agent: opencode (single)
+[2026-04-07 20:47:45]   Path: /tmp/test_skillweave/.config/opencode/commands
+[2026-04-07 20:47:45]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:47:45]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:47:45]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:47:45]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:47:45]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:47:45]   Installed 5 skills for opencode
+[2026-04-07 20:48:13] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:48:13] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:48:13] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:48:13] 
+[2026-04-07 20:48:13] Processing agent: opencode (single)
+[2026-04-07 20:48:13]   Path: /tmp/test_home/.config/opencode/commands
+[2026-04-07 20:48:13]   ✓ Installed as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:48:13]   ✓ Installed as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:48:13]   ✓ Installed as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:48:13]   ✓ Installed as single file: skillweave-releasechain.md
+[2026-04-07 20:48:13]   ✓ Installed as single file: prompt-chain.md
+[2026-04-07 20:48:13]   Installed 5 skills for opencode
+[2026-04-07 20:48:18] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:48:18] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:48:18] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:48:18] 
+[2026-04-07 20:48:18] Processing agent: opencode (single)
+[2026-04-07 20:48:18]   Path: /tmp/test_home/.config/opencode/commands
+[2026-04-07 20:48:18]   Updating file: skillweave-promptchain-generate.md
+[2026-04-07 20:48:18]   ✓ Installed as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:48:18]   Updating file: skillweave-promptchain-validate.md
+[2026-04-07 20:48:18]   ✓ Installed as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:48:18]   Updating file: skillweave-promptchain-execute.md
+[2026-04-07 20:48:18]   ✓ Installed as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:48:18]   Updating file: skillweave-releasechain.md
+[2026-04-07 20:48:18]   ✓ Installed as single file: skillweave-releasechain.md
+[2026-04-07 20:48:18]   Updating file: prompt-chain.md
+[2026-04-07 20:48:18]   ✓ Installed as single file: prompt-chain.md
+[2026-04-07 20:48:18]   Installed 5 skills for opencode
+[2026-04-07 20:48:47] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:48:47] DRY RUN MODE - simulating installation only
+[2026-04-07 20:48:47] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:48:47] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:48:47] 
+[2026-04-07 20:48:47] Processing agent: opencode (single)
+[2026-04-07 20:48:47]   Path: /tmp/test_home2/.config/opencode/commands
+[2026-04-07 20:48:47]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:48:47]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:48:47]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:48:47]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:48:47]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:48:47]   Installed 5 skills for opencode
+[2026-04-07 20:48:47] 
+[2026-04-07 20:48:47] Installation complete
+[2026-04-07 20:48:47] Processed 1 agents
+[2026-04-07 20:48:47] Installed 5 skill instances total
+[2026-04-07 20:48:53] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:48:53] DRY RUN MODE - simulating installation only
+[2026-04-07 20:48:53] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:48:53] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:48:53] 
+[2026-04-07 20:48:53] Processing agent: opencode (single)
+[2026-04-07 20:48:53]   Path: /tmp/test_home2/.config/opencode/commands
+[2026-04-07 20:48:53]   ✓ Would install as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:48:53]   ✓ Would install as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:48:53]   ✓ Would install as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:48:53]   ✓ Would install as single file: skillweave-releasechain.md
+[2026-04-07 20:48:53]   ✓ Would install as single file: prompt-chain.md
+[2026-04-07 20:48:53]   Installed 5 skills for opencode
+[2026-04-07 20:48:53] 
+[2026-04-07 20:48:53] Installation complete
+[2026-04-07 20:48:53] Processed 1 agents
+[2026-04-07 20:48:53] Installed 5 skill instances total
+[2026-04-07 20:49:53] Starting SkillWeave multi-agent skill installation
+[2026-04-07 20:49:53] SkillWeave directory: /Users/andrelange/Documents/repositories/github/SkillWeave
+[2026-04-07 20:49:53] Skills available: skillweave-promptchain-generate skillweave-promptchain-validate skillweave-promptchain-execute skillweave-releasechain prompt-chain
+[2026-04-07 20:49:53] 
+[2026-04-07 20:49:53] Processing agent: opencode (single)
+[2026-04-07 20:49:53]   Path: /tmp/test_real/.config/opencode/commands
+[2026-04-07 20:49:53]   ✓ Installed as single file: skillweave-promptchain-generate.md
+[2026-04-07 20:49:53]   ✓ Installed as single file: skillweave-promptchain-validate.md
+[2026-04-07 20:49:53]   ✓ Installed as single file: skillweave-promptchain-execute.md
+[2026-04-07 20:49:53]   ✓ Installed as single file: skillweave-releasechain.md
+[2026-04-07 20:49:53]   ✓ Installed as single file: prompt-chain.md
+[2026-04-07 20:49:53]   Installed 5 skills for opencode
+[2026-04-07 20:49:53] 
+[2026-04-07 20:49:53] Installation complete
+[2026-04-07 20:49:53] Processed 1 agents
+[2026-04-07 20:49:53] Installed 5 skill instances total
