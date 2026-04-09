@@ -126,6 +126,7 @@ AGENT_EXTS=(
 
 # SkillWeave skills to install
 SKILLS=(
+    "skillweave-blueprint"
     "skillweave-promptchain-generate"
     "skillweave-promptchain-validate"
     "skillweave-promptchain-execute"
@@ -133,8 +134,44 @@ SKILLS=(
     "prompt-chain"  # Legacy skill for compatibility
 )
 
+LEGACY_SKILL_PATHS=(
+    "$HOME/.agents/skills"
+)
+
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$INSTALL_LOG" >&2 || true
+}
+
+cleanup_legacy_skill_paths() {
+    local cleaned=0
+    
+    for legacy_path in "${LEGACY_SKILL_PATHS[@]}"; do
+        if [ ! -d "$legacy_path" ]; then
+            continue
+        fi
+        
+        log "Checking legacy skill path: $legacy_path"
+        
+        for skill in "${SKILLS[@]}"; do
+            local legacy_target="$legacy_path/$skill"
+            
+            if [ -L "$legacy_target" ] || [ -f "$legacy_target" ] || [ -d "$legacy_target" ]; then
+                if [ -z "$DRY_RUN" ]; then
+                    rm -rf "$legacy_target"
+                    log "  ✓ Removed legacy skill duplicate: $legacy_target"
+                else
+                    log "  ✓ Would remove legacy skill duplicate: $legacy_target"
+                fi
+                ((cleaned++))
+            fi
+        done
+    done
+    
+    if [ $cleaned -eq 0 ]; then
+        log "No legacy SkillWeave duplicates found"
+    else
+        log "Legacy cleanup complete: removed $cleaned duplicate skill entries"
+    fi
 }
 
 get_agent_config() {
@@ -414,6 +451,7 @@ uninstall_skills() {
     fi
     
     echo "Uninstalling SkillWeave skills from selected agents..."
+    cleanup_legacy_skill_paths
     
     local total_removed=0
     local agents_processed=0
@@ -483,6 +521,7 @@ update_skills() {
     fi
     
     echo "Updating SkillWeave skills for selected agents..."
+    cleanup_legacy_skill_paths
     
     local total_updated=0
     local agents_processed=0
@@ -640,6 +679,23 @@ troubleshoot_skills() {
     done
     
     echo ""
+    echo "3. Checking legacy skill paths..."
+    for legacy_path in "${LEGACY_SKILL_PATHS[@]}"; do
+        if [ -d "$legacy_path" ]; then
+            echo "   ○ Legacy path exists: $legacy_path"
+            for skill in "${SKILLS[@]}"; do
+                local legacy_target="$legacy_path/$skill"
+                if [ -L "$legacy_target" ] || [ -f "$legacy_target" ] || [ -d "$legacy_target" ]; then
+                    echo "     ⚠ Duplicate SkillWeave skill in legacy path: $skill"
+                    ((issues_found++))
+                fi
+            done
+        else
+            echo "   ✓ Legacy path not present: $legacy_path"
+        fi
+    done
+    
+    echo ""
     echo "Troubleshooting complete"
     if [ $issues_found -eq 0 ]; then
         echo "✓ No issues found"
@@ -658,6 +714,7 @@ install_for_agents() {
     fi
     
     echo "Installing SkillWeave skills for selected agents..."
+    cleanup_legacy_skill_paths
     
     local total_installed=0
     local agents_processed=0
@@ -771,6 +828,7 @@ main() {
         auto|*)
             # Auto mode: install for all existing agents
             show_agent_status
+            cleanup_legacy_skill_paths
             
             local total_installed=0
             local agents_processed=0

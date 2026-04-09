@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.3
+- **FIX**: Installed `skillweave-blueprint` for supported agents so Codex and related tools see the full five-skill SkillWeave set
+- **FIX**: Cleaned up legacy SkillWeave duplicates under `~/.agents/skills` to prevent duplicate promptchain entries with stale descriptions
+- **FIX**: Source/Target directory separation – installer now copies skills from development repo to `~/.skillweave` installation directory
+- **FIX**: Removed duplicate git repository from `~/.skillweave` (target directory should be plain folder, not a git repo)
+- **FIX**: Added warning when target directory is a git repository with cleanup instructions
+- **NEW**: `update-local-skills.sh` script for developers to sync changes from development repo to installation
+- **IMPROVEMENT**: Installer automatically copies skills from source to target when run from development repository
+- **IMPROVEMENT**: Better logging and dry-run output for copying operations
+
 ## 0.4.2
 - **FEATURE**: Interactive installer with agent selection modes (`--interactive`, `--uninstall`, `--update`, `--troubleshoot`)
 - **FIX**: Correct agent paths for Gemini CLI (`~/.gemini/skills`) and Qwen Code (`~/.qwen/skills`)
