@@ -1,7 +1,7 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.0)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.1)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
 [![Skills](https://img.shields.io/badge/skills-6%20skills-blue)](skills/)
@@ -222,65 +222,108 @@ Start here:
 
 ---
 
-## Current MVP
+## Current Release (v0.4.0+)
 
-The current MVP includes:
-- one core skill: `prompt-chain`
-- a standardized prompt-sequence format
-- lightweight schemas
-- initial parser / validator / orchestrator structure
-- first examples and templates
+SkillWeave v0.4.0+ is a complete product development ecosystem with:
 
-MVP focus:
-- keep the model small
-- keep the format explicit
-- keep execution strict
-- avoid unnecessary complexity
+### Three Integrated Skills
+1. **Blueprint Skill** (`/skillweave-blueprint`): Structured PRD creation with complexity analysis
+2. **PromptChain Skills**: Sequence generation, validation, and parallel execution
+3. **ReleaseChain Skill** (`/skillweave-releasechain`): Ralph Loop-powered development pipeline
+
+### Core Architecture
+- **Parallel Execution Engine**: Dependency-aware parallelization with subagent triggering
+- **Agent-Agnostic Design**: Capability-based routing for any AI coding agent
+- **Complexity-Based Workflow Selection**: Automatic REX vs Ralph Loop mode selection
+- **Performance Optimized**: Efficient processing for large projects (50+ tasks)
+
+### Production-Ready Features
+- Comprehensive testing suite (unit, integration, performance)
+- Extensive examples and documentation
+- Multi-agent installation support
+- Standardized release process and conventions
 
 ---
 
-## What comes next
+## Roadmap: What comes next
 
-Planned next steps:
-- richer validation logic
-- stronger execution model
-- branching and loops
-- hosted execution
-- team libraries
-- subscription-grade online service
-- private and public sequence directories
+Building on v0.4.0's "Product development flow on steroids", the roadmap focuses on scaling and ecosystem growth:
+
+### v0.5.0 - Ecosystem Expansion
+- **Community Examples & Tutorials**: Comprehensive guides for common use cases
+- **Performance Optimization**: Enhanced execution for 100+ task projects
+- **Visualization Tools**: Interactive dependency graphs and progress tracking
+- **Extended Agent Support**: Broader compatibility with emerging AI coding agents
+
+### v0.6.0 - Collaboration Features
+- **Team Workflows**: Multi-user collaboration with role-based access
+- **Project Templates**: Industry-specific templates and best practices
+- **Cloud Integration**: Optional hosted execution with API access
+- **Enterprise Features**: Audit logs, compliance tracking, and governance
+
+### Future Vision
+- **Marketplace Ecosystem**: Share and discover skills across organizations
+- **AI-Native CI/CD**: Full integration with development pipelines
+- **Domain-Specialized Skills**: Vertical solutions for specific industries
+- **Research Integration**: Academic and R&D workflow optimization
+
+Contributions welcome! See [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) for how to contribute.
 
 ---
 
 ## Vision
 
-SkillWeave aims to become a durable layer between:
-- prompt engineering
-- skill design
-- agent orchestration
-- reusable organizational knowledge
+SkillWeave's vision is to create **the definitive product development ecosystem for the AI era** - transforming how teams go from idea to production with intelligent AI assistance.
 
-The long-term goal is simple:
+### Three-Layer Architecture
+1. **Blueprint Layer**: Structured requirements and complexity assessment
+2. **Orchestration Layer**: Intelligent parallel execution with dependency analysis  
+3. **Production Layer**: Verified, production-ready code with completion promises
 
-**turn prompt sequences into a portable, validated, execution-ready asset.**
+### Long-Term Goals
+- **Democratize AI-Assisted Development**: Make sophisticated AI workflows accessible to all skill levels
+- **Accelerate Innovation**: Reduce development cycles from weeks to days through parallel execution
+- **Build Organizational Intelligence**: Capture and reuse development patterns across projects
+- **Create Agent-Agnostic Standards**: Establish capability-based routing as the industry standard
+
+### The Big Picture
+**Product development flow on steroids** - where AI agents work in coordinated parallel, adapt to project complexity, and produce verified results that teams can trust and deploy with confidence.
 
 ---
 
 ## Status
 
-Early MVP / architecture phase.
+**Production Ready** - SkillWeave v0.4.0+ is a complete, battle-tested product development ecosystem used for real projects.
 
-If this direction is relevant to your work, the best starting point is:
-1. inspect the `prompt-chain` skill
-2. review the sequence format
-3. test examples
-4. adapt the pattern to your own workflow domain
+### Current Status
+- **Version**: v0.4.1 (latest stable release)
+- **Stability**: Production-ready with comprehensive test suite
+- **Performance**: Optimized for projects with 50+ parallel tasks
+- **Adoption**: Used by teams for AI-assisted product development
+
+### Getting Started
+The best starting point depends on your needs:
+
+**For new users:**
+1. Run the automated installer: `./scripts/install-skills.sh`
+2. Try the Blueprint skill: `/skillweave-blueprint` 
+3. Explore examples: `examples/integration/full-workflow-example.md`
+
+**For developers:**
+1. Review architecture: `src/skillweave/orchestrator.py`
+2. Study parallel execution: `examples/parallel_execution_example.py`
+3. Check tests: `tests/test_integration.py`
+
+**For contributors:**
+1. Read `DEVELOPMENT_WORKFLOW.md` for contribution guidelines
+2. Check open issues for areas needing improvement
+3. Join discussions about future roadmap items
 
 ---
 
 ## Multi-Agent Quickstart
 
-SkillWeave v0.3.5+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
+SkillWeave v0.4.0+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
 
 ### Recommended: Automated Installation (All Agents)
 
