@@ -22,10 +22,31 @@ Generate optimized prompt sequences for execution. Two modes:
 
 **Parameters:**
 - `inputs` (required): JSON containing either PRD path (`prd`) or topic/domain/goal
-- `mode` (optional): Sequence mode - auto (analyze complexity), simple (REX-style), standard (Ralph Loop attended), complex (Ralph Loop overnight) (default: auto)
+- `sequence_type` (optional): Type of sequence - plan (conceptual/strategy), build (development/implementation), mixed (combination) (default: auto-detect)
+- `execution_mode` (optional): Execution profile - rex (simple, fast, attended), ralph_attended (full loop with human checkpoints), ralph_overnight (autonomous overnight execution) (default: auto based on complexity)
 - `target` (optional): Target audience - humanize (human readable), machinize (machine optimized), mixed (default: mixed)
 - `quality` (optional): Quality level (basic, standard, premium)
 - `output_expectations` (optional): Expected output format
+
+**Mode Mapping Table:**
+
+| Sequence Type | Execution Mode | Characteristics | Use Case |
+|--------------|----------------|----------------|----------|
+| **plan** | **rex** | Conceptual, strategy, business planning • 1-3 tasks • <60 minutes • Quick feedback loop | Business idea validation, market analysis, strategic planning |
+| **plan** | **ralph_attended** | Comprehensive planning with human oversight • 4-10 tasks • 1-4 hours • Structured validation | Product requirements, detailed business plans, investment decks |
+| **plan** | **ralph_overnight** | Autonomous strategic analysis • 10+ tasks • >4 hours • Deep research | Market research reports, competitive analysis, industry deep dives |
+| **build** | **rex** | Simple implementation • 1-3 components • <60 minutes • Lightweight testing | Prototype building, proof of concept, simple feature addition |
+| **build** | **ralph_attended** | Full development cycle • 4-10 components • 1-4 hours • Multi-level verification | Feature development, API implementation, UI components |
+| **build** | **ralph_overnight** | Complex system implementation • 10+ components • >4 hours • Production-grade gates | System architecture, full-stack applications, complex integrations |
+| **mixed** | **rex** | Combined plan/build • 2-5 total tasks • <90 minutes • Integrated flow | MVP development, concept-to-prototype, pilot projects |
+| **mixed** | **ralph_attended** | Full product development • 6-15 tasks • 2-8 hours • Phased execution | End-to-end product development, startup launch, product redesign |
+| **mixed** | **ralph_overnight** | Enterprise-scale development • 15+ tasks • >8 hours • Autonomous pipeline | Large-scale projects, platform development, organizational transformation |
+
+**Backward Compatibility:** The `mode` parameter is still supported as an alias:
+- `mode="simple"` → `execution_mode="rex"`
+- `mode="standard"` → `execution_mode="ralph_attended"` 
+- `mode="complex"` → `execution_mode="ralph_overnight"`
+- `mode="auto"` → Auto-detect both sequence_type and execution_mode
 
 **PRD Input Example:**
 ```
@@ -56,27 +77,42 @@ When generating from topic/domain, creates standard prompt sequence:
 
 ## PRD-based Sequence Generation
 
-### Complexity-Aware Workflow Selection
+### Complexity-Aware Workflow Selection (Two-Axis Model)
 
-PromptChain analyzes the PRD's `execution_recommendation` and tasks to generate optimal execution sequences:
+PromptChain analyzes the PRD's `execution_recommendation` and tasks using a two-axis model:
+- **Sequence Type**: `plan` (conceptual/strategy), `build` (development/implementation), or `mixed`
+- **Execution Mode**: `rex` (simple/fast), `ralph_attended` (human-checkpointed), `ralph_overnight` (autonomous)
 
-1. **Simple Mode (REX-style)**: For 1-3 tasks, <60 minutes
+Based on complexity analysis, generates optimal execution sequences:
+
+#### Execution Modes (Based on Task Complexity):
+
+1. **REX Mode (`execution_mode="rex"`)**: For 1-3 tasks, <60 minutes
    - **Workflow**: Plan → Implement → Review → Done
-   - **Sequence**: Minimal steps with quick feedback loop
+   - **Parallelization**: Limited parallel lanes, simple dependencies
    - **Memory**: Basic progress tracking (`progress-simple.txt`)
    - **Verification**: Lightweight checks (type checking, basic tests)
+   - **Use**: Quick prototypes, simple features, concept validation
 
-2. **Standard Mode (Ralph Loop Attended)**: For 4-10 tasks, 1-4 hours
-   - **Workflow**: Full Ralph Loop with human checkpoints
-   - **Sequence**: Iterative execution with dependency resolution
+2. **Ralph Loop Attended Mode (`execution_mode="ralph_attended"`)**: For 4-10 tasks, 1-4 hours
+   - **Workflow**: Full Ralph Loop with human checkpoints at integration gates
+   - **Parallelization**: Multiple sidecar lanes with synchronization points
    - **Memory**: Structured progress tracking (`progress-structured.yaml`)
    - **Verification**: Multi-level verification (code, functional, system)
+   - **Use**: Feature development, product requirements, detailed planning
 
-3. **Complex Mode (Ralph Loop Overnight)**: For 10+ tasks, >4 hours
-   - **Workflow**: Fully autonomous Ralph Loop execution
-   - **Sequence**: Parallel execution with comprehensive verification
+3. **Ralph Loop Overnight Mode (`execution_mode="ralph_overnight"`)**: For 10+ tasks, >4 hours
+   - **Workflow**: Fully autonomous Ralph Loop execution with automated gates
+   - **Parallelization**: Maximal parallelization with critical path management
    - **Memory**: Advanced memory system (`agents-enhanced.md`)
-   - **Verification**: Production-grade quality gates
+   - **Verification**: Production-grade quality gates and integration tests
+   - **Use**: System architecture, large-scale projects, enterprise development
+
+#### Sequence Types (Based on Content):
+
+- **Plan Sequences**: Conceptual work, strategy, business planning, research
+- **Build Sequences**: Development, implementation, coding, technical work  
+- **Mixed Sequences**: Combination of plan and build phases in integrated workflow
 
 ### Automatic Analysis Process
 

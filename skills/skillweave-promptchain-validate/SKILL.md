@@ -85,6 +85,10 @@ What should be saved as .md?
    - Usefulness of validation rules
    - Usefulness of failure handling
    - Output format appropriateness for sequence type
+   - **Parallelization readiness**: Check if sequence cleanly separates critical path (single-owner surfaces) from parallelizable sidecar lanes
+   - **Single-owner surfaces**: Identify steps that modify critical surfaces (database schemas, core APIs, config files) requiring exclusive ownership
+   - **Dependency clarity**: Verify blocking vs non-blocking dependencies are explicitly defined
+   - **Integration gates**: Ensure appropriate synchronization points for parallel lanes
 
 **Rules:**
 - Do not only critique; provide complete improved sequence

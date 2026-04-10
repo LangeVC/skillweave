@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.4
+- **FEATURE**: Execute Skill v2 – Ralph Loop state machine with binary gates, batch planning, and safe parallelization
+- **FEATURE**: Two-axis model for generate – separates `sequence_type` (plan/build/mixed) from `execution_mode` (rex/ralph_attended/ralph_overnight)
+- **FEATURE**: Enhanced validate – checks parallelization readiness and separation of critical path vs sidecar lanes
+- **NEW**: Three reference files for execute – `ralph-loop-state-machine.md`, `build-step-normalization.md`, `gate-policy.md`
+- **IMPROVEMENT**: Execute now enforces write-scope ownership, safe parallel lanes, and binary completion signals
+- **IMPROVEMENT**: Generate includes mode mapping table with 9 combinations (plan/build/mixed × rex/ralph_attended/ralph_overnight)
+- **IMPROVEMENT**: Validate now identifies single-owner surfaces and integration gate requirements
+
 ## 0.4.3
 - **FIX**: Installed `skillweave-blueprint` for supported agents so Codex and related tools see the full five-skill SkillWeave set
 - **FIX**: Cleaned up legacy SkillWeave duplicates under `~/.agents/skills` to prevent duplicate promptchain entries with stale descriptions
