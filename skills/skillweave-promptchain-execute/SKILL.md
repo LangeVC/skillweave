@@ -1,128 +1,320 @@
 ---
 name: skillweave-promptchain-execute
-description: Execute SkillWeave prompt sequences with parallel execution, dependency analysis, subagent triggering, plan/build detection, and adaptive outputs. Product development flow on steroids.
-argument-hint: sequence="[prompt sequence]" inputs="[JSON]" (or attach .md/.txt file)
+description: Execute SkillWeave prompt sequences with dependency-aware batching, Ralph Loop execution, binary gates, and safe parallel subagent orchestration. Use when a validated prompt sequence or PRD-derived task set should be carried through real execution, especially for multi-step build, review, verification, release, or mixed plan/build work.
+argument-hint: sequence="[prompt sequence]" inputs="[JSON]" execution_mode="[auto/rex/ralph_attended/ralph_overnight]" audience_mode="[auto/humanize/machinize/mixed]" (or attach .md/.txt file)
 ---
 
 # /skillweave-promptchain-execute
 
-**Product development flow on steroids.**  
-Run prompt sequences with intelligent parallel execution, dependency analysis, and subagent triggering for maximum efficiency.
+**Execute structured prompt sequences with real delivery discipline.**
 
-**Usage:**
-```
+This skill is the execution engine for SkillWeave prompt sequences. It does not just "run steps"; it resolves execution mode, plans batches, identifies safe parallel lanes, applies Ralph Loop when the work is substantial, and advances only through binary gates.
+
+## Usage
+
+```text
 /skillweave-promptchain-execute sequence="[prompt sequence text]" inputs="[JSON inputs]"
 ```
-**Or attach a .md or .txt file** containing the prompt sequence.
 
-**Parameters:**
-- `sequence` (optional if file attached): Prompt sequence text to execute
-- `inputs` (required): JSON string containing required inputs
+Or attach a `.md` / `.txt` sequence file and provide:
 
-**Attachment detection:** If no `sequence` parameter is provided, check for attached .md/.txt files. If multiple options exist, ask for clarification.
-
-**Examples:**
-
-**With inline sequence:**
-```
-/skillweave-promptchain-execute sequence="[sequence]" inputs='{"business_idea": "Yoga studio", "target_region": "Berlin"}'
+```text
+/skillweave-promptchain-execute inputs='{"key":"value"}'
 ```
 
-**With attached file:**
-Attach `sequence.md` or `sequence.txt` and use:
-```
-/skillweave-promptchain-execute inputs='{"business_idea": "Yoga studio"}'
-```
+## Parameters
 
-**Example Execution Interaction:**
+- `sequence` (optional if file attached): Prompt sequence text
+- `inputs` (required): JSON object with required runtime inputs
+- `execution_mode` (optional): `auto`, `rex`, `ralph_attended`, `ralph_overnight`
+- `audience_mode` (optional): `auto`, `humanize`, `machinize`, `mixed`
 
-1. **Skill analyzes sequence**: "Detected mixed sequence: 5 plan steps (business concept), 3 build steps (website prototype)"
-2. **Skill analyzes dependencies**: "Dependency graph: Steps 1-2 parallel, Step 3 depends on 1-2, Steps 4-5 parallel after 3"
-3. **Skill triggers parallel execution**:
-   - Subagent A: Steps 1-2 (market research + user analysis) - running in parallel
-   - Subagent B: Step 3 (business model) - waiting for A
-   - Subagent C: Steps 4-5 (UI prototype + API design) - parallel after B
-4. **Skill executes with adaptive outputs**:
-   - Plan steps → Business plan .md sections
-   - Build steps → Code files + technical report .md
-5. **Skill asks post-execution questions**:
-   - "Target audience for plan outputs? [Humanize/Machinize/Mixed]"
-   - "Target audience for build outputs? [Humanize/Machinize/Mixed]"
-   - "Initiate development pipeline for build components? [Yes/No]"
-6. **If development pipeline requested**:
-   - "Initiating `/skillweave-releasechain` with: review, testing, commit, push, PR, release, changelog"
-   - Transfers build outputs to releasechain skill for processing
-7. **Final deliverables presented** organized by type, audience, and execution timeline
+Default:
 
-**Execution Process:**
+- `execution_mode = auto`
+- `audience_mode = auto`
 
-1. **Sequence Analysis & Dependency Mapping:**
-   - Detect sequence type: **plan mode** (conceptual, strategy, business planning), **build mode** (development, coding, implementation), or **mixed**
-   - Use detailed heuristics from `references/sequence-type-detection.md` for accurate detection
-   - Analyze `depends_on` arrays to build dependency graph
-   - Identify parallel execution opportunities using `references/parallel-execution.md`
-   - Analyze step purposes and expected outputs
-   - Identify which steps produce human-readable vs. machine-readable outputs
+## Core Distinctions
 
-2. **Parallel Execution Planning:**
-   - Determine optimal execution strategy (sequential/parallel/mixed)
-   - Identify steps that can run concurrently in subagents
-   - Group similar steps for efficient resource usage
-   - Plan subagent triggering for maximum parallelization
+### 1. Sequence Type
 
-3. **Adaptive Execution with Parallelization:**
-   - Execute independent steps in parallel using Task tool subagents
-   - Monitor subagent progress and collect results
-   - Trigger dependent steps when prerequisites complete
-   - For **plan mode steps**: Create well-structured .md documents (business plans, strategies, reports)
-   - For **build mode steps**: Generate code/files with accompanying technical documentation
-   - For **mixed sequences**: Separate plan and build outputs with appropriate parallelization
+Sequence type describes the nature of the work:
 
-4. **Post-Execution Options:**
-   - Ask about **target audience** for outputs:
-     - **Humanize**: Optimize for human readability (explanations, summaries, formatting)
-     - **Machinize**: Optimize for machine processing (structured data, APIs, code)
-     - **Mixed**: Separate human and machine outputs appropriately
-   - For **build components**: Offer to initiate development pipeline via `/skillweave-releasechain` (review, testing, commit, push, PR, release, changelog)
-   - For **plan components**: Offer document consolidation and formatting options
+- `plan`: strategy, analysis, PRD, architecture, research-led planning
+- `build`: code, config, tests, infra, docs tied to implementation
+- `mixed`: both plan and build steps are materially present
 
-5. **Output Structure with Execution Timeline:**
-   - Step-by-step execution with progress tracking
-   - Parallel execution visualization showing concurrent steps
-   - Validation status per step with improvement suggestions
-   - Error or fallback handling with recovery options
-   - Final assembled deliverables organized by purpose, audience, and execution timeline
+### 2. Execution Mode
 
-**Agent-Agnostic Execution:**
+Execution mode describes how the work should be carried out:
 
-PromptChain Execute is **agent-agnostic** – it works with any AI coding agent through the Task tool's subagent capability. Instead of hardcoding specific agents, it uses:
+- `rex`: fast path for small, low-risk, mostly linear work
+- `ralph_attended`: default for substantial repo work with active checkpoints
+- `ralph_overnight`: autonomous multi-batch execution for large, well-structured sequences
 
-1. **Subagent Abstraction**: Uses Task tool's generic subagent capability (`subagent_type: "explore"` or `"general"`)
-2. **Capability-Based Routing**: When specific agent capabilities are needed, delegates to ReleaseChain for capability-based routing
-3. **Fallback to Available Agents**: Uses whatever agents are available in the current environment
-4. **Parallel Execution Compatibility**: Parallel subagents work with any agent type that supports Task tool execution
+`mixed` is **not** an execution mode. It is only a sequence-type classification.
 
-**Integration with ReleaseChain**: When build components are detected and development pipeline is requested, the skill automatically invokes `/skillweave-releasechain` which handles agent routing based on capabilities.
+## Mode Resolution
 
-**Execution Rules:**
-- Analyze `depends_on` arrays to determine execution order
-- Execute independent steps in parallel when possible
-- Use Task tool subagents for parallel execution of independent steps
-- Respect usage notes before marking a step complete
-- If `web_research: required`, do not complete the step without research
-- If `citations: required`, do not complete the step without citations
-- If `intermediate_validation: required`, validate before moving on
-- If the sequence is blocked, follow failure handling rules
-- Do not freestyle beyond the defined scope of the sequence
-- Adapt output format based on detected sequence type and step purpose
-- For parallel execution failures, implement retry logic or fallback to sequential
-- Monitor subagent resources and adjust parallelization dynamically
+If `execution_mode=auto`, choose as follows:
 
-## Recommended companion files
+### Use `rex` when:
+
+- there are 1-3 steps
+- total work is small
+- dependencies are mostly linear
+- there is no meaningful public/private or release boundary risk
+- verification is lightweight
+
+### Use `ralph_attended` when:
+
+- there are 4+ steps
+- the work mutates a repository
+- code, tests, docs, or release flow are all involved
+- binary gates are required
+- public/private or product-tier boundaries are involved
+- multiple safe parallel lanes exist
+
+### Use `ralph_overnight` when:
+
+- the sequence is already decomposed into explicit batches
+- batch gates are well-defined
+- retries and carry-forward logic are already specified
+- long autonomous execution is acceptable
+
+Rule of thumb:
+
+- default to `ralph_attended` for real product development unless the task is obviously tiny
+
+## Execution Process
+
+### Phase 1: Preflight
+
+1. Detect sequence type: `plan`, `build`, or `mixed`
+2. Validate required inputs
+3. Parse dependencies
+4. Identify:
+   - critical path
+   - safe parallel lanes
+   - review gates
+   - release or deployment risk
+5. Resolve execution mode
+6. Determine whether the sequence should run:
+   - as one batch
+   - as multiple batches
+   - with sidecar subagents
+
+If the sequence is malformed, underspecified, or contradicts the real repository baseline, stop and produce a baseline-alignment report before executing.
+
+### Phase 2: Batch Planning
+
+Before implementation, convert the sequence into executable batches.
+
+For each batch, define:
+
+- `batch_id`
+- `goal`
+- `included_steps`
+- `critical_path_step`
+- `parallel_lanes`
+- `write_surfaces`
+- `verification_commands`
+- `review_gate`
+- `completion_contract`
+- `next_batch_if_pass`
+- `fallback_if_fail`
+
+Do not execute a multi-step build sequence without first producing an explicit batch plan.
+
+### Phase 3: Ralph Loop State Machine
+
+When execution mode is `ralph_attended` or `ralph_overnight`, use this loop:
+
+1. `Preflight`
+2. `Batch Selection`
+3. `Lane Plan`
+4. `Implement`
+5. `Verify`
+6. `Review Gate`
+7. `Fix / Retry`
+8. `Integrate`
+9. `Advance or Stop`
+
+Only advance when the current batch passes its binary gate.
+
+## Parallelization Rules
+
+Parallelism is allowed only when it is safe.
+
+### Safe parallel lanes
+
+Parallelize steps when they have:
+
+- disjoint write scopes
+- no unresolved dependency between them
+- no shared ownership of fragile contract surfaces
+
+Good sidecar lanes:
+
+- read-only research
+- documentation drafting
+- isolated tests
+- release notes
+- audit and verification passes
+
+### Keep local on the critical path
+
+Keep the following local unless the sequence explicitly isolates them:
+
+- product-tier registries
+- tool index / tool registration
+- shared contracts used across many modules
+- release and export manifests
+- other single-owner integration surfaces
+
+### Subagent policy
+
+Use subagents only for:
+
+- independent sidecar lanes
+- isolated implementation with disjoint write scope
+- verification or review that does not block immediate local context-building
+
+Do not delegate the immediate blocking task if the next local action depends on it.
+
+## Required Build-Step Fields
+
+For build-oriented execution, each implementation step should define or be normalized into:
+
+- `id`
+- `title`
+- `depends_on`
+- `required_capabilities`
+- `write_scope`
+- `verification`
+- `integration_gate`
+- `retry_budget`
+- `handoff_contract`
+
+If these are missing, infer them conservatively. If they cannot be inferred safely, stop and emit a sequence-hardening recommendation.
+
+## Gate Policy
+
+All meaningful completion decisions must be binary.
+
+Allowed completion signals:
+
+- tests passed
+- verifier passed
+- build succeeded
+- review explicitly returned `continue`
+- required artifact exists and matches the contract
+
+Not sufficient on their own:
+
+- "looks good"
+- "seems fine"
+- "mostly done"
+- "probably works"
+
+If verification is inconclusive, mark the batch `inconclusive`, explain why, and do not silently advance.
+
+## Audience Handling
+
+After execution, outputs may be shaped for:
+
+- `humanize`: explanation-first deliverables
+- `machinize`: structured machine-readable outputs
+- `mixed`: both
+
+Do not ask about audience mode if the sequence or context already makes it obvious.
+
+## Output Contract
+
+### For each batch, return:
+
+- `batch_id`
+- `steps_completed`
+- `files_changed`
+- `commands_run`
+- `verification_results`
+- `review_result`
+- `blockers`
+- `known_limitations`
+- `next_executable_batch`
+
+### For plan-oriented outputs, return:
+
+- decision summary
+- assumptions
+- unresolved questions
+- artifacts produced
+- recommended next execution package
+
+### For build-oriented outputs, return:
+
+- implementation summary
+- exact verification steps
+- pass/fail/inconclusive status
+- next slice recommendation
+
+## Failure Handling
+
+If a batch fails:
+
+1. identify whether the failure is:
+   - implementation
+   - verification
+   - environment
+   - sequence-definition
+2. apply the retry budget if appropriate
+3. prefer narrow fixes over broad redesign
+4. if still blocked, stop and emit:
+   - blocker summary
+   - affected batch
+   - safe rollback or pause point
+   - next required user or system action
+
+Do not continue into the next batch after a failed gate.
+
+## Integration with ReleaseChain
+
+Offer `/skillweave-releasechain` only when:
+
+- build-oriented work completed successfully
+- outputs are in a reviewable state
+- the next logical step is review, test hardening, commit, release, or PR flow
+
+Do not automatically transfer partial or inconclusive build batches into ReleaseChain.
+
+## Agent-Agnostic Execution
+
+This skill is agent-agnostic.
+
+It should prefer:
+
+- capability-based routing
+- lane-based task assignment
+- central ownership of critical-path integration
+- fallback to available agents when the preferred capability runner is unavailable
+
+When multiple agents exist, assign by:
+
+- capability fit
+- write-scope safety
+- dependency position
+- verification needs
+
+Do not encode vendor-specific assumptions into the execution logic.
+
+## Recommended Companion Files
 
 Use these files if present:
+
 - `references/execution-rules.md`
 - `references/format-spec.md`
 - `references/sequence-type-detection.md`
 - `references/parallel-execution.md`
-- `assets/workflow-context.schema.json`
+- `references/ralph-loop-state-machine.md`
+- `references/build-step-normalization.md`
+- `references/gate-policy.md`

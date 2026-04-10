@@ -1,168 +1,243 @@
-# Parallel Execution & Dependency Analysis
+# Parallel Execution & Safe Parallelization
 
-Execute SkillWeave sequences with intelligent parallelization, dependency analysis, and subagent triggering for maximum efficiency.
+Execute SkillWeave sequences with write-scope awareness, safe parallel lanes, and binary gate synchronization. Parallelism is allowed only when it is safe.
 
-## Dependency Analysis
+## Core Concepts
 
-### 1. **Dependency Graph Construction**
-- Parse `depends_on` arrays for each step
-- Build directed graph of step dependencies
-- Identify independent steps that can run in parallel
-- Detect circular dependencies and report errors
+### 1. **Write Scope & Ownership**
+- Each step defines its `write_scope`: files, directories, or system surfaces it will modify
+- Steps with overlapping write scopes **cannot** run in parallel
+- Write scope determines ownership and conflict prevention
 
-### 2. **Execution Modes**
-- **Sequential**: Steps with dependencies must run in order
-- **Parallel**: Independent steps can run simultaneously  
-- **Mixed**: Combination of sequential and parallel execution
+### 2. **Critical Path vs Sidecar Lanes**
+- **Critical Path**: Steps that modify single-owner integration surfaces (database schemas, core APIs, config files)
+- **Sidecar Lanes**: Independent computations, research, documentation, isolated tests
+- Critical path steps run sequentially, sidecar lanes can run in parallel
 
-### 3. **Parallelization Heuristics**
-- Steps without `depends_on` or with empty `depends_on` arrays are independent
-- Steps with the same dependencies can run in parallel after dependencies complete
-- Consider resource constraints (API rate limits, computation resources)
-- Group similar step types for efficiency
+### 3. **Safe Parallel Lanes**
+Parallelize steps only when they have:
+- **Disjoint write scopes**: No overlapping files or surfaces
+- **No unresolved dependencies**: Independent or properly synchronized
+- **No shared ownership**: Each lane owns its write surfaces exclusively
 
-## Subagent Triggering
+### 4. **Integration Gates**
+- Points where parallel lanes must synchronize and validate integration
+- Defined by `integration_gate` field: `"pre"`, `"post"`, `"both"`, or `"none"`
+- Ensure system consistency before advancing
 
-### When to Trigger Subagents:
-1. **Independent parallel steps** → Each can run in separate subagent
-2. **Different execution contexts** → Plan vs build steps in different subagents
-3. **Resource-intensive steps** → Offload to dedicated subagents
-4. **Specialized expertise required** → Route to appropriate subagent
+## Parallelization Rules
 
-### Subagent Detection & Management:
-- Check for available subagents in the environment
-- Use Task tool for parallel subagent execution
-- Monitor subagent progress and collect results
-- Handle subagent failures with retry logic
+### Safe to Parallelize
+- Read-only research and analysis
+- Documentation drafting
+- Isolated unit tests
+- Release notes and changelogs
+- Audit and verification passes
+- Independent module implementations (disjoint write scopes)
 
-## Execution Flow
+### Keep Sequential (Critical Path)
+- Product-tier registries and configurations
+- Tool index / tool registration
+- Shared contracts used across many modules
+- Release and export manifests
+- Database schema migrations
+- Core API interfaces
+- Configuration files with wide impact
 
-### Phase 1: Analysis
+### Subagent Policy
+Use subagents only for:
+- Independent sidecar lanes with disjoint write scope
+- Isolated implementation that doesn't block local context-building
+- Verification or review that can run asynchronously
+
+Do **not** delegate:
+- Critical path steps
+- Steps that modify shared integration surfaces
+- Immediate blocking tasks the next local action depends on
+
+## Execution Flow with Safe Parallelization
+
+### Phase 1: Preflight & Write Scope Analysis
 ```
 1. Parse sequence and extract all steps
-2. Build dependency graph from depends_on
-3. Identify execution groups:
-   - Group A: Steps 1, 2, 3 (sequential)
-   - Group B: Steps 4, 5 (parallel after Group A)
-   - Group C: Step 6 (sequential after Group B)
-4. Determine parallelization strategy
+2. Analyze `write_scope` for each step (infer if missing)
+3. Identify write scope overlaps and conflicts
+4. Map dependency graph with write scope awareness
+5. Classify steps: critical path vs sidecar lanes
 ```
 
-### Phase 2: Execution Planning
+### Phase 2: Batch Planning with Lane Assignment
 ```
-1. Map steps to available subagents
-2. Schedule execution based on dependencies
-3. Allocate resources and set timeouts
-4. Prepare input data for each step
-```
-
-### Phase 3: Parallel Execution
-```
-1. Launch independent steps in parallel subagents
-2. Monitor progress and collect outputs
-3. Trigger dependent steps when prerequisites complete
-4. Handle errors and implement fallbacks
+1. Group steps into batches based on integration gates
+2. For each batch:
+   - Identify critical path step(s)
+   - Identify safe sidecar lanes
+   - Assign write ownership per lane
+   - Define parallelization constraints
+   - Set integration gate requirements
+3. Create lane plan with subagent assignments
 ```
 
-### Phase 4: Result Assembly
+### Phase 3: Safe Parallel Execution
 ```
-1. Combine outputs from parallel executions
-2. Validate final deliverables against requirements
+1. Execute critical path steps locally (main agent)
+2. Launch sidecar lanes in parallel subagents (if safe)
+3. Monitor lane progress and resource usage
+4. Synchronize at integration gates
+5. Validate integration before advancing
+```
+
+### Phase 4: Integration & Result Assembly
+```
+1. Merge results from parallel lanes
+2. Validate overall system consistency
 3. Apply final assembly instructions
-4. Format outputs for target audience
+4. Format outputs with execution timeline
 ```
 
-## Examples
+## Examples with Write Scope Awareness
 
-### Example 1: Simple Dependency Chain
+### Example 1: Safe Parallel Implementation
 ```
-Step 1: depends_on: []
-Step 2: depends_on: ["step-1"]
-Step 3: depends_on: ["step-2"]
-Step 4: depends_on: ["step-2"]
-→ Execution: 1 → 2 → [3,4] (parallel)
+Step 1: 
+  title: "Implement user authentication module"
+  write_scope: ["src/auth/", "tests/auth/"]
+  depends_on: []
+
+Step 2:
+  title: "Implement payment processing module"  
+  write_scope: ["src/payments/", "tests/payments/"]
+  depends_on: []
+
+Step 3:
+  title: "Update shared configuration"
+  write_scope: ["config/app.yaml"]
+  depends_on: ["step-1", "step-2"]
+
+→ Execution: [1,2] (parallel, disjoint write scopes) → 3 (sequential, shared config)
 ```
 
-### Example 2: Complex Parallelization
+### Example 2: Critical Path Protection
 ```
-Step 1: depends_on: []
-Step 2: depends_on: []
-Step 3: depends_on: ["step-1", "step-2"]
-Step 4: depends_on: ["step-1"]
-Step 5: depends_on: ["step-3"]
-→ Execution: [1,2] (parallel) → 3 → [4,5] (parallel after respective deps)
+Step 1:
+  title: "Update database schema"
+  write_scope: ["migrations/001_users.sql", "models/user.py"]
+  depends_on: []
+
+Step 2:
+  title: "Update API endpoints"
+  write_scope: ["api/users.py", "api/auth.py"]  
+  depends_on: ["step-1"]
+
+Step 3:
+  title: "Write documentation"
+  write_scope: ["docs/users.md"]
+  depends_on: []
+
+→ Execution: 1 → 2 (sequential, critical path) + 3 (parallel sidecar, disjoint write scope)
 ```
 
-### Example 3: Mixed Plan/Build with Subagents
+### Example 3: Integration Gate Synchronization
 ```
-Step 1 (plan): Market analysis → Subagent A
-Step 2 (plan): User research → Subagent B (parallel with Step 1)
-Step 3 (build): API design → Subagent C (after Step 1,2)
-Step 4 (build): UI prototype → Subagent D (parallel with Step 3)
-→ Maximized parallel execution with specialized subagents
+Step 1:
+  title: "Implement frontend component"
+  write_scope: ["frontend/src/ComponentA/"]
+  integration_gate: "post"
+  depends_on: []
+
+Step 2:
+  title: "Implement backend API"
+  write_scope: ["backend/src/api/"]
+  integration_gate: "post"  
+  depends_on: []
+
+Step 3:
+  title: "Integration test"
+  write_scope: ["tests/integration/"]
+  depends_on: ["step-1", "step-2"]
+
+→ Execution: [1,2] (parallel) → [Integration Gate] → 3 (after both complete)
+```
+
+## Build-Step Normalization for Parallelization
+
+For safe parallel execution, build steps should define:
+
+```yaml
+id: "COMP-001"
+title: "Implement component X"
+depends_on: []
+required_capabilities: ["code_generation", "testing"]
+write_scope: ["src/components/X/", "tests/components/X/"]
+verification: ["unit tests pass", "compiles without errors"]
+integration_gate: "post"
+retry_budget: 2
+handoff_contract: ["files_changed", "tests_run", "known_limitations"]
 ```
 
 ## Error Handling in Parallel Execution
 
-### Failure Scenarios:
-- **Subagent timeout**: Retry with same or different subagent
-- **Partial failure**: Continue with remaining steps, mark failed
-- **Dependency failure**: Skip dependent steps, report chain failure
-- **Resource exhaustion**: Queue steps, implement backoff
+### Failure Scenarios with Write Scope:
+- **Write scope conflict**: Two parallel steps attempt to modify same file
+- **Integration gate failure**: Parallel lanes produce incompatible results
+- **Dependency violation**: Sidecar lane depends on incomplete critical path
+- **Resource deadlock**: Parallel steps waiting for each other's write surfaces
 
 ### Recovery Strategies:
-1. **Retry failed steps** with adjusted parameters
-2. **Fallback to sequential execution** if parallel fails
-3. **Skip non-critical steps** with user approval
-4. **Partial completion** with clear status reporting
+1. **Rollback conflicting writes**: Restore original state, retry with synchronization
+2. **Isolate write conflicts**: Serialize steps with overlapping write scopes
+3. **Partial rollback**: Undo only conflicting changes, preserve independent work
+4. **Gate retry**: Re-run integration verification with adjusted parameters
 
-## Performance Optimization
+## Performance Optimization with Safety
 
-### 1. **Batch Processing**
-- Group similar steps to minimize context switching
-- Pre-fetch resources needed by multiple steps
-- Cache intermediate results for reuse
+### 1. **Write Scope Minimization**
+- Define precise write scopes to maximize parallel opportunities
+- Avoid broad write scopes like `["src/"]` unless necessary
+- Use directory-level granularity when possible
 
-### 2. **Resource Management**
-- Limit concurrent API calls
-- Monitor memory and computation usage
-- Implement rate limiting for external services
+### 2. **Lane Resource Allocation**
+- Allocate resources based on write scope complexity
+- Monitor I/O contention for file system operations
+- Balance CPU vs I/O intensive lanes
 
 ### 3. **Adaptive Parallelization**
-- Start with conservative parallelization
-- Increase concurrency based on success rate
-- Dynamic adjustment based on system load
+- Start with conservative parallelization (fewer lanes)
+- Increase lanes as write scope safety is confirmed
+- Dynamic adjustment based on conflict history
 
-## Integration with Existing Features
+## Integration with Ralph Loop
 
-### Combined with Plan/Build Detection:
-- Parallelize within plan steps and build steps separately
-- Maintain separation between conceptual and implementation work
-- Coordinate handoffs between plan and build phases
+### Combined with Batch Planning:
+- Each Ralph Loop batch defines its parallel lane structure
+- Critical path steps advance the loop state
+- Sidecar lanes complete within batch boundaries
+- Integration gates synchronize lanes before batch completion
 
-### Combined with ReleaseChain:
-- Parallel execution feeds into parallel development pipeline
-- Multiple build components can be reviewed/tested simultaneously
-- Accelerated end-to-end product development flow
+### Combined with Gate Policy:
+- Parallel lanes have individual verification gates
+- Integration gates validate cross-lane consistency
+- Batch completion requires all lanes to pass their gates
 
-## Best Practices
+## Best Practices for Safe Parallelization
 
-1. **Design for parallelism**: Structure sequences with clear, minimal dependencies
-2. **Use descriptive step IDs**: Makes dependency tracking clearer
-3. **Consider resource constraints**: Don't parallelize steps that share limited resources
-4. **Implement progress tracking**: Essential for monitoring parallel execution
-5. **Provide clear error messages**: Critical when debugging parallel failures
+1. **Define precise write scopes**: Enables accurate conflict detection
+2. **Separate critical path from sidecars**: Clear ownership boundaries
+3. **Use integration gates liberally**: Prevent subtle integration bugs
+4. **Monitor write conflicts**: Log and learn from parallelization issues
+5. **Design for retryability**: Make parallel steps idempotent when possible
+6. **Document lane dependencies**: Help reviewers understand parallel structure
 
-## Marketing Angle: "Product Development Flow on Steroids"
+## Safety-First Parallelization Philosophy
 
-SkillWeave's parallel execution turns sequential AI workflows into **highly parallelized product development pipelines**:
+SkillWeave's parallel execution prioritizes **safety over maximal parallelism**:
 
-- **From**: Linear, slow, single-threaded prompt chains
-- **To**: Parallel, fast, multi-agent development flows
-- **Result**: Dramatically accelerated ideation → implementation → deployment cycles
+- **From**: "Parallelize everything possible" (risky, conflict-prone)
+- **To**: "Parallelize only what's safe" (reliable, deterministic)
+- **Result**: Accelerated development **without** integration nightmares
 
 This enables teams to:
-- **Run market research and technical prototyping simultaneously**
-- **Develop multiple product components in parallel**
-- **Accelerate feedback loops and iteration speed**
-- **Scale AI-assisted development across entire organizations**
+- **Develop multiple features simultaneously without stepping on each other**
+- **Run tests and documentation in parallel with implementation**
+- **Accelerate iteration while maintaining system integrity**
+- **Scale AI-assisted development with confidence**

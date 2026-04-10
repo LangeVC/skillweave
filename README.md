@@ -1,7 +1,7 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.2-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.2)
+[![Version](https://img.shields.io/badge/version-0.4.3-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.3)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
 [![Skills](https://img.shields.io/badge/skills-5%20skills-blue)](skills/)
@@ -295,7 +295,7 @@ SkillWeave's vision is to create **the definitive product development ecosystem 
 **Production Ready** - SkillWeave v0.4.0+ is a complete, battle-tested product development ecosystem used for real projects.
 
 ### Current Status
-- **Version**: v0.4.1 (latest stable release)
+- **Version**: v0.4.3 (latest stable release)
 - **Stability**: Production-ready with comprehensive test suite
 - **Performance**: Optimized for projects with 50+ parallel tasks
 - **Adoption**: Used by teams for AI-assisted product development
@@ -357,6 +357,7 @@ git clone https://github.com/typelicious/skillweave.git
 mkdir -p ~/.config/opencode/commands
 
 # Install as single .md files (symlinks recommended for updates)
+ln -sf $PWD/skillweave/skills/skillweave-blueprint/SKILL.md ~/.config/opencode/commands/skillweave-blueprint.md
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-generate.md
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-validate.md
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-execute.md
@@ -372,9 +373,11 @@ git clone https://github.com/typelicious/skillweave.git
 mkdir -p ~/.claude/skills ~/.codex/skills ~/.antigravity/skills
 
 # Install as directory symlinks
+ln -sf $PWD/skillweave/skills/skillweave-blueprint ~/.claude/skills/
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate ~/.claude/skills/
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate ~/.claude/skills/
 ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute ~/.claude/skills/
+ln -sf $PWD/skillweave/skills/skillweave-releasechain ~/.claude/skills/
 
 # Repeat for other agents with their respective paths
 ```
@@ -428,6 +431,7 @@ This script:
 3. **Checks repository status** (git branch, latest commit)
 4. **Warns if** `~/.skillweave` is a git repository (should be plain directory)
 5. **Offers to run installer** automatically after update
+6. **Lets the installer clean up** legacy `~/.agents/skills` duplicates during install/update
 
 **Typical workflow:**
 ```bash
