@@ -1,14 +1,49 @@
-from typing import List, Dict, Set, Tuple, Optional
+from typing import List, Dict, Set, Tuple, Optional, Any
 from .models import WorkflowContext, PromptSequence, StepSpec
 
 
-def initialize_context(sequence_id: str, mode: str, inputs: dict, usage_notes: dict) -> WorkflowContext:
+def initialize_context(
+    sequence_id: str, 
+    mode: str, 
+    inputs: dict, 
+    usage_notes: dict,
+    project_root: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> WorkflowContext:
+    """Initialize workflow context with optional Next Level integration.
+    
+    Args:
+        sequence_id: Unique identifier for the sequence
+        mode: Execution mode (maps to RiskMode)
+        inputs: Input data for the workflow
+        usage_notes: Usage notes for the sequence
+        project_root: Optional project root for Next Level features
+        metadata: Optional additional metadata
+    
+    Returns:
+        WorkflowContext with optional Next Level instance in metadata
+    """
+    metadata_dict = metadata or {}
+    
+    # If project_root provided, try to create SkillWeaveNextLevel instance
+    if project_root:
+        try:
+            from .next_level import SkillWeaveNextLevel
+            next_level = SkillWeaveNextLevel(project_root)
+            metadata_dict["next_level"] = next_level
+            # Update mode from next_level configuration (if different)
+            mode = next_level.get_mode().value
+        except ImportError:
+            # Next Level not available, continue without it
+            pass
+    
     return WorkflowContext(
         sequence_id=sequence_id,
         mode=mode,
         status="running",
         inputs=inputs,
         usage_notes=usage_notes,
+        metadata=metadata_dict,
     )
 
 

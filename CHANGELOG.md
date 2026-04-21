@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0
+- **RELEASE**: SkillWeave Next Level Features v0.5.0
+- **FEATURE**: Three risk modes (conservative, medium, unicorn) across all skills
+- **FEATURE**: .skillweave folder structure with config, tracking, manifesto
+- **FEATURE**: Persistent state manager with session recovery
+- **FEATURE**: Configuration manager with mode interpretation
+- **FEATURE**: GitHub Issues integration with Planning Poker estimation
+- **FEATURE**: Backlog synchronization with .skillweave tracking
+- **FEATURE**: Optional checklist execution with markdown checkbox tracking
+- **FEATURE**: Optional Design-Thinking Lens for UI/UX decisions
+- **FEATURE**: Enhanced capability-based routing with dynamic agent detection
+- **FEATURE**: Modular templates foundation with example templates
+- **FEATURE**: Community know-how prototype for pattern extraction
+- **FEATURE**: Comprehensive testing suite with 100+ tests
+- **FEATURE**: Updated documentation with configuration guide and examples
+- **IMPROVEMENT**: All Next Level features fully tested and integrated
+
 ## 0.4.4
 - **FEATURE**: Execute Skill v2 – Ralph Loop state machine with binary gates, batch planning, and safe parallelization
 - **FEATURE**: Two-axis model for generate – separates `sequence_type` (plan/build/mixed) from `execution_mode` (rex/ralph_attended/ralph_overnight)

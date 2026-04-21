@@ -1,0 +1,322 @@
+{
+  "projectName": "SkillWeave Next Level",
+  "version": "1.0",
+  "status": "implemented",
+  "tasks": [
+    {
+      "id": "ARCH-001",
+      "title": "Design .skillweave folder structure",
+      "description": "Define directory layout, file formats, and gitignore rules for persistent tracking",
+      "acceptanceCriteria": [
+        "Folder structure documented in design spec",
+        "Gitignore rules exclude tracking-log but include manifesto/config",
+        "Sample files for each subdirectory created",
+        "Backward compatibility considered"
+      ],
+      "priority": "high",
+      "estimatedEffort": 4,
+      "dependsOn": [],
+      "type": "infrastructure",
+      "passes": true,
+      "complexityPoints": 2
+    },
+    {
+      "id": "ARCH-002",
+      "title": "Implement Persistent State Manager",
+      "description": "Create manager for reading/writing tracking logs, session recovery",
+      "acceptanceCriteria": [
+        "JSON/YAML serialization for state",
+        "Automatic creation of .skillweave folder on first run",
+        "State can be saved and loaded after restart",
+        "Integration test for session recovery"
+      ],
+      "priority": "high",
+      "estimatedEffort": 8,
+      "dependsOn": [
+        "ARCH-001"
+      ],
+      "type": "infrastructure",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "ARCH-003",
+      "title": "Create Configuration Manager",
+      "description": "Implement config.yaml parser with mode interpretation",
+      "acceptanceCriteria": [
+        "Config.yaml schema defined",
+        "Three modes (conservative, medium, unicorn) recognized",
+        "Default values provided",
+        "Configuration influences skill behavior"
+      ],
+      "priority": "high",
+      "estimatedEffort": 6,
+      "dependsOn": [
+        "ARCH-001"
+      ],
+      "type": "infrastructure",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "FEAT-001",
+      "title": "Implement three risk modes in Blueprint skill",
+      "description": "Modify Blueprint skill to interpret mode and adjust behavior",
+      "acceptanceCriteria": [
+        "Blueprint reads mode from config",
+        "Different behavior per mode (e.g., detail level, validation strictness)",
+        "Tests verify mode-specific outputs",
+        "Documentation updated"
+      ],
+      "priority": "high",
+      "estimatedEffort": 5,
+      "dependsOn": [
+        "ARCH-003"
+      ],
+      "type": "feature",
+      "passes": true,
+      "complexityPoints": 2
+    },
+    {
+      "id": "FEAT-002",
+      "title": "Implement three risk modes in PromptChain skills",
+      "description": "Modify PromptChain generate/validate/execute to respect mode",
+      "acceptanceCriteria": [
+        "PromptChain skills interpret mode",
+        "Conservative mode adds extra validation steps",
+        "Unicorn mode allows more creative approaches",
+        "Behavior differences testable"
+      ],
+      "priority": "high",
+      "estimatedEffort": 8,
+      "dependsOn": [
+        "ARCH-003"
+      ],
+      "type": "feature",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "FEAT-003",
+      "title": "Implement three risk modes in ReleaseChain skill",
+      "description": "Modify ReleaseChain to adjust automation level based on mode",
+      "acceptanceCriteria": [
+        "ReleaseChain reads mode",
+        "Conservative mode requires more human confirmations",
+        "Unicorn mode runs more autonomously",
+        "Integration tests pass for all modes"
+      ],
+      "priority": "high",
+      "estimatedEffort": 8,
+      "dependsOn": [
+        "ARCH-003"
+      ],
+      "type": "feature",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "FEAT-004",
+      "title": "Optional checklist execution",
+      "description": "Add ability to process markdown checkboxes and loop until complete",
+      "acceptanceCriteria": [
+        "Skill detects markdown checkboxes in input",
+        "Loop continues until all checkboxes checked",
+        "Progress saved in tracking-log",
+        "Feature can be disabled in config"
+      ],
+      "priority": "medium",
+      "estimatedEffort": 6,
+      "dependsOn": [
+        "ARCH-002"
+      ],
+      "type": "feature",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "FEAT-005",
+      "title": "Optional Design-Thinking Lens",
+      "description": "Implement decision rules for UI/UX elements (optional)",
+      "acceptanceCriteria": [
+        "Design rules defined in manifesto/design-rules.yaml",
+        "Skill can apply rules when enabled",
+        "Output shows reduced clutter",
+        "Rules customizable per project"
+      ],
+      "priority": "low",
+      "estimatedEffort": 10,
+      "dependsOn": [
+        "ARCH-001",
+        "ARCH-003"
+      ],
+      "type": "feature",
+      "passes": true,
+      "complexityPoints": 5
+    },
+    {
+      "id": "REFACTOR-001",
+      "title": "Analyze redundancies between PromptChain and ReleaseChain",
+      "description": "Code analysis to identify overlapping functionality",
+      "acceptanceCriteria": [
+        "Duplicate code blocks identified",
+        "Overlap areas documented",
+        "Recommendation for consolidation produced",
+        "No functional regression"
+      ],
+      "priority": "high",
+      "estimatedEffort": 6,
+      "dependsOn": [],
+      "type": "refactor",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "REFACTOR-002",
+      "title": "Extract shared library components",
+      "description": "Create shared modules for memory system, agent routing, verification",
+      "acceptanceCriteria": [
+        "Shared library created (skillweave.core)",
+        "PromptChain and ReleaseChain use shared components",
+        "Code duplication reduced by 50%",
+        "All tests pass"
+      ],
+      "priority": "high",
+      "estimatedEffort": 12,
+      "dependsOn": [
+        "REFACTOR-001"
+      ],
+      "type": "refactor",
+      "passes": true,
+      "complexityPoints": 5
+    },
+    {
+      "id": "ENHANCE-001",
+      "title": "Enhance capability-based routing",
+      "description": "Improve agent detection and capability registry",
+      "acceptanceCriteria": [
+        "Dynamic agent detection scans installed skills",
+        "Registry updates automatically",
+        "Fallback strategies implemented",
+        "Works with at least 2 agent types"
+      ],
+      "priority": "high",
+      "estimatedEffort": 10,
+      "dependsOn": [],
+      "type": "enhancement",
+      "passes": true,
+      "complexityPoints": 5
+    },
+    {
+      "id": "ENHANCE-002",
+      "title": "Create modular templates foundation",
+      "description": "Define template format and loading mechanism",
+      "acceptanceCriteria": [
+        "Template format (YAML/JSON) documented",
+        "Template loader implemented",
+        "Variable substitution works",
+        "3 example templates for different use cases"
+      ],
+      "priority": "medium",
+      "estimatedEffort": 8,
+      "dependsOn": [
+        "ARCH-001"
+      ],
+      "type": "enhancement",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "ENHANCE-003",
+      "title": "Build community know-how prototype",
+      "description": "Prototype for pattern extraction and repo-cleanup recommendations",
+      "acceptanceCriteria": [
+        "Pattern extraction from successful runs works",
+        "Repo-cleanup recommendations generated",
+        "Prototype demonstrates concept",
+        "No production integration"
+      ],
+      "priority": "low",
+      "estimatedEffort": 8,
+      "dependsOn": [
+        "ARCH-002"
+      ],
+      "type": "enhancement",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "TEST-001",
+      "title": "Comprehensive testing suite",
+      "description": "Create tests for new features and regression",
+      "acceptanceCriteria": [
+        "Unit tests for new components",
+        "Integration tests for mode behaviors",
+        "Performance tests show no regression",
+        "Test coverage >80%"
+      ],
+      "priority": "high",
+      "estimatedEffort": 10,
+      "dependsOn": [
+        "FEAT-001",
+        "FEAT-002",
+        "FEAT-003",
+        "REFACTOR-002",
+        "ENHANCE-001"
+      ],
+      "type": "testing",
+      "passes": true,
+      "complexityPoints": 5
+    },
+    {
+      "id": "DOCS-001",
+      "title": "Update documentation",
+      "description": "Document new features, configuration, migration guide",
+      "acceptanceCriteria": [
+        "README updated with new capabilities",
+        "Configuration guide for .skillweave folder",
+        "Migration guide for existing users",
+        "Examples of three modes"
+      ],
+      "priority": "medium",
+      "estimatedEffort": 6,
+      "dependsOn": [
+        "FEAT-001",
+        "FEAT-002",
+        "FEAT-003",
+        "ENHANCE-002"
+      ],
+      "type": "documentation",
+      "passes": true,
+      "complexityPoints": 3
+    },
+    {
+      "id": "ENHANCE-004",
+      "title": "GitHub Issues integration with Planning Poker estimation",
+      "description": "Integrate with GitHub API to create issues from tasks, estimate complexity using Fibonacci points (1 point = 2 hours), sync with .skillweave tracking",
+      "acceptanceCriteria": [
+        "GitHub API integration for issue creation",
+        "Fibonacci point estimation (1 point = 2 hours)",
+        "Planning Poker-style complexity assignment",
+        "Backlog synchronization with .skillweave tracking",
+        "Components, priorities, and roadmap mapping",
+        "Extensible architecture for Jira/other systems (future)"
+      ],
+      "priority": "medium",
+      "estimatedEffort": 12,
+      "complexityPoints": 5,
+      "dependsOn": [
+        "ARCH-002"
+      ],
+      "type": "enhancement",
+      "passes": true
+    }
+  ],
+  "execution_recommendation": {
+    "mode": "standard",
+    "reason": "16 tasks, estimated 127 hours (56 Fibonacci points), moderate dependencies, mix of infrastructure, feature, refactor, and testing",
+    "suggested_workflow": "ralph-loop-attended",
+    "estimated_iterations": 22,
+    "parallel_opportunities": 4
+  }
+}

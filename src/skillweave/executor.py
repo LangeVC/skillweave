@@ -1,7 +1,15 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 import time
 from concurrent.futures import ThreadPoolExecutor, Future, TimeoutError
 from .models import WorkflowContext, StepSpec, PromptSequence
+
+
+def _get_next_level_from_context(context: WorkflowContext) -> Optional[Any]:
+    """Extract SkillWeaveNextLevel instance from context metadata if available."""
+    next_level = context.metadata.get("next_level")
+    if next_level and hasattr(next_level, 'get_max_parallel_tasks'):
+        return next_level
+    return None
 
 
 def execute_step(step: StepSpec, context: WorkflowContext) -> dict:
@@ -135,6 +143,11 @@ def execute_with_dependency_awareness(sequence_steps: List[StepSpec], context: W
         Execution summary with statistics
     """
     from .orchestrator import get_execution_groups
+    
+    # Adjust max_parallel based on Next Level mode if available
+    next_level = _get_next_level_from_context(context)
+    if next_level:
+        max_parallel = min(max_parallel, next_level.get_max_parallel_tasks())
     
     # Create a minimal PromptSequence for dependency analysis
     dummy_sequence = PromptSequence(

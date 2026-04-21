@@ -1,0 +1,91 @@
+# Design Thinking Lens Manifesto
+# Custom rules for applying cognitive ergonomics principles
+
+# Core rules (from specification)
+rules:
+  - name: "Value ≥ Noise"
+    description: "Every element must provide clear value; eliminate noise"
+    enabled: true
+    applies_to: ["blueprint", "promptchain", "releasechain"]
+    priority: "high"
+    examples:
+      - "Remove redundant steps in workflows"
+      - "Eliminate unnecessary configuration options"
+      - "Focus on essential features first"
+  
+  - name: "Scan Before Read"
+    description: "Structure content for quick scanning before deep reading"
+    enabled: true
+    applies_to: ["blueprint", "promptchain"]
+    priority: "medium"
+    examples:
+      - "Use clear headings and bullet points"
+      - "Put most important information first"
+      - "Include executive summaries"
+  
+  - name: "Progressive Disclosure"
+    description: "Reveal complexity gradually based on user needs"
+    enabled: true
+    applies_to: ["blueprint", "releasechain"]
+    priority: "medium"
+    examples:
+      - "Hide advanced options by default"
+      - "Provide beginner-friendly defaults"
+      - "Offer advanced configurations only when needed"
+  
+  - name: "Consistent Mental Models"
+    description: "Maintain consistent patterns and terminology"
+    enabled: true
+    applies_to: ["blueprint", "promptchain", "releasechain"]
+    priority: "high"
+    examples:
+      - "Use consistent naming conventions"
+      - "Apply same patterns across similar tasks"
+      - "Maintain consistent UI/UX patterns"
+  
+  - name: "Error Prevention & Recovery"
+    description: "Prevent errors where possible, provide clear recovery when not"
+    enabled: true
+    applies_to: ["releasechain", "promptchain"]
+    priority: "high"
+    examples:
+      - "Add confirmation for destructive operations"
+      - "Provide clear error messages with solutions"
+      - "Include rollback mechanisms"
+  
+  - name: "Cognitive Load Management"
+    description: "Minimize mental effort required to understand and use"
+    enabled: true
+    applies_to: ["blueprint", "promptchain"]
+    priority: "medium"
+    examples:
+      - "Break complex tasks into smaller steps"
+      - "Provide examples and templates"
+      - "Use visual aids where helpful"
+
+# Custom project-specific rules
+custom_rules:
+  - name: "Accessibility First"
+    description: "Ensure all outputs are accessible to diverse users"
+    enabled: true
+    applies_to: ["blueprint", "promptchain"]
+    priority: "high"
+  
+  - name: "Mobile-Friendliness"
+    description: "Design for mobile devices first when applicable"
+    enabled: true
+    applies_to: ["blueprint"]
+    priority: "medium"
+  
+  - name: "Performance Budget"
+    description: "Stay within performance constraints for all outputs"
+    enabled: true
+    applies_to: ["releasechain"]
+    priority: "high"
+
+# Rule application settings
+settings:
+  strict_mode: false
+  auto_apply: true
+  feedback_level: "detailed"
+  require_confirmation: false

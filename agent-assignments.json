@@ -1,0 +1,178 @@
+{
+  "ARCH-001": {
+    "required_capabilities": [
+      "infrastructure",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 240
+  },
+  "ARCH-002": {
+    "required_capabilities": [
+      "infrastructure",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 480
+  },
+  "ARCH-003": {
+    "required_capabilities": [
+      "infrastructure",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "FEAT-001": {
+    "required_capabilities": [
+      "code_generation",
+      "testing"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 300
+  },
+  "FEAT-002": {
+    "required_capabilities": [
+      "code_generation",
+      "testing"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 480
+  },
+  "FEAT-003": {
+    "required_capabilities": [
+      "code_generation",
+      "testing"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 480
+  },
+  "FEAT-004": {
+    "required_capabilities": [
+      "code_generation",
+      "testing"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "FEAT-005": {
+    "required_capabilities": [
+      "code_generation",
+      "testing"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "REFACTOR-001": {
+    "required_capabilities": [
+      "code_generation",
+      "review"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "REFACTOR-002": {
+    "required_capabilities": [
+      "code_generation",
+      "review"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 720
+  },
+  "ENHANCE-001": {
+    "required_capabilities": [
+      "code_generation",
+      "automation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "ENHANCE-002": {
+    "required_capabilities": [
+      "code_generation",
+      "automation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 480
+  },
+  "ENHANCE-003": {
+    "required_capabilities": [
+      "code_generation",
+      "automation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 480
+  },
+  "TEST-001": {
+    "required_capabilities": [
+      "testing",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "DOCS-001": {
+    "required_capabilities": [
+      "documentation",
+      "research"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "ENHANCE-004": {
+    "required_capabilities": [
+      "code_generation",
+      "automation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 720
+  }
+}

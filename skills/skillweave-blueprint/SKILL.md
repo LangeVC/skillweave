@@ -29,10 +29,95 @@ Create a complete PRD (Product Requirements Document) through guided interview, 
 /skillweave-blueprint idea="AI-powered task management tool" domain="saas"
 ```
 
+## Mode Configuration
+
+SkillWeave supports three risk modes that influence how this skill operates. Check for `.skillweave/config.yaml` in the project root. If it exists, read the `mode` setting (`conservative`, `medium`, `unicorn`). If not present, default to `medium`.
+
+### Mode-Specific Behavior
+
+**Conservative Mode** (maximum safety):
+- Require explicit approval for all assumptions before proceeding
+- Validate all inputs with strict rules (e.g., check for completeness, realism)
+- Generate detailed documentation with extensive rationale
+- Suggest conservative, battle-tested technology choices
+- Add extra validation steps and confirmations
+
+**Medium Mode** (balanced, default):
+- Standard validation and approval process
+- Generate comprehensive documentation
+- Suggest balanced technology choices
+
+**Unicorn Mode** (maximum creativity):
+- Minimal validation (accept optimistic assumptions)
+- Make optimistic assumptions when information is missing
+- Generate lightweight, concise documentation
+- Suggest cutting-edge, innovative technology choices
+- Skip unnecessary confirmations to speed up process
+
+Adjust your interview questions, validation rigor, documentation depth, and technology suggestions accordingly.
+
+## Next Level Features
+
+SkillWeave Next Level provides advanced capabilities that can enhance the blueprint process. These features are controlled by `.skillweave/config.yaml` and can be accessed via the `SkillWeaveNextLevel` class.
+
+### Checklist-Based Execution
+If `checklist: true` is set in the config, the skill will:
+- Parse markdown checklists (`- [ ]` and `- [x]`) from input or attached files
+- Track checklist item completion across sessions using `.skillweave/tracking-log/`
+- Loop until all checklist items are marked complete
+- Provide progress reports and remaining items
+
+### Design-Thinking Lens  
+If `design_thinking: true` is set in the config, apply these cognitive ergonomics principles:
+1. **Value ≥ Noise**: Ensure every output provides clear user value
+2. **Scan Before Read**: Structure content for quick scanning with clear headings
+3. **Hierarchy of Needs**: Address functional needs before advanced features
+4. **Progressive Disclosure**: Reveal complexity gradually as needed
+5. **Recognition Over Recall**: Use consistent patterns and familiar formats
+6. **Error Tolerance**: Design for mistakes with clear recovery paths
+
+### Community Know-How
+If `community_knowhow: true` is set, the skill will:
+- Extract patterns from `.skillweave/tracking-log/` across projects
+- Provide repository cleanup recommendations based on common issues
+- Suggest optimizations and best practices from community patterns
+
+### Modular Templates
+If `modular_templates: true` is set, the skill can:
+- Load and combine templates from `.skillweave/templates/`
+- Use template inheritance for consistent documentation
+- Generate custom PRD sections from reusable components
+
+### Using Next Level Features
+```python
+from skillweave.next_level import SkillWeaveNextLevel
+
+# Initialize with project root
+next_level = SkillWeaveNextLevel("/path/to/project")
+
+# Check feature availability
+if next_level.is_checklist_enabled():
+    checklist = next_level.parse_checklist(markdown_content)
+    # Track progress, loop until completion
+
+if next_level.is_design_thinking_enabled():
+    lens = next_level.get_design_thinking_lens()
+    lens.apply_to_output(your_content)
+
+# Access other features similarly
+```
+
+Adjust your execution based on enabled features to provide enhanced results while maintaining backward compatibility.
+
 ## Interactive PRD Creation Process
 
 ### Phase 1: Discovery Interview
 The skill conducts a structured interview to understand your project:
+
+**Mode Adaptation:** Based on the configured mode, adjust the level of validation, detail, and approval requirements:
+- **Conservative:** For each answer, validate completeness and realism, ask for explicit confirmation of assumptions.
+- **Medium:** Standard validation, ask for clarification when needed.
+- **Unicorn:** Accept optimistic assumptions, focus on speed over exhaustive validation.
 
 1. **Project Vision & Goals**
    - What problem are you solving?
@@ -51,6 +136,10 @@ The skill conducts a structured interview to understand your project:
    - Performance requirements
    - Scalability needs
    - Security considerations
+   - **Technology suggestions based on mode:**
+     - *Conservative:* Suggest battle-tested, stable technologies with strong community support
+     - *Medium:* Suggest balanced mix of mature and modern technologies
+     - *Unicorn:* Suggest cutting-edge, innovative technologies that provide competitive advantage
 
 4. **Success Criteria**
    - How will you measure success?
@@ -60,6 +149,11 @@ The skill conducts a structured interview to understand your project:
 
 ### Phase 2: PRD Generation
 Based on interview responses, creates a structured PRD with:
+
+**Documentation Depth based on Mode:**
+- **Conservative:** Include extensive rationale, detailed acceptance criteria, thorough risk analysis, comprehensive appendices.
+- **Medium:** Include standard sections with clear acceptance criteria and reasonable detail.
+- **Unicorn:** Keep documentation concise, focus on essential information, skip lengthy explanations.
 
 ```
 # Product Requirements Document

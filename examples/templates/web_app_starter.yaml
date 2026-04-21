@@ -1,0 +1,52 @@
+name: web_app_starter
+type: web_app
+description: Starter template for a modern web application
+content:
+  project_type: web_app
+  stack:
+    frontend: ${frontend_framework}
+    backend: ${backend_framework}
+    database: ${database}
+    deployment: ${deployment_platform}
+  structure:
+    src:
+      components:
+      - ${component_list}
+      pages:
+      - ${page_list}
+      styles:
+      - ${style_framework}
+    public:
+    - index.html
+    - assets
+    package.json:
+      dependencies:
+        ${frontend_framework}: ^latest
+        react-router-dom: ^6.0
+        axios: ^1.0
+      scripts:
+        start: npm run dev
+        build: npm run build
+        dev: vite
+  development:
+    environment_variables:
+      API_URL: ${api_url}
+      ENV: development
+    scripts:
+      setup: npm install
+      test: npm test
+  deployment:
+    platform: ${deployment_platform}
+    steps:
+    - Build application
+    - Deploy to ${deployment_platform}
+    - Configure environment variables
+variables:
+- frontend_framework
+- backend_framework
+- database
+- deployment_platform
+- component_list
+- page_list
+- style_framework
+- api_url

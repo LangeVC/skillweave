@@ -1,0 +1,77 @@
+mode: standard
+workflow: ralph-loop-attended
+checkpoint_interval: 5
+description: Ralph Loop execution with human checkpoints for SkillWeave Next Level
+phases:
+  -
+    name: phase_1
+    tasks:
+      - ARCH-001
+      - REFACTOR-001
+      - ENHANCE-001
+    depends_on:
+
+    parallel: True
+    description: Level 1 tasks
+    verification:
+      - typecheck
+      - lint
+      - tests
+  -
+    name: phase_2
+    tasks:
+      - ARCH-002
+      - ARCH-003
+      - ENHANCE-002
+      - REFACTOR-002
+    depends_on:
+      - phase_1
+    parallel: True
+    description: Level 2 tasks
+    verification:
+      - typecheck
+      - lint
+      - tests
+  -
+    name: phase_3
+    tasks:
+      - ENHANCE-003
+      - FEAT-004
+      - ENHANCE-004
+      - FEAT-001
+      - FEAT-002
+      - FEAT-003
+      - FEAT-005
+    depends_on:
+      - phase_2
+    parallel: True
+    description: Level 3 tasks
+    verification:
+      - typecheck
+      - lint
+      - tests
+  -
+    name: phase_4
+    tasks:
+      - DOCS-001
+      - TEST-001
+    depends_on:
+      - phase_3
+    parallel: True
+    description: Level 4 tasks
+    verification:
+      - documentation_complete
+      - deployment_ready
+memory_system:
+  short_term: progress-structured.yaml
+  long_term: agents-enhanced.md
+  update_frequency: per_iteration
+verification:
+  levels:
+    - code
+    - functional
+    - system
+  gates:
+    - pre_commit
+    - pre_merge
+    - pre_deploy

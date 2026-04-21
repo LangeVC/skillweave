@@ -43,3 +43,4 @@ class WorkflowContext:
     validation_findings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     final_output: Any = None
+    metadata: dict[str, Any] = field(default_factory=dict)

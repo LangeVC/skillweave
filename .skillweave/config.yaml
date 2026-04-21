@@ -1,0 +1,8 @@
+mode: medium
+features:
+  checklist_execution: false
+  design_thinking_lens: false
+  community_patterns: false
+  modular_templates: false
+  capability_routing: false
+overrides: {}

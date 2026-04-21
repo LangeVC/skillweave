@@ -43,6 +43,9 @@ copy_skills_to_target() {
     [ -z "$DRY_RUN" ] && mkdir -p "$TARGET_DIR/skills"
     [ -z "$DRY_RUN" ] && mkdir -p "$TARGET_DIR/scripts"
     
+    # Create global Next Level configuration
+    create_global_config
+    
     # Copy skills directory
     if [ -d "$SOURCE_DIR/skills" ]; then
         log "  Copying skills directory..."
@@ -72,6 +75,97 @@ copy_skills_to_target() {
     
     log "  Skills copied successfully to target directory"
     return 0
+}
+
+# Create global Next Level configuration
+create_global_config() {
+    local config_file="$TARGET_DIR/config.yaml"
+    
+    if [ -f "$config_file" ]; then
+        log "  Global config already exists: $config_file"
+        return 0
+    fi
+    
+    log "  Creating global Next Level configuration..."
+    
+    cat > "$config_file" << 'EOF'
+# SkillWeave Next Level Global Configuration
+# This configuration provides defaults for all projects.
+# Project-specific .skillweave/config.yaml overrides these settings.
+
+mode: medium
+
+features:
+  checklist_execution: true
+  design_thinking_lens: true
+  community_patterns: false
+  modular_templates: false
+  capability_routing: false
+
+overrides:
+  global: true
+  description: "Global SkillWeave configuration. Project-specific .skillweave/config.yaml overrides these settings."
+EOF
+    
+    log "  ✓ Created global config: $config_file"
+}
+
+# Initialize Next Level features in current project
+init_project() {
+    local project_root="$(pwd)"
+    local skillweave_dir="$project_root/.skillweave"
+    local config_file="$skillweave_dir/config.yaml"
+    
+    log "Initializing SkillWeave Next Level features in: $project_root"
+    
+    if [ -d "$skillweave_dir" ]; then
+        log "  .skillweave directory already exists"
+    else
+        log "  Creating .skillweave directory structure..."
+        [ -z "$DRY_RUN" ] && mkdir -p "$skillweave_dir"
+        [ -z "$DRY_RUN" ] && mkdir -p "$skillweave_dir/handover"
+        [ -z "$DRY_RUN" ] && mkdir -p "$skillweave_dir/specs"
+        [ -z "$DRY_RUN" ] && mkdir -p "$skillweave_dir/tracking-log"
+        [ -z "$DRY_RUN" ] && mkdir -p "$skillweave_dir/manifesto"
+    fi
+    
+    if [ -f "$config_file" ]; then
+        log "  config.yaml already exists"
+    else
+        log "  Creating config.yaml..."
+        [ -z "$DRY_RUN" ] && cat > "$config_file" << 'EOF'
+# SkillWeave Next Level Project Configuration
+# This configuration overrides global settings in ~/.skillweave/config.yaml
+
+mode: medium
+
+features:
+  checklist_execution: true
+  design_thinking_lens: true
+  community_patterns: false
+  modular_templates: false
+  capability_routing: false
+
+overrides:
+  project: true
+  description: "Project-specific SkillWeave configuration"
+EOF
+    fi
+    
+    # Update .gitignore if needed
+    local gitignore="$project_root/.gitignore"
+    if [ -f "$gitignore" ]; then
+        if ! grep -q "^\.skillweave/tracking-log/\*" "$gitignore"; then
+            log "  Updating .gitignore to exclude tracking-log..."
+            [ -z "$DRY_RUN" ] && echo "" >> "$gitignore"
+            [ -z "$DRY_RUN" ] && echo "# SkillWeave tracking logs" >> "$gitignore"
+            [ -z "$DRY_RUN" ] && echo ".skillweave/tracking-log/*" >> "$gitignore"
+        fi
+    fi
+    
+    log "  ✓ Next Level features initialized"
+    log "  Configuration: $config_file"
+    log "  Subdirectories: handover, specs, tracking-log, manifesto"
 }
 
 # Agent configuration arrays (Bash 3.x compatible)
@@ -105,7 +199,7 @@ AGENT_PATHS=(
     "$HOME/.claude/skills"                # claude-code
     "$HOME/.codex/skills"                 # codex
     "$HOME/.gemini/skills"                # gemini-cli
-    "$HOME/.antigravity/skills"           # antigravity
+    "$HOME/.gemini/antigravity/skills"    # antigravity
     "$HOME/.config/openclaw/skills"       # openclaw
     "$HOME/.config/aider/skills"          # aider
     "$HOME/.config/windsurf/skills"       # windsurf
@@ -131,7 +225,7 @@ SKILLS=(
     "skillweave-promptchain-validate"
     "skillweave-promptchain-execute"
     "skillweave-releasechain"
-    "prompt-chain"  # Legacy skill for compatibility
+    # "prompt-chain" removed in v0.4.4 - use skillweave-promptchain-generate instead
 )
 
 LEGACY_SKILL_PATHS=(
@@ -390,6 +484,8 @@ interactive_select_agents() {
     
     echo "" >&2
     echo "Select agents to install (enter numbers separated by commas, 'all', or 'none'):" >&2
+    echo "  'all' = all detected/installed agents (✓ marked)" >&2
+    echo "  'none' = exit without installation" >&2
     echo -n "> " >&2
     
     local selection=""
@@ -764,6 +860,9 @@ main() {
             --update)
                 MODE="update"
                 ;;
+            --init)
+                MODE="init"
+                ;;
             --troubleshoot)
                 MODE="troubleshoot"
                 ;;
@@ -821,6 +920,10 @@ main() {
                 IFS=' ' read -ra agents_array <<< "$selected_agents"
                 update_skills "${agents_array[@]}"
             fi
+            ;;
+        init)
+            init_project
+            exit 0
             ;;
         troubleshoot)
             troubleshoot_skills
@@ -893,25 +996,6 @@ main() {
             echo "========================================="
             ;;
     esac
-    echo "SkillWeave Installation Summary"
-    echo "========================================="
-    echo "Agents processed: $agents_processed"
-    echo "Total skill instances: $total_installed"
-    echo ""
-    echo "Installed skills:"
-    for skill in "${SKILLS[@]}"; do
-        echo "  - $skill"
-    done
-    echo ""
-    echo "Usage examples:"
-    echo "  /skillweave-promptchain-generate topic=\"Business analysis\" domain=\"strategy\""
-    echo "  /skillweave-promptchain-validate sequence=\"[prompt sequence]\""
-    echo "  /skillweave-promptchain-execute sequence=\"[sequence]\" inputs='{\"key\": \"value\"}'"
-    echo ""
-    echo "Note: Restart your agent tool to detect new skills"
-    echo ""
-    echo "For manual installation or troubleshooting, see README.md"
-    echo "========================================="
 }
 
 # Run main function

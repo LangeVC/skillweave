@@ -9,3 +9,6 @@ build/
 *.egg-info/
 install.log
 strategy.md
+
+# SkillWeave tracking logs (auto-generated)
+.skillweave/tracking-log/*

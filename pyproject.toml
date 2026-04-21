@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skillweave"
+version = "0.5.0"
+description = "Multi-agent AI skill orchestration with Next Level features"
+readme = "README.md"
+authors = [
+    {name = "SkillWeave Team"},
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "flake8>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/typelicious/SkillWeave"
+Repository = "https://github.com/typelicious/SkillWeave"
+Issues = "https://github.com/typelicious/SkillWeave/issues"
+
+[project.scripts]
+skillweave-install = "skillweave.installer:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["skillweave*"]
+
+[tool.setuptools.package-data]
+skillweave = ["py.typed"]

@@ -1,0 +1,17 @@
+# SkillWeave Next Level Configuration - Unicorn Mode
+# Maximum creativity, speed, and innovation
+
+mode: unicorn
+features:
+  checklist_execution: false  # Skip checklists for speed
+  design_thinking_lens: true  # Still apply design thinking (creative focus)
+  community_patterns: true    # Enable pattern extraction for inspiration
+  modular_templates: false    # Avoid template constraints for creativity
+  capability_routing: true    # Use dynamic routing for best agent matching
+
+overrides:
+  max_parallel_tasks: 10      # Maximize parallel execution
+  require_approval: false     # No approval required
+  safety_checks: false        # Disable safety checks for speed
+  backup_before_changes: false # No backups, move fast
+  experimental_features: true  # Enable experimental features

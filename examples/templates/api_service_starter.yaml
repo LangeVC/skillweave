@@ -1,0 +1,68 @@
+name: api_service_starter
+type: api_service
+description: Starter template for a RESTful API service
+content:
+  project_type: api_service
+  stack:
+    framework: ${api_framework}
+    language: ${language}
+    database: ${database}
+    authentication: ${auth_method}
+  structure:
+    src:
+      controllers:
+      - ${controller_list}
+      models:
+      - ${model_list}
+      routes:
+      - ${route_list}
+      middleware:
+      - ${middleware_list}
+      utils:
+      - ${utility_list}
+    tests:
+      unit:
+      - ${unit_test_files}
+      integration:
+      - ${integration_test_files}
+    package.json:
+      dependencies:
+        ${api_framework}: ^latest
+        express: ^4.18
+        mongoose: ^7.0
+        jsonwebtoken: ^9.0
+      scripts:
+        start: node src/index.js
+        dev: nodemon src/index.js
+        test: jest
+  endpoints:
+  - method: GET
+    path: /api/${resource_name}
+    description: Get all ${resource_name}
+  - method: GET
+    path: /api/${resource_name}/:id
+    description: Get single ${resource_name}
+  - method: POST
+    path: /api/${resource_name}
+    description: Create ${resource_name}
+  development:
+    environment_variables:
+      PORT: ${port}
+      DB_URL: ${database_url}
+      JWT_SECRET: ${jwt_secret}
+variables:
+- api_framework
+- language
+- database
+- auth_method
+- controller_list
+- model_list
+- route_list
+- middleware_list
+- utility_list
+- unit_test_files
+- integration_test_files
+- resource_name
+- port
+- database_url
+- jwt_secret

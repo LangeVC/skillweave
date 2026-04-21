@@ -1,0 +1,83 @@
+{
+  "projectName": "SkillWeave v0.5.0 Release",
+  "version": "1.0",
+  "status": "pending",
+  "tasks": [
+    {
+      "id": "RELEASE-001",
+      "title": "Update version in pyproject.toml",
+      "description": "Update version field from 0.1.0 to 0.5.0 in pyproject.toml",
+      "acceptanceCriteria": [
+        "pyproject.toml version field updated to 0.5.0",
+        "No other changes to pyproject.toml"
+      ],
+      "priority": "high",
+      "estimatedEffort": 0.5,
+      "complexityPoints": 1,
+      "dependsOn": [],
+      "type": "documentation",
+      "passes": false
+    },
+    {
+      "id": "RELEASE-002",
+      "title": "Update version badge in README.md",
+      "description": "Update version badge URL and label from 0.4.4 to 0.5.0",
+      "acceptanceCriteria": [
+        "README.md version badge shows 0.5.0",
+        "Badge link points to v0.5.0 tag"
+      ],
+      "priority": "high",
+      "estimatedEffort": 0.5,
+      "complexityPoints": 1,
+      "dependsOn": [],
+      "type": "documentation",
+      "passes": false
+    },
+    {
+      "id": "RELEASE-003",
+      "title": "Add changelog entry for v0.5.0",
+      "description": "Add new section to CHANGELOG.md for version 0.5.0 with list of Next Level features",
+      "acceptanceCriteria": [
+        "CHANGELOG.md includes 0.5.0 section at top",
+        "Includes all Next Level features as bullet points",
+        "Follows existing changelog format"
+      ],
+      "priority": "high",
+      "estimatedEffort": 1,
+      "complexityPoints": 1,
+      "dependsOn": [],
+      "type": "documentation",
+      "passes": false
+    },
+    {
+      "id": "RELEASE-004",
+      "title": "Create git tag v0.5.0",
+      "description": "Create annotated git tag v0.5.0 pointing to current commit",
+      "acceptanceCriteria": [
+        "Git tag v0.5.0 created locally",
+        "Tag message includes release summary"
+      ],
+      "priority": "high",
+      "estimatedEffort": 0.5,
+      "complexityPoints": 1,
+      "dependsOn": ["RELEASE-001", "RELEASE-002", "RELEASE-003"],
+      "type": "infrastructure",
+      "passes": false
+    },
+    {
+      "id": "RELEASE-005",
+      "title": "Push tag to remote",
+      "description": "Push the v0.5.0 tag to GitHub remote repository",
+      "acceptanceCriteria": [
+        "Tag pushed to origin remote",
+        "Tag visible on GitHub"
+      ],
+      "priority": "high",
+      "estimatedEffort": 0.5,
+      "complexityPoints": 1,
+      "dependsOn": ["RELEASE-004"],
+      "type": "infrastructure",
+      "passes": false
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+name: cli_tool_starter
+type: cli_tool
+description: Starter template for a command-line interface tool
+content:
+  project_type: cli_tool
+  stack:
+    language: ${language}
+    cli_framework: ${cli_framework}
+    package_manager: ${package_manager}
+  structure:
+    src:
+      commands:
+      - ${command_list}
+      utils:
+      - ${utility_list}
+      config:
+      - ${config_files}
+    bin:
+      ${tool_name}: Entry point script
+    package.json:
+      name: ${tool_name}
+      version: 1.0.0
+      bin:
+        ${tool_name}: ./bin/${tool_name}
+      dependencies:
+        ${cli_framework}: ^latest
+        commander: ^11.0
+        chalk: ^5.0
+        inquirer: ^9.0
+      scripts:
+        start: node src/index.js
+        test: jest
+        build: npm run build
+  commands:
+  - name: ${command_name}
+    description: ${command_description}
+    options:
+    - flag: --verbose
+      description: Enable verbose output
+  development:
+    environment_variables:
+      DEBUG: ${debug_flag}
+    testing:
+      framework: ${test_framework}
+      coverage: ${coverage_tool}
+variables:
+- language
+- cli_framework
+- package_manager
+- command_list
+- utility_list
+- config_files
+- tool_name
+- command_name
+- command_description
+- debug_flag
+- test_framework
+- coverage_tool

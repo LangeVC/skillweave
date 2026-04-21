@@ -1,0 +1,16 @@
+# SkillWeave Next Level Configuration - Medium Mode
+# Balanced approach between safety and productivity
+
+mode: medium
+features:
+  checklist_execution: true   # Use checklists for important tasks
+  design_thinking_lens: true  # Apply design thinking principles
+  community_patterns: true    # Enable pattern extraction for insights
+  modular_templates: true     # Use templates for efficiency
+  capability_routing: true    # Enable dynamic routing for optimal agent selection
+
+overrides:
+  max_parallel_tasks: 3       # Moderate parallel execution
+  require_approval: false     # Only require approval for high-risk operations
+  safety_checks: true         # Enable safety checks
+  backup_before_changes: false # Only backup for critical changes

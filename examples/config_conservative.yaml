@@ -1,0 +1,16 @@
+# SkillWeave Next Level Configuration - Conservative Mode
+# Maximum safety, security, and reliability
+
+mode: conservative
+features:
+  checklist_execution: true  # Always use checklists for safety
+  design_thinking_lens: true  # Apply design thinking principles
+  community_patterns: false   # Disable pattern extraction for privacy
+  modular_templates: true     # Use templates for consistency
+  capability_routing: false   # Disable dynamic routing for predictability
+
+overrides:
+  max_parallel_tasks: 1       # Execute tasks sequentially
+  require_approval: true      # Require manual approval for critical operations
+  safety_checks: true         # Enable all safety checks
+  backup_before_changes: true # Create backups before making changes

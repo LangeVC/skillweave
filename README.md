@@ -1,11 +1,11 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.3-blue)](https://github.com/typelicious/skillweave/releases/tag/v0.4.3)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/typelicious/SkillWeave/releases/tag/v0.5.0)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
 [![Skills](https://img.shields.io/badge/skills-5%20skills-blue)](skills/)
-[![Status](https://img.shields.io/badge/status-production%20ready-green)](https://github.com/typelicious/skillweave)
+[![Status](https://img.shields.io/badge/status-production%20ready-green)](https://github.com/typelicious/SkillWeave)
 [![Repo Safety](https://img.shields.io/badge/repo%20safety-checked-green.svg)](SECURITY.md)
 
 **Product development flow on steroids - from idea to production with AI agents.**
@@ -23,7 +23,7 @@ It is designed for builders who want:
 
 ## What SkillWeave is
 
-SkillWeave is a complete product development ecosystem for AI-assisted development with **three integrated skills**:
+SkillWeave is a complete product development ecosystem for AI-assisted development with **five integrated skills**:
 
 ### 1. **Blueprint Skill** (`/skillweave-blueprint`)
 - **Structured PRD Creation**: Guided interview for comprehensive product requirements
@@ -31,16 +31,26 @@ SkillWeave is a complete product development ecosystem for AI-assisted developme
 - **Execution Recommendations**: REX vs Ralph Loop selection based on project scope
 - **Ralph Loop Integration**: Adapts Ralph Loop concepts for multi-agent AI development
 
-### 2. **PromptChain Skills** (generate, validate, execute)
-- **Generate**: Create prompt sequences from PRDs or concrete needs
-- **Validate**: Review and improve existing sequences
-- **Execute**: Run sequences with intelligent parallel execution and dependency analysis
+### 2. **PromptChain Generate** (`/skillweave-promptchain-generate`)
+- **Two-Axis Model**: Generates sequences with `sequence_type` (plan/build/mixed) and `execution_mode` (rex/ralph_attended/ralph_overnight)
+- **Complexity-Aware**: Creates execution plans optimized for REX (simple) or Ralph Loop (standard/complex) workflows
+- **Backward Compatibility**: Supports legacy `mode` parameter while encouraging explicit type/mode separation
 
-### 3. **ReleaseChain Skill** (`/skillweave-releasechain`)
-- **Dual-Mode Execution**: Simple REX-style for 1-3 tasks, full Ralph Loop for complex projects
-- **Agent-Agnostic Routing**: Capability-based task assignment to any AI coding agent
-- **Completion Promise System**: Standardized completion signaling with verification
-- **Memory Systems**: Progress tracking and knowledge accumulation across sessions
+### 3. **PromptChain Validate** (`/skillweave-promptchain-validate`)
+- **Comprehensive Validation**: Reviews sequences for completeness, parallelization readiness, and integration gates
+- **Parallelization Readiness**: Checks for write-scope conflicts and single-owner surfaces
+- **Improvement Suggestions**: Recommends enhancements to sequences for better execution
+
+### 4. **PromptChain Execute** (`/skillweave-promptchain-execute`)
+- **Ralph Loop State Machine**: 9-state execution flow (Preflight → Batch Selection → Lane Plan → Implement → Verify → Review Gate → Fix/Retry → Integrate → Advance/Stop)
+- **Write-Scope Based Parallelization**: Safe parallel execution only for disjoint write scopes
+- **Binary Gate Policy**: Only accepts hard completion signals (tests passed, verifier passed, explicit `continue`)
+- **Batch Planning**: Intelligent batching with `critical_path_step`, `parallel_lanes`, `write_surfaces`
+
+### 5. **ReleaseChain Skill** (`/skillweave-releasechain`)
+- **Ralph Loop Pipeline**: Ralph Loop-powered development pipeline for autonomous AI development
+- **Completion Promises**: Handles review, testing, iteration with completion promises, memory systems, and multi-agent execution
+- **Multi-Agent Orchestration**: Safe parallel subagent orchestration with dependency-aware batching
 
 Instead of linear, slow development workflows, SkillWeave enables **parallel, intelligent product development flows** with dependency-aware execution and adaptive workflow selection.
 
@@ -152,6 +162,18 @@ SkillWeave v0.4.0 transforms these weaknesses into strengths with:
 2. **PromptChain**: PRD → Execution sequences with parallelization planning
 3. **ReleaseChain**: Sequences → Production-ready code with verification loops
 
+### Next Level Features
+SkillWeave Next Level provides advanced capabilities that enhance all skills with intelligent execution modes, design thinking principles, and persistent tracking:
+
+- **Mode-Aware Execution**: Three risk modes (Conservative, Medium, Unicorn) control parallelization limits, approval requirements, and safety checks
+- **Checklist-Based Tracking**: Parse markdown checklists (`- [ ]` and `- [x]`) to track task completion across sessions using `.skillweave/tracking-log/`
+- **Design-Thinking Lens**: Apply cognitive ergonomics principles (Value ≥ Noise, Scan Before Read, Hierarchy of Needs, etc.) for better outputs
+- **Community Know-How**: Extract patterns from `.skillweave/tracking-log/` across projects for optimization recommendations
+- **Modular Templates**: Load and combine templates from `.skillweave/templates/` for consistent documentation
+- **Capability-Based Routing**: Dynamic agent detection and intelligent task routing based on declared capabilities
+
+**Usage**: Initialize with `--init` flag or via `SkillWeaveNextLevel` Python class. Configure via `.skillweave/config.yaml` in your project root.
+
 ---
 
 ## Who SkillWeave is for
@@ -221,20 +243,24 @@ Start here:
 
 ---
 
-## Current Release (v0.4.0+)
+## Current Release (v0.4.4+)
 
-SkillWeave v0.4.0+ is a complete product development ecosystem with:
+SkillWeave v0.4.4+ is a complete product development ecosystem with:
 
-### Three Integrated Skills
+### Five Integrated Skills
 1. **Blueprint Skill** (`/skillweave-blueprint`): Structured PRD creation with complexity analysis
-2. **PromptChain Skills**: Sequence generation, validation, and parallel execution
-3. **ReleaseChain Skill** (`/skillweave-releasechain`): Ralph Loop-powered development pipeline
+2. **PromptChain Generate** (`/skillweave-promptchain-generate`): Two-axis sequence generation with type/mode separation
+3. **PromptChain Validate** (`/skillweave-promptchain-validate`): Comprehensive validation with parallelization readiness checks
+4. **PromptChain Execute** (`/skillweave-promptchain-execute`): Ralph Loop state machine with write-scope based parallelization
+5. **ReleaseChain Skill** (`/skillweave-releasechain`): Ralph Loop-powered development pipeline
 
 ### Core Architecture
-- **Parallel Execution Engine**: Dependency-aware parallelization with subagent triggering
+- **Ralph Loop State Machine**: 9-state execution flow with binary gate policy
+- **Write-Scope Based Parallelization**: Safe parallel execution only for disjoint write scopes
+- **Two-Axis Model**: Explicit separation of `sequence_type` (plan/build/mixed) and `execution_mode` (rex/ralph_attended/ralph_overnight)
+- **Batch Planning**: Intelligent batching with critical path vs sidecar lanes
+- **Binary Gate Policy**: Only hard completion signals (tests passed, verifier passed, explicit `continue`)
 - **Agent-Agnostic Design**: Capability-based routing for any AI coding agent
-- **Complexity-Based Workflow Selection**: Automatic REX vs Ralph Loop mode selection
-- **Performance Optimized**: Efficient processing for large projects (50+ tasks)
 
 ### Production-Ready Features
 - Comprehensive testing suite (unit, integration, performance)
@@ -295,10 +321,11 @@ SkillWeave's vision is to create **the definitive product development ecosystem 
 **Production Ready** - SkillWeave v0.4.0+ is a complete, battle-tested product development ecosystem used for real projects.
 
 ### Current Status
-- **Version**: v0.4.3 (latest stable release)
+- **Version**: v0.4.4 (latest stable release)
 - **Stability**: Production-ready with comprehensive test suite
-- **Performance**: Optimized for projects with 50+ parallel tasks
+- **Performance**: Optimized for projects with 50+ parallel tasks, now with Ralph Loop state machine
 - **Adoption**: Used by teams for AI-assisted product development
+- **Key Features**: Ralph Loop execution, write-scope parallelization, two-axis model, binary gate policy
 
 ### Getting Started
 The best starting point depends on your needs:
@@ -324,14 +351,35 @@ The best starting point depends on your needs:
 
 SkillWeave v0.4.0+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
 
+### Online Installer (One-line)
+
+Install SkillWeave with a single command:
+
+```bash
+curl -s https://raw.githubusercontent.com/typelicious/SkillWeave/main/install.sh | bash
+```
+
+Or with options:
+
+```bash
+# Interactive installation
+curl -s https://raw.githubusercontent.com/typelicious/SkillWeave/main/install.sh | bash -s -- --interactive
+
+# Dry-run to preview changes
+curl -s https://raw.githubusercontent.com/typelicious/SkillWeave/main/install.sh | bash -s -- --dry-run
+
+# Initialize Next Level features in current project
+curl -s https://raw.githubusercontent.com/typelicious/SkillWeave/main/install.sh | bash -s -- --init
+```
+
 ### Recommended: Automated Installation (All Agents)
 
 Use the installer script to automatically install skills to all detected AI agent directories with correct formats for each agent type:
 
 ```bash
 # Clone the repository
-git clone https://github.com/typelicious/skillweave.git
-cd skillweave
+git clone https://github.com/typelicious/SkillWeave.git
+cd SkillWeave
 
 # Run the multi-agent installer
 ./scripts/install-skills.sh
@@ -351,33 +399,33 @@ If you prefer manual installation or need to install to specific agents:
 #### For Opencode (single .md files in commands directory)
 ```bash
 # Clone the repository
-git clone https://github.com/typelicious/skillweave.git
+git clone https://github.com/typelicious/SkillWeave.git
 
 # Create commands directory if it doesn't exist
 mkdir -p ~/.config/opencode/commands
 
 # Install as single .md files (symlinks recommended for updates)
-ln -sf $PWD/skillweave/skills/skillweave-blueprint/SKILL.md ~/.config/opencode/commands/skillweave-blueprint.md
-ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-generate.md
-ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-validate.md
-ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-execute.md
-ln -sf $PWD/skillweave/skills/skillweave-releasechain/SKILL.md ~/.config/opencode/commands/skillweave-releasechain.md
+ln -sf $PWD/SkillWeave/skills/skillweave-blueprint/SKILL.md ~/.config/opencode/commands/skillweave-blueprint.md
+ln -sf $PWD/SkillWeave/skills/skillweave-promptchain-generate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-generate.md
+ln -sf $PWD/SkillWeave/skills/skillweave-promptchain-validate/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-validate.md
+ln -sf $PWD/SkillWeave/skills/skillweave-promptchain-execute/SKILL.md ~/.config/opencode/commands/skillweave-promptchain-execute.md
+ln -sf $PWD/SkillWeave/skills/skillweave-releasechain/SKILL.md ~/.config/opencode/commands/skillweave-releasechain.md
 ```
 
 #### For Claude Code, Codex, Antigravity (directory structure)
 ```bash
 # Clone the repository
-git clone https://github.com/typelicious/skillweave.git
+git clone https://github.com/typelicious/SkillWeave.git
 
 # Create skills directories
-mkdir -p ~/.claude/skills ~/.codex/skills ~/.antigravity/skills
+mkdir -p ~/.claude/skills ~/.codex/skills ~/.gemini/antigravity/skills
 
 # Install as directory symlinks
-ln -sf $PWD/skillweave/skills/skillweave-blueprint ~/.claude/skills/
-ln -sf $PWD/skillweave/skills/skillweave-promptchain-generate ~/.claude/skills/
-ln -sf $PWD/skillweave/skills/skillweave-promptchain-validate ~/.claude/skills/
-ln -sf $PWD/skillweave/skills/skillweave-promptchain-execute ~/.claude/skills/
-ln -sf $PWD/skillweave/skills/skillweave-releasechain ~/.claude/skills/
+ln -sf $PWD/SkillWeave/skills/skillweave-blueprint ~/.claude/skills/
+ln -sf $PWD/SkillWeave/skills/skillweave-promptchain-generate ~/.claude/skills/
+ln -sf $PWD/SkillWeave/skills/skillweave-promptchain-validate ~/.claude/skills/
+ln -sf $PWD/SkillWeave/skills/skillweave-promptchain-execute ~/.claude/skills/
+ln -sf $PWD/SkillWeave/skills/skillweave-releasechain ~/.claude/skills/
 
 # Repeat for other agents with their respective paths
 ```
@@ -392,7 +440,7 @@ The installer supports these agent paths with correct formats:
 | **Claude Code** | Directory | `~/.claude/skills/` | Directory structure |
 | **Codex** | Directory | `~/.codex/skills/` | Directory structure |
 | **Gemini CLI** | Directory | `~/.gemini/skills/` | Directory structure |
-| **Antigravity** | Directory | `~/.antigravity/skills/` | Directory structure |
+| **Antigravity** | Directory | `~/.gemini/antigravity/skills/` | Directory structure |
 | **OpenClaw** | Directory | `~/.config/openclaw/skills/` | Directory structure |
 | **Aider** | Directory | `~/.config/aider/skills/` | Directory structure |
 | **Windsurf** | Directory | `~/.config/windsurf/skills/` | Directory structure |
