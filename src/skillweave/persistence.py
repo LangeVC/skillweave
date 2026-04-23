@@ -30,28 +30,66 @@ class SkillWeaveConfig:
         "community_patterns": False,
         "modular_templates": False,
         "capability_routing": False,
+        "intelligent_detection": True,  # New in v0.5.5
+        "interactive_guidance": True,   # New in v0.5.5
     }
+    # Default intelligent detection configuration
+    DEFAULT_INTELLIGENT_DETECTION = {
+        "enabled": True,
+        "sensitivity": "medium",  # conservative, medium, aggressive
+        "auto_switch_threshold": 70,  # 0-100 score threshold for suggesting switch
+        "learn_from_feedback": True,
+        "store_patterns": False,  # Opt-in for community pattern sharing
+        "user_preferences": {},  # User-specific preferences learned from behavior
+    }
+    # Default guidance configuration
+    DEFAULT_GUIDANCE = {
+        "show_parameter_hints": True,
+        "confirm_before_switching": True,
+        "persist_corrections": True,
+    }
+    SCHEMA_VERSION = 2  # Bump version for v0.5.5 new features
+    schema_version: int = SCHEMA_VERSION
     mode: RiskMode = RiskMode.MEDIUM
     features: Dict[str, bool] = field(default_factory=lambda: SkillWeaveConfig.DEFAULT_FEATURES.copy())
     overrides: Dict[str, Any] = field(default_factory=dict)
+    intelligent_detection: Dict[str, Any] = field(default_factory=lambda: SkillWeaveConfig.DEFAULT_INTELLIGENT_DETECTION.copy())
+    guidance: Dict[str, Any] = field(default_factory=lambda: SkillWeaveConfig.DEFAULT_GUIDANCE.copy())
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SkillWeaveConfig":
         """Create config from dictionary."""
+        schema_version = data.get("schema_version", 1)
         mode = RiskMode(data.get("mode", "medium"))
         # Merge with default features to ensure all keys exist
         user_features = data.get("features", {})
         features = cls.DEFAULT_FEATURES.copy()
         features.update(user_features)
         overrides = data.get("overrides", {})
-        return cls(mode=mode, features=features, overrides=overrides)
+        # Intelligent detection config
+        intelligent_detection = cls.DEFAULT_INTELLIGENT_DETECTION.copy()
+        intelligent_detection.update(data.get("intelligent_detection", {}))
+        # Guidance config
+        guidance = cls.DEFAULT_GUIDANCE.copy()
+        guidance.update(data.get("guidance", {}))
+        return cls(
+            schema_version=schema_version,
+            mode=mode,
+            features=features,
+            overrides=overrides,
+            intelligent_detection=intelligent_detection,
+            guidance=guidance,
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
         return {
+            "schema_version": self.schema_version,
             "mode": self.mode.value,
             "features": self.features,
             "overrides": self.overrides,
+            "intelligent_detection": self.intelligent_detection,
+            "guidance": self.guidance,
         }
 
 
@@ -290,3 +328,50 @@ def get_mode_specific_setting(setting_path: str, default: Any = None, project_ro
             return default
     
     return current
+
+
+def get_global_config() -> SkillWeaveConfig:
+    """Load global configuration from ~/.skillweave/config.yaml."""
+    global_persistence = SkillWeavePersistence(str(Path.home()))
+    return global_persistence.load_config()
+
+
+def get_merged_config(project_root: Optional[str] = None) -> SkillWeaveConfig:
+    """
+    Get merged configuration with project config overriding global config.
+    
+    Project configuration takes precedence over global configuration.
+    If neither exists, returns default configuration.
+    """
+    # Load global config
+    try:
+        global_config = get_global_config()
+    except Exception:
+        global_config = SkillWeaveConfig()
+    
+    # Load project config
+    try:
+        project_config = get_config(project_root)
+    except Exception:
+        project_config = SkillWeaveConfig()
+    
+    # Merge: project config overrides global config
+    merged = SkillWeaveConfig()
+    
+    # Mode: project overrides global
+    merged.mode = project_config.mode if project_config.mode != SkillWeaveConfig().mode else global_config.mode
+    
+    # Features: project overrides global
+    merged_features = global_config.features.copy()
+    merged_features.update(project_config.features)
+    merged.features = merged_features
+    
+    # Overrides: project overrides global (deep merge might be needed but simple override for now)
+    merged_overrides = global_config.overrides.copy()
+    merged_overrides.update(project_config.overrides)
+    merged.overrides = merged_overrides
+    
+    # Schema version: use project's if available, else global's
+    merged.schema_version = project_config.schema_version if project_config.schema_version != SkillWeaveConfig().schema_version else global_config.schema_version
+    
+    return merged

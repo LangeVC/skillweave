@@ -1,67 +1,86 @@
 mode: standard
 workflow: ralph-loop-attended
 checkpoint_interval: 5
-description: Ralph Loop execution with human checkpoints for SkillWeave Next Level
+description: Ralph Loop execution with human checkpoints for SkillWeave v0.5.5 Intelligent Guidance
 phases:
   -
-    name: phase_1
+    name: phase_1_risk_mode_override
     tasks:
-      - ARCH-001
-      - REFACTOR-001
-      - ENHANCE-001
+      - T-001
+      - T-002
+      - T-003
+      - T-004
+      - T-005
+      - T-006
+      - T-007
+      - T-008
+      - T-009
+      - T-010
+      - T-011
     depends_on:
-
     parallel: True
-    description: Level 1 tasks
+    description: Risk Mode Override System - configuration, CLI, interactive selection
     verification:
       - typecheck
       - lint
-      - tests
+      - unit_tests
   -
-    name: phase_2
+    name: phase_2_intelligent_detection
     tasks:
-      - ARCH-002
-      - ARCH-003
-      - ENHANCE-002
-      - REFACTOR-002
+      - T-012
+      - T-013
+      - T-014
+      - T-015
+      - T-016
+      - T-017
+      - T-018
+      - T-019
+      - T-020
+      - T-021
+      - T-022
+      - T-023
+      - T-024
     depends_on:
-      - phase_1
     parallel: True
-    description: Level 2 tasks
+    description: Intelligent Skill Detection Engine - prompt analysis, mapping, validation
     verification:
       - typecheck
       - lint
-      - tests
+      - unit_tests
   -
-    name: phase_3
+    name: phase_3_onboarding_flow
     tasks:
-      - ENHANCE-003
-      - FEAT-004
-      - ENHANCE-004
-      - FEAT-001
-      - FEAT-002
-      - FEAT-003
-      - FEAT-005
+      - T-025
+      - T-026
+      - T-027
+      - T-028
+      - T-029
+      - T-030
     depends_on:
-      - phase_2
     parallel: True
-    description: Level 3 tasks
+    description: Onboarding Flow System - interactive guidance, skill switching
     verification:
       - typecheck
       - lint
-      - tests
+      - unit_tests
   -
-    name: phase_4
+    name: phase_4_integration_testing
     tasks:
-      - DOCS-001
-      - TEST-001
+      - T-031
+      - T-032
+      - T-033
+      - T-034
+      - T-035
     depends_on:
-      - phase_3
+      - phase_1_risk_mode_override
+      - phase_2_intelligent_detection
+      - phase_3_onboarding_flow
     parallel: True
-    description: Level 4 tasks
+    description: Integration & Testing - core integration, performance optimization, comprehensive tests
     verification:
-      - documentation_complete
-      - deployment_ready
+      - integration_tests
+      - performance_benchmarks
+      - system_tests
 memory_system:
   short_term: progress-structured.yaml
   long_term: agents-enhanced.md

@@ -12,3 +12,12 @@ strategy.md
 
 # SkillWeave tracking logs (auto-generated)
 .skillweave/tracking-log/*
+
+# Debug/exploration scripts and generated artifacts
+*.debug*
+prd-skillweave-*.json
+prd-skillweave-*.md
+generated/
+
+# Coverage
+.coverage

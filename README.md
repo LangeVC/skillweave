@@ -4,7 +4,7 @@
 [![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/typelicious/SkillWeave/releases/tag/v0.5.0)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
-[![Skills](https://img.shields.io/badge/skills-5%20skills-blue)](skills/)
+[![Skills](https://img.shields.io/badge/skills-6%20skills-blue)](skills/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](https://github.com/typelicious/SkillWeave)
 [![Repo Safety](https://img.shields.io/badge/repo%20safety-checked-green.svg)](SECURITY.md)
 
@@ -23,7 +23,7 @@ It is designed for builders who want:
 
 ## What SkillWeave is
 
-SkillWeave is a complete product development ecosystem for AI-assisted development with **five integrated skills**:
+SkillWeave is a complete product development ecosystem for AI-assisted development with **six integrated skills**:
 
 ### 1. **Blueprint Skill** (`/skillweave-blueprint`)
 - **Structured PRD Creation**: Guided interview for comprehensive product requirements
@@ -51,6 +51,12 @@ SkillWeave is a complete product development ecosystem for AI-assisted developme
 - **Ralph Loop Pipeline**: Ralph Loop-powered development pipeline for autonomous AI development
 - **Completion Promises**: Handles review, testing, iteration with completion promises, memory systems, and multi-agent execution
 - **Multi-Agent Orchestration**: Safe parallel subagent orchestration with dependency-aware batching
+
+### 6. **SkillWeave Package Manager (SWPM)** (`swpm`)
+- **Centralized Package Storage**: Intelligent package management for AI skills with centralized storage
+- **Version Management**: SHA-256 fingerprinting and skill@version syntax for precise versioning
+- **Multi-Framework Integration**: Seamless integration with OpenCode and other AI agent frameworks
+- **CLI Interface**: Simple commands for install, update, remove, list, and search operations
 
 Instead of linear, slow development workflows, SkillWeave enables **parallel, intelligent product development flows** with dependency-aware execution and adaptive workflow selection.
 
@@ -207,6 +213,41 @@ SkillWeave is for teams and individuals who want **AI-assisted development at sc
 
 ---
 
+## Configuration & .skillweave
+
+SkillWeave v0.5.0 introduces a `.skillweave` folder structure for persistent configuration, tracking, and project management:
+
+### `.skillweave/config.yaml` – Risk Mode Configuration
+```yaml
+mode: medium  # conservative, medium, or unicorn
+tracking:
+  enabled: true
+  log_dir: ".skillweave/tracking-log"
+github:
+  enabled: true
+  owner: "your-org"
+  repo: "your-repo"
+```
+
+### Folder Structure
+```
+.skillweave/
+├── config.yaml          # Risk mode and settings
+├── handover/            # Handover documents between sessions
+├── specs/               # Specifications (backlog.yaml, requirements)
+├── tracking-log/        # Execution tracking logs (gitignored)
+└── manifesto/           # Project vision and principles
+```
+
+### Three Risk Modes
+1. **Conservative**: Safe defaults, explicit confirmations, minimal automation
+2. **Medium**: Balanced automation with safety checks, recommended for most projects
+3. **Unicorn**: Maximum automation, experimental features, for experienced users
+
+To get started, create `.skillweave/config.yaml` in your project root or let SkillWeave create it automatically when you first run a skill.
+
+---
+
 ## Repository structure
 
 ```text
@@ -243,9 +284,9 @@ Start here:
 
 ---
 
-## Current Release (v0.4.4+)
+## Current Release (v0.5.0)
 
-SkillWeave v0.4.4+ is a complete product development ecosystem with:
+SkillWeave v0.5.0 ("Next Level") introduces enterprise-grade workflow configuration, risk management, and project tracking features:
 
 ### Five Integrated Skills
 1. **Blueprint Skill** (`/skillweave-blueprint`): Structured PRD creation with complexity analysis
@@ -262,6 +303,19 @@ SkillWeave v0.4.4+ is a complete product development ecosystem with:
 - **Binary Gate Policy**: Only hard completion signals (tests passed, verifier passed, explicit `continue`)
 - **Agent-Agnostic Design**: Capability-based routing for any AI coding agent
 
+### Next Level Features (v0.5.0)
+- **Three Risk Modes**: Conservative, Medium, Unicorn – configurable behavior across all skills
+- **.skillweave Folder Structure**: Persistent configuration, tracking logs, specs, and manifesto
+- **GitHub Issues Integration**: Automatic issue creation with Planning Poker estimation
+- **Backlog Synchronization**: Sync GitHub Issues with `.skillweave/specs/backlog.yaml`
+- **Persistent State Manager**: Session recovery and configuration management
+- **Optional Checklist Execution**: Markdown checkbox tracking for step-by-step validation
+- **Design-Thinking Lens**: UI/UX decision framework for product development
+- **Enhanced Capability Routing**: Dynamic agent detection and capability matching
+- **Modular Templates Foundation**: Reusable template system with examples
+- **Community Know-How Prototype**: Pattern extraction and knowledge sharing
+- **Comprehensive Testing**: 100+ tests covering all Next Level features
+
 ### Production-Ready Features
 - Comprehensive testing suite (unit, integration, performance)
 - Extensive examples and documentation
@@ -272,15 +326,28 @@ SkillWeave v0.4.4+ is a complete product development ecosystem with:
 
 ## Roadmap: What comes next
 
-Building on v0.4.0's "Product development flow on steroids", the roadmap focuses on scaling and ecosystem growth:
+Building on v0.5.0's "Next Level Features", the roadmap focuses on scaling and ecosystem growth:
 
-### v0.5.0 - Ecosystem Expansion
+### v0.5.0 - Next Level Features ✓ (Released)
+- **Three Risk Modes**: Conservative, Medium, Unicorn – configurable behavior across all skills
+- **.skillweave Folder Structure**: Persistent configuration, tracking logs, specs, and manifesto
+- **GitHub Issues Integration**: Automatic issue creation with Planning Poker estimation
+- **Backlog Synchronization**: Sync GitHub Issues with `.skillweave/specs/backlog.yaml`
+- **Persistent State Manager**: Session recovery and configuration management
+- **Optional Checklist Execution**: Markdown checkbox tracking for step-by-step validation
+- **Design-Thinking Lens**: UI/UX decision framework for product development
+- **Enhanced Capability Routing**: Dynamic agent detection and capability matching
+- **Modular Templates Foundation**: Reusable template system with examples
+- **Community Know-How Prototype**: Pattern extraction and knowledge sharing
+- **Comprehensive Testing**: 100+ tests covering all Next Level features
+
+### v0.6.0 - Ecosystem Expansion
 - **Community Examples & Tutorials**: Comprehensive guides for common use cases
 - **Performance Optimization**: Enhanced execution for 100+ task projects
 - **Visualization Tools**: Interactive dependency graphs and progress tracking
 - **Extended Agent Support**: Broader compatibility with emerging AI coding agents
 
-### v0.6.0 - Collaboration Features
+### v0.7.0 - Collaboration Features
 - **Team Workflows**: Multi-user collaboration with role-based access
 - **Project Templates**: Industry-specific templates and best practices
 - **Cloud Integration**: Optional hosted execution with API access
@@ -315,6 +382,29 @@ SkillWeave's vision is to create **the definitive product development ecosystem 
 **Product development flow on steroids** - where AI agents work in coordinated parallel, adapt to project complexity, and produce verified results that teams can trust and deploy with confidence.
 
 ---
+
+## Configuration and Risk Mode Override System
+
+SkillWeave v0.5.5 introduces a hierarchical override system for risk mode configuration. The effective risk mode is determined by the following precedence order (highest to lowest):
+
+1. **CLI parameter**: `--risk-mode=conservative|medium|unicorn` (if provided in skill invocation)
+2. **Environment variable**: `SKILLWEAVE_RISK_MODE` (if set)
+3. **Project configuration**: `.skillweave/config.yaml` `mode` setting
+4. **Global user configuration**: `~/.skillweave/config.yaml` `mode` setting
+5. **System default**: `medium`
+
+### Command-Line Utilities
+
+- `skillweave-risk-mode` - shows effective risk mode given current context
+- `skillweave-interactive-mode` - interactive risk mode selection with project analysis and persistence options
+
+### Adjusting Behavior
+
+- **Conservative**: Extra validation, explicit approvals, strict safety checks
+- **Medium**: Balanced approach with standard validation  
+- **Unicorn**: Optimistic assumptions, minimal confirmations, maximum speed
+
+For more details, see the "Risk Mode Integration" section in each skill's documentation.
 
 ## Status
 

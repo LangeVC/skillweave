@@ -15,6 +15,7 @@
 - **FEATURE**: Community know-how prototype for pattern extraction
 - **FEATURE**: Comprehensive testing suite with 100+ tests
 - **FEATURE**: Updated documentation with configuration guide and examples
+- **FEATURE**: SkillWeave Package Manager (SWPM) - intelligent package management for AI skills with centralized storage, versioning, and framework integration
 - **IMPROVEMENT**: All Next Level features fully tested and integrated
 
 ## 0.4.4

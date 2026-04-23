@@ -41,6 +41,8 @@ Issues = "https://github.com/typelicious/SkillWeave/issues"
 
 [project.scripts]
 skillweave-install = "skillweave.installer:main"
+skillweave-risk-mode = "skillweave.scripts.resolve_risk_mode:main"
+skillweave-interactive-mode = "skillweave.scripts.interactive_mode:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

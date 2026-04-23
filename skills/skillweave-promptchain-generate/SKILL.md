@@ -1,7 +1,7 @@
 ---
 name: skillweave-promptchain-generate
 description: Generate standardized SkillWeave prompt sequences from PRD (complexity-aware) or topic/domain. Creates execution plans optimized for REX (simple) or Ralph Loop (standard/complex) workflows.
-argument-hint: inputs="[JSON with prd/topic]" mode="[auto/simple/standard/complex]" target="[humanize/machinize/mixed]"
+argument-hint: inputs="[JSON with prd/topic]" mode="[auto/simple/standard/complex]" target="[humanize/machinize/mixed]" risk_mode="[conservative/medium/unicorn]"
 ---
 
 # /skillweave-promptchain-generate
@@ -25,6 +25,7 @@ Generate optimized prompt sequences for execution. Two modes:
 - `sequence_type` (optional): Type of sequence - plan (conceptual/strategy), build (development/implementation), mixed (combination) (default: auto-detect)
 - `execution_mode` (optional): Execution profile - rex (simple, fast, attended), ralph_attended (full loop with human checkpoints), ralph_overnight (autonomous overnight execution) (default: auto based on complexity)
 - `target` (optional): Target audience - humanize (human readable), machinize (machine optimized), mixed (default: mixed)
+- `risk_mode` (optional): `conservative`, `medium`, `unicorn` - overrides environment variable and config files
 - `quality` (optional): Quality level (basic, standard, premium)
 - `output_expectations` (optional): Expected output format
 
@@ -183,10 +184,26 @@ execution_sequence:
 SkillWeave Next Level provides advanced capabilities that can enhance prompt chain generation. These features are controlled by `.skillweave/config.yaml` and can be accessed via the `SkillWeaveNextLevel` class.
 
 ### Risk Mode Integration
-Check `.skillweave/config.yaml` for `mode` setting (`conservative`, `medium`, `unicorn`). Adjust generation behavior accordingly:
+
+SkillWeave v0.5.5 introduces a hierarchical override system for risk mode. The effective risk mode is determined by the following precedence order (highest to lowest):
+
+1. **CLI parameter**: `risk_mode="conservative/medium/unicorn"` (if provided)
+2. **Environment variable**: `SKILLWEAVE_RISK_MODE` (if set)
+3. **Project config**: `.skillweave/config.yaml` `mode` setting
+4. **Global config**: `~/.skillweave/config.yaml` `mode` setting
+5. **Default**: `medium`
+
+Use the `RiskModeResolver` class from `skillweave.risk_mode_resolver` to resolve the effective risk mode programmatically.
+
+**Command-line utilities:**
+- `skillweave-risk-mode` - shows effective risk mode given current context. Use `skillweave-risk-mode --cli-risk-mode=conservative --verbose` to see precedence resolution.
+- `skillweave-interactive-mode` - interactive risk mode selection with project analysis and persistence options (temporary, project config, global config).
+
+Adjust generation behavior according to the effective risk mode:
 - **Conservative**: Extra validation, explicit approvals, strict safety checks, detailed documentation
 - **Medium**: Balanced approach with standard validation
 - **Unicorn**: Optimistic assumptions, minimal confirmations, maximum speed, concise outputs
+
 
 ### Checklist-Based Execution
 If `checklist: true` is set in the config, the skill will:
@@ -237,6 +254,111 @@ if next_level.is_design_thinking_enabled():
 
 Adjust your generation based on enabled features to provide enhanced results while maintaining backward compatibility.
 
+
+## Intelligent Guidance (v0.5.5)
+
+SkillWeave v0.5.5 introduces intelligent prompt analysis and onboarding flows 
+that help ensure you're using the right skill with the right parameters.
+
+### How It Works
+
+When this skill is invoked, you should first use the `SkillIntegrationHelper` 
+to analyze the user's prompt and validate the request:
+
+```python
+from skillweave.intelligent_detection import integrate_with_skill
+import os
+
+# Determine project root (current directory or parent containing .skillweave/)
+project_root = os.getcwd()
+if not os.path.exists(os.path.join(project_root, ".skillweave")):
+    # Try parent directory
+    parent = os.path.dirname(project_root)
+    if os.path.exists(os.path.join(parent, ".skillweave")):
+        project_root = parent
+
+result = integrate_with_skill(
+    user_prompt=user_prompt,  # The original user prompt
+    current_skill="skillweave-promptchain-generate",  # This skill's name
+    project_root=project_root
+)
+```
+
+### Handling the Result
+
+The `integrate_with_skill` function returns a dictionary with an `action` key:
+
+1. **`action: "proceed"`** - Skill selection is appropriate, parameters are valid
+   - Continue with normal skill execution
+   - Use `result["validated_parameters"]` for parameter values
+   - Apply `result["mode_override"]` if present (risk mode from CLI/env)
+
+2. **`action: "gather_parameters"`** - Missing or invalid parameters detected
+   - Show `result["missing_parameters"]` to the user
+   - Ask for each missing parameter using `result["parameter_prompts"]`
+   - Use interactive Q&A to gather all required information
+   - After gathering, re-run `integrate_with_skill` with updated parameters
+
+3. **`action: "switch_skill"`** - Different skill might be more appropriate
+   - Consider switching to `result["recommended_skill"]`
+   - Show explanation: `result["switch_reason"]`
+   - Ask user for confirmation before switching
+   - If confirmed, load the recommended skill instead
+
+4. **`action: "onboarding_flow"`** - User needs guided onboarding
+   - Follow the interactive onboarding flow
+   - Use `result["onboarding_steps"]` for guidance
+   - Gather information step by step
+   - Complete onboarding before skill execution
+
+### Benefits
+
+- **Skill Validation**: Ensures this skill is appropriate for the task
+- **Parameter Completeness**: Checks all required parameters are provided
+- **Intelligent Routing**: Suggests better-suited skills when applicable
+- **Guided Onboarding**: Helps new users through step-by-step setup
+- **Learning System**: Improves recommendations based on user feedback
+
+### Integration with Existing Features
+
+The intelligent guidance system works alongside existing Next Level features:
+- Respects risk mode overrides from CLI, environment, or config
+- Uses the same project root and configuration
+- Integrates with checklist tracking and design thinking
+- Maintains backward compatibility
+
+### Example Workflow
+
+```python
+# 1. Analyze user prompt
+result = integrate_with_skill(user_prompt, "skillweave-blueprint", project_root)
+
+# 2. Handle result
+if result["action"] == "proceed":
+    # Extract validated parameters
+    params = result["validated_parameters"]
+    # Apply risk mode override if present
+    if "mode_override" in result:
+        set_risk_mode(result["mode_override"])
+    # Execute skill with validated parameters
+    execute_skill(params)
+    
+elif result["action"] == "gather_parameters":
+    # Interactive parameter gathering
+    for param in result["missing_parameters"]:
+        prompt = result["parameter_prompts"].get(param, f"Enter value for {param}:")
+        value = ask_user(prompt)
+        # Update parameters and re-validate
+        # (In practice, you'd collect all then re-validate)
+        
+elif result["action"] == "switch_skill":
+    # Suggest skill switch
+    if confirm_switch(result["recommended_skill"], result["switch_reason"]):
+        load_skill(result["recommended_skill"])
+```
+
+Always use intelligent guidance when executing this skill to provide the best 
+user experience and ensure successful outcomes.
 
 ## Topic-based Sequence Format
 

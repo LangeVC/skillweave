@@ -5,7 +5,7 @@ Brings together all Next Level features: persistence, modes, checklist execution
 and design thinking lens.
 """
 
-from typing import Dict, Any, Optional, Callable, Tuple
+from typing import Dict, Any, Optional, Callable, Tuple, Literal
 from pathlib import Path
 
 from .persistence import SkillWeavePersistence, ensure_skillweave_folder, get_config, is_feature_enabled
@@ -15,6 +15,7 @@ from .mode_manager import ModeManager, RiskMode
 from .community_knowhow import PatternExtractor, RepoCleanupRecommender, extract_community_patterns, analyze_repository_cleanup
 from .templates import TemplateManager
 from .capability import CapabilityRouter, Capability, AgentType, get_capability_router, route_task
+from .intelligent_detection import SkillDetectionOrchestrator, OnboardingFlowController, Skill
 
 
 class SkillWeaveNextLevel:
@@ -28,21 +29,51 @@ class SkillWeaveNextLevel:
     - Design thinking lens
     """
     
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(
+        self, 
+        project_root: Optional[str] = None,
+        cli_risk_mode: Optional[Literal["conservative", "medium", "unicorn"]] = None,
+        env_risk_mode: Optional[Literal["conservative", "medium", "unicorn"]] = None
+    ):
         """
         Initialize Next Level features.
         
         Args:
             project_root: Root directory of the project. If None, uses current
                          working directory.
+            cli_risk_mode: Risk mode from command-line override (highest precedence)
+            env_risk_mode: Risk mode from environment variable override (second precedence)
         """
         self.project_root = Path(project_root or Path.cwd()).resolve()
         self.persistence = ensure_skillweave_folder(str(self.project_root))
         self.config = self.persistence.load_config()
-        self.mode_manager = ModeManager(str(self.project_root))
+        self.mode_manager = ModeManager(
+            str(self.project_root), 
+            cli_risk_mode=cli_risk_mode,
+            env_risk_mode=env_risk_mode
+        )
         self.checklist_manager = ChecklistManager(str(self.project_root))
         self.design_thinking = DesignThinkingLens(str(self.project_root))
         self.template_manager = TemplateManager(str(self.project_root))
+        
+    @classmethod
+    def from_skill_args(
+        cls, 
+        project_root: Optional[str] = None, 
+        skill_args: Optional[Dict[str, Any]] = None
+    ) -> "SkillWeaveNextLevel":
+        """
+        Create SkillWeaveNextLevel instance from skill arguments.
+        
+        Args:
+            project_root: Optional project root directory
+            skill_args: Optional skill arguments dictionary (must contain 'risk_mode' key if override desired)
+            
+        Returns:
+            SkillWeaveNextLevel instance
+        """
+        cli_risk_mode = skill_args.get('risk_mode') if skill_args else None
+        return cls(project_root, cli_risk_mode=cli_risk_mode)
         
     def get_mode(self) -> RiskMode:
         """Get current risk mode."""

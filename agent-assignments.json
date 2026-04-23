@@ -1,5 +1,38 @@
 {
-  "ARCH-001": {
+  "T-001": {
+    "required_capabilities": [
+      "infrastructure",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-002": {
+    "required_capabilities": [
+      "infrastructure",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-003": {
+    "required_capabilities": [
+      "infrastructure",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-004": {
     "required_capabilities": [
       "infrastructure",
       "code_generation"
@@ -10,18 +43,7 @@
     "estimated_tokens": 2000,
     "estimated_minutes": 240
   },
-  "ARCH-002": {
-    "required_capabilities": [
-      "infrastructure",
-      "code_generation"
-    ],
-    "recommended_agents": [
-      "any_with_capabilities"
-    ],
-    "estimated_tokens": 2000,
-    "estimated_minutes": 480
-  },
-  "ARCH-003": {
+  "T-005": {
     "required_capabilities": [
       "infrastructure",
       "code_generation"
@@ -32,42 +54,52 @@
     "estimated_tokens": 2000,
     "estimated_minutes": 360
   },
-  "FEAT-001": {
+  "T-006": {
     "required_capabilities": [
-      "code_generation",
-      "testing"
+      "infrastructure",
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
     ],
     "estimated_tokens": 2000,
-    "estimated_minutes": 300
+    "estimated_minutes": 600
   },
-  "FEAT-002": {
+  "T-007": {
     "required_capabilities": [
-      "code_generation",
-      "testing"
+      "infrastructure",
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
     ],
     "estimated_tokens": 2000,
-    "estimated_minutes": 480
+    "estimated_minutes": 360
   },
-  "FEAT-003": {
+  "T-008": {
     "required_capabilities": [
-      "code_generation",
-      "testing"
+      "infrastructure",
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
     ],
     "estimated_tokens": 2000,
-    "estimated_minutes": 480
+    "estimated_minutes": 360
   },
-  "FEAT-004": {
+  "T-009": {
     "required_capabilities": [
-      "code_generation",
+      "infrastructure",
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 240
+  },
+  "T-010": {
+    "required_capabilities": [
       "testing"
     ],
     "recommended_agents": [
@@ -76,10 +108,19 @@
     "estimated_tokens": 2000,
     "estimated_minutes": 360
   },
-  "FEAT-005": {
+  "T-011": {
     "required_capabilities": [
-      "code_generation",
-      "testing"
+      "documentation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 240
+  },
+  "T-012": {
+    "required_capabilities": [
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
@@ -87,10 +128,9 @@
     "estimated_tokens": 2000,
     "estimated_minutes": 600
   },
-  "REFACTOR-001": {
+  "T-013": {
     "required_capabilities": [
-      "code_generation",
-      "review"
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
@@ -98,21 +138,9 @@
     "estimated_tokens": 2000,
     "estimated_minutes": 360
   },
-  "REFACTOR-002": {
+  "T-014": {
     "required_capabilities": [
-      "code_generation",
-      "review"
-    ],
-    "recommended_agents": [
-      "any_with_capabilities"
-    ],
-    "estimated_tokens": 2000,
-    "estimated_minutes": 720
-  },
-  "ENHANCE-001": {
-    "required_capabilities": [
-      "code_generation",
-      "automation"
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
@@ -120,32 +148,215 @@
     "estimated_tokens": 2000,
     "estimated_minutes": 600
   },
-  "ENHANCE-002": {
+  "T-015": {
     "required_capabilities": [
-      "code_generation",
-      "automation"
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
     ],
     "estimated_tokens": 2000,
-    "estimated_minutes": 480
+    "estimated_minutes": 600
   },
-  "ENHANCE-003": {
+  "T-016": {
     "required_capabilities": [
-      "code_generation",
-      "automation"
+      "code_generation"
     ],
     "recommended_agents": [
       "any_with_capabilities"
     ],
     "estimated_tokens": 2000,
-    "estimated_minutes": 480
+    "estimated_minutes": 600
   },
-  "TEST-001": {
+  "T-017": {
+    "required_capabilities": [
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-018": {
+    "required_capabilities": [
+      "code_generation",
+      "validation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-019": {
+    "required_capabilities": [
+      "code_generation",
+      "validation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-020": {
+    "required_capabilities": [
+      "code_generation",
+      "validation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-021": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-022": {
+    "required_capabilities": [
+      "code_generation"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-023": {
+    "required_capabilities": [
+      "code_generation",
+      "learning"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-024": {
+    "required_capabilities": [
+      "code_generation",
+      "learning"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-025": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 960
+  },
+  "T-026": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-027": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 960
+  },
+  "T-028": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-029": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-030": {
+    "required_capabilities": [
+      "code_generation",
+      "configuration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-031": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-032": {
+    "required_capabilities": [
+      "code_generation",
+      "integration"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 360
+  },
+  "T-033": {
+    "required_capabilities": [
+      "optimization",
+      "performance"
+    ],
+    "recommended_agents": [
+      "any_with_capabilities"
+    ],
+    "estimated_tokens": 2000,
+    "estimated_minutes": 600
+  },
+  "T-034": {
     "required_capabilities": [
       "testing",
-      "code_generation"
+      "integration"
     ],
     "recommended_agents": [
       "any_with_capabilities"
@@ -153,26 +364,15 @@
     "estimated_tokens": 2000,
     "estimated_minutes": 600
   },
-  "DOCS-001": {
+  "T-035": {
     "required_capabilities": [
-      "documentation",
-      "research"
+      "testing",
+      "performance"
     ],
     "recommended_agents": [
       "any_with_capabilities"
     ],
     "estimated_tokens": 2000,
     "estimated_minutes": 360
-  },
-  "ENHANCE-004": {
-    "required_capabilities": [
-      "code_generation",
-      "automation"
-    ],
-    "recommended_agents": [
-      "any_with_capabilities"
-    ],
-    "estimated_tokens": 2000,
-    "estimated_minutes": 720
   }
 }

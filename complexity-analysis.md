@@ -1,8 +1,8 @@
 # Complexity Analysis
 
-- Total tasks: 16
-- Total estimated effort: 127 hours
-- Total complexity points: 56
-- Task types: {'testing', 'documentation', 'feature', 'refactor', 'infrastructure', 'enhancement'}
+- Total tasks: 35
+- Total estimated effort: 288 hours
+- Total complexity points: 144
+- Task types: {'infrastructure', 'feature', 'testing', 'documentation', 'integration', 'optimization'}
 - Execution recommendation: standard
 - Suggested workflow: ralph-loop-attended

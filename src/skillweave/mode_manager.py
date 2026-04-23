@@ -4,18 +4,13 @@ Mode manager for SkillWeave Next Level.
 Handles three risk modes (conservative, medium, unicorn) and their behavior differences.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Literal
 from dataclasses import dataclass, field
 from enum import Enum
 
 from .persistence import SkillWeavePersistence, ensure_skillweave_folder, get_mode_only, get_mode_specific_setting
-
-
-class RiskMode(str, Enum):
-    """Risk modes for SkillWeave."""
-    CONSERVATIVE = "conservative"
-    MEDIUM = "medium"
-    UNICORN = "unicorn"
+from .persistence import RiskMode
+from .risk_mode_resolver import RiskModeResolver, get_effective_risk_mode
 
 
 @dataclass
@@ -90,19 +85,34 @@ class ModeBehavior:
                 allow_experimental=True,
             )
         else:
-            return cls()  # Default
+            return cls()  # pragma: no cover
 
 
 class ModeManager:
     """Manages mode-specific behavior for SkillWeave skills."""
     
-    def __init__(self, project_root: Optional[str] = None):
+    def __init__(
+        self, 
+        project_root: Optional[str] = None,
+        cli_risk_mode: Optional[Literal["conservative", "medium", "unicorn"]] = None,
+        env_risk_mode: Optional[Literal["conservative", "medium", "unicorn"]] = None
+    ):
         self.persistence = ensure_skillweave_folder(project_root)
         self.config = self.persistence.load_config()
-        self.mode = RiskMode(self.config.mode.value)
+        
+        # Get effective risk mode using hierarchical precedence
+        self.effective_mode_str = get_effective_risk_mode(
+            project_root=project_root,
+            cli_override=cli_risk_mode,
+            env_override=env_risk_mode,
+            interactive=False,
+            include_global_config=True
+        )
+        # Convert string to RiskMode enum
+        self.mode = RiskMode(self.effective_mode_str)
         self.behavior = ModeBehavior.for_mode(self.mode)
         
-        # Apply any overrides from config
+        # Apply any overrides from config for the effective mode
         self._apply_overrides()
     
     def _apply_overrides(self) -> None:
@@ -139,8 +149,8 @@ class ModeManager:
         elif self.mode == RiskMode.UNICORN:
             return False
         
-        return False
-    
+        return False  # pragma: no cover
+
     def get_max_parallel_tasks(self) -> int:
         """Get maximum parallel tasks allowed."""
         return self.behavior.max_parallel_tasks
@@ -182,8 +192,8 @@ class ModeManager:
             critical_operations = ["delete_production", "format_disk"]
             return operation in critical_operations
         
-        return False
-    
+        return False  # pragma: no cover
+
     def should_perform_safety_check(self, check_type: str) -> bool:
         """
         Determine if a safety check should be performed.
@@ -200,7 +210,7 @@ class ModeManager:
             critical_checks = ["data_loss"]
             return check_type in critical_checks
         
-        return False
+        return False  # pragma: no cover
     
     def should_optimize_for_speed(self) -> bool:
         """Determine if we should optimize for speed over safety."""
