@@ -1,12 +1,12 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/typelicious/SkillWeave/releases/tag/v0.5.0)
+[![Version](https://img.shields.io/badge/version-0.5.6-blue)](https://github.com/typelicious/SkillWeave/releases/tag/v0.5.6)
 [![Python](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
-[![Skills](https://img.shields.io/badge/skills-6%20skills-blue)](skills/)
+[![Tests](https://img.shields.io/badge/tests-184%20passing-green)](tests/)
+[![Skills](https://img.shields.io/badge/skills-5%20skills-blue)](skills/)
 [![Status](https://img.shields.io/badge/status-production%20ready-green)](https://github.com/typelicious/SkillWeave)
-[![Repo Safety](https://img.shields.io/badge/repo%20safety-checked-green.svg)](SECURITY.md)
+[![Capacium](https://img.shields.io/badge/Capacium-Install%20via%20cap-0B1020?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjIwMCA1MCAyNTAgNTAwIj48cGF0aCBmaWxsPSIjRjdGQUZDIiBkPSJNMzA4LjgzLDU5MC40N2wtMzYuMDItMzYuMjQtMjExLjMyLS4wNC0uMDItMjExLjczLTMzLjExLTMzLjk3LDMzLjEtMzIuODMuMDYtMjE1Ljc0LDIxMy43NC0uMDQsMzMuNDQtMzIuOTcsMzIuNzIsMzIuOTUsMjE0LjAxLjA2LjA5LDIxNS42MiwzMi44NSwzMi43Ni0zMi45OCwzMy4xMS4wNywyMTIuNzQtMjEwLjQuMTItMzYuMjMsMzYuMjJaTTMwOS4wNiw1NTQuMzhsNzUuNTktNzYuODQsMTM5LjgzLTE0MS4zMSwyNy43MS0yOC4xNi05MC42NS05MC43Mi0xNTMuMjItMTUzLjE0LTEyMS41MiwxMjAuNTQtOTQuOTMsOTUuNDYtMjguMTIsMjguNDQsMTA0Ljc1LDEwNS41LDc0LjA4LDczLjY2LDY2LjQ3LDY2LjU3Wk0yMTcuMjYsMTE4LjQ0bDMyLjE0LTMyLjAyLTE2Mi41MS0uMDMuMDQsMTYyLjQ4TDIxNy4yNiwxMTguNDRaTTUyOS44OSw4Ni4zNmwtMTYyLjY1LjA2LDE2Mi42MSwxNjIuNDguMDQtMTYyLjUzWk0yMTIuNTksNDk0LjQ4bC04MC41NS04MS44Ny00NS4wMi00NS43Mi0uMTEsMTYyLjA2LDE1OS40Ny0uMDUtMzMuNzktMzQuNDJaTTM2OC4zNSw1MjguOTRoMTYxLjUzcy0uMDUtMTYyLjA0LS4wNS0xNjIuMDRsLTU1LjEsNTQuOTktMTA2LjM4LDEwNy4wNVoiLz48cGF0aCBmaWxsPSIjRjdGQUZDIiBkPSJNMzA4LjgyLDQ4MC4wN2wtNzkuNzctNDcuNzMtNjcuMTItNDAuMDctLjAyLTE3MC43MywxNDYuNzItODQuMjUsNjQuODMsMzYuODUsODIuOTIsNDcuMTUuMDIsMTcxLjQ4LTE0Ny41OSw4Ny4zWk0zMjYuNTksMjMxLjU0YzE2LjA4LDQuMzYsMjkuNzMsMTMuMzgsNDAuNDcsMjYuMTZsNDkuNTktMjguNDktMTA3Ljc4LTYyLjgxLTEwNy4xNyw2Mi40Myw0OS43NSwyOC41NWMxOC4yNi0yMi42Niw0Ni45OS0zMi44NCw3NS4xNS0yNS44NFpNMjk1LjgyLDM4Ni40NmMtNDcuNTktMTAuMjEtNzQuOTYtNjAuODMtNTcuMTgtMTA2LjM5bC01MC45LTI5LjYxLS4wOCwxMjguNCwxMDguMDYsNjIuMzIuMS01NC43Wk0zMjEuOTUsMzg2LjZsLjI4LDU0LjY0LDEwNy45LTYyLjI5LS4wNS0xMjguMjQtNDkuNzQsMjkuMjdjMTMuNzEsMzUuNTkuNTksNzUuNDMtMzEuMzksOTUuNzMtOC4zMiw1LjcxLTE3LjE4LDguODYtMjYuOTksMTAuODhaIi8%2BPC9zdmc%2B&labelColor=0B1020&logoColor=F7FAFC)](https://github.com/Capacium/capacium)
 
 **Product development flow on steroids - from idea to production with AI agents.**
 
@@ -23,7 +23,7 @@ It is designed for builders who want:
 
 ## What SkillWeave is
 
-SkillWeave is a complete product development ecosystem for AI-assisted development with **six integrated skills**:
+SkillWeave is a complete product development ecosystem for AI-assisted development with **five integrated skills**:
 
 ### 1. **Blueprint Skill** (`/skillweave-blueprint`)
 - **Structured PRD Creation**: Guided interview for comprehensive product requirements
@@ -52,11 +52,19 @@ SkillWeave is a complete product development ecosystem for AI-assisted developme
 - **Completion Promises**: Handles review, testing, iteration with completion promises, memory systems, and multi-agent execution
 - **Multi-Agent Orchestration**: Safe parallel subagent orchestration with dependency-aware batching
 
-### 6. **SkillWeave Package Manager (SWPM)** (`swpm`)
-- **Centralized Package Storage**: Intelligent package management for AI skills with centralized storage
-- **Version Management**: SHA-256 fingerprinting and skill@version syntax for precise versioning
-- **Multi-Framework Integration**: Seamless integration with OpenCode and other AI agent frameworks
-- **CLI Interface**: Simple commands for install, update, remove, list, and search operations
+### 6. **Install via Capacium** (`cap install`)
+SkillWeave is also available as a **Capacium** capability package. Install any skill directly:
+
+```bash
+# Install via Capacium (recommended)
+cap install skillweave-blueprint
+cap install skillweave-promptchain-generate
+cap install skillweave-promptchain-validate
+cap install skillweave-promptchain-execute
+cap install skillweave-releasechain
+```
+
+Each skill ships as a self-contained `capability.yaml` with all dependencies, gates, and tools declared — ready for the Capacium runtime.
 
 Instead of linear, slow development workflows, SkillWeave enables **parallel, intelligent product development flows** with dependency-aware execution and adaptive workflow selection.
 
@@ -284,9 +292,9 @@ Start here:
 
 ---
 
-## Current Release (v0.5.0)
+## Current Release (v0.5.6)
 
-SkillWeave v0.5.0 ("Next Level") introduces enterprise-grade workflow configuration, risk management, and project tracking features:
+SkillWeave v0.5.6 refines the **README documentation** with Capacium branding, content boundary enforcement, and prerelease quality gates:
 
 ### Five Integrated Skills
 1. **Blueprint Skill** (`/skillweave-blueprint`): Structured PRD creation with complexity analysis
@@ -408,10 +416,10 @@ For more details, see the "Risk Mode Integration" section in each skill's docume
 
 ## Status
 
-**Production Ready** - SkillWeave v0.4.0+ is a complete, battle-tested product development ecosystem used for real projects.
+**Production Ready** - SkillWeave v0.5.0+ is a complete, battle-tested product development ecosystem used for real projects.
 
 ### Current Status
-- **Version**: v0.4.4 (latest stable release)
+- **Version**: v0.5.6 (latest stable release)
 - **Stability**: Production-ready with comprehensive test suite
 - **Performance**: Optimized for projects with 50+ parallel tasks, now with Ralph Loop state machine
 - **Adoption**: Used by teams for AI-assisted product development
@@ -439,7 +447,19 @@ The best starting point depends on your needs:
 
 ## Multi-Agent Quickstart
 
-SkillWeave v0.4.0+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
+SkillWeave v0.5.0+ provides separate skill directories for each command with direct `/skillweave-*` prefixes for faster access.
+
+### Install via Capacium
+
+If you have the [Capacium](https://github.com/Capacium/capacium) CLI installed:
+
+```bash
+cap install skillweave-blueprint
+cap install skillweave-promptchain-generate
+cap install skillweave-promptchain-validate
+cap install skillweave-promptchain-execute
+cap install skillweave-releasechain
+```
 
 ### Online Installer (One-line)
 

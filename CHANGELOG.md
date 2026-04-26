@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.6
+- **FEATURE**: Capacium badge and install section in README
+- **FEATURE**: Content boundary enforcement for release artifacts (AGENTS.md + prerelease.yml)
+- **IMPROVEMENT**: Version bump to 0.5.6 with updated documentation
+
 ## 0.5.0
 - **RELEASE**: SkillWeave Next Level Features v0.5.0
 - **FEATURE**: Three risk modes (conservative, medium, unicorn) across all skills
@@ -15,7 +20,7 @@
 - **FEATURE**: Community know-how prototype for pattern extraction
 - **FEATURE**: Comprehensive testing suite with 100+ tests
 - **FEATURE**: Updated documentation with configuration guide and examples
-- **FEATURE**: SkillWeave Package Manager (SWPM) - intelligent package management for AI skills with centralized storage, versioning, and framework integration
+- **FEATURE**: Capacium packaging for all skills - each skill ships as a self-contained capability.yaml for cap install
 - **IMPROVEMENT**: All Next Level features fully tested and integrated
 
 ## 0.4.4
