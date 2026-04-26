@@ -1,0 +1,99 @@
+name: Prerelease Changelog Filter
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  filter-changelog:
+    name: Filter non-core topics from changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check CHANGELOG for non-core topics
+        run: |
+          NON_CORE_PATTERNS=(
+            "personal.tool"
+            "local.setup"
+            "private.workflow"
+            "my.machine"
+            "my.local"
+            "my.config"
+          )
+          joined=$(IFS="|"; echo "${NON_CORE_PATTERNS[*]}")
+          if grep -qinE "$joined" CHANGELOG.md; then
+            echo "============================================================"
+            echo "  CONTENT BOUNDARY VIOLATION"
+            echo "============================================================"
+            echo ""
+            echo "CHANGELOG contains non-SkillWeave topic references."
+            echo "Release notes, changelogs, PR descriptions, and commit"
+            echo "messages must only reference SkillWeave-core concepts:"
+            echo "  - Skill names and capabilities"
+            echo "  - Version numbers and release types"
+            echo "  - Feature additions, improvements, fixes"
+            echo "  - Dependency changes relevant to users"
+            echo "  - Documentation updates"
+            echo ""
+            grep -nE "$joined" CHANGELOG.md
+            exit 1
+          fi
+          echo "Changelog content boundary check PASSED."
+
+      - name: Check PR description for non-core topics
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          NON_CORE_PATTERNS=(
+            "personal.tool"
+            "local.setup"
+            "private.workflow"
+            "my.machine"
+            "my.local"
+            "my.config"
+          )
+          joined=$(IFS="|"; echo "${NON_CORE_PATTERNS[*]}")
+          if echo "$PR_BODY" | grep -qinE "$joined"; then
+            echo "============================================================"
+            echo "  CONTENT BOUNDARY VIOLATION — PR description"
+            echo "============================================================"
+            echo ""
+            echo "PR description contains non-SkillWeave topic references."
+            echo "Please revise to only reference SkillWeave-core concepts."
+            exit 1
+          fi
+          echo "PR description content boundary check PASSED."
+
+      - name: Post warning label on violation
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number,
+              labels: ['content-boundary-violation']
+            });
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: '## Content Boundary Violation\n\n' +
+                    'This PR references non-SkillWeave topics. ' +
+                    'Release artifacts (changelog, PR description, commit messages) ' +
+                    'MUST only reference SkillWeave-core concepts.\n\n' +
+                    '**Allowed:** Skill names, versions, features, fixes, dependencies, docs.\n' +
+                    '**Not allowed:** Personal tools, local setup, private workflows.\n\n' +
+                    'Please revise and push an update.'
+            });
