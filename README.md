@@ -21,6 +21,23 @@ It is designed for builders who want:
 
 ---
 
+## Quickstart
+
+Install the complete SkillWeave bundle with [Capacium](https://github.com/Capacium/capacium) — a capability package manager:
+
+```bash
+# 1. Install Capacium
+brew install capacium/tap/capacium
+# or: pipx install capacium
+
+# 2. Install SkillWeave (bundle with all 5 skills)
+cap install skillweave
+```
+
+Each skill ships as a self-contained `capability.yaml` with all dependencies, gates, and tools declared — ready for the Capacium runtime.
+
+---
+
 ## What SkillWeave is
 
 SkillWeave is a complete product development ecosystem for AI-assisted development with **five integrated skills**:
@@ -51,20 +68,6 @@ SkillWeave is a complete product development ecosystem for AI-assisted developme
 - **Ralph Loop Pipeline**: Ralph Loop-powered development pipeline for autonomous AI development
 - **Completion Promises**: Handles review, testing, iteration with completion promises, memory systems, and multi-agent execution
 - **Multi-Agent Orchestration**: Safe parallel subagent orchestration with dependency-aware batching
-
-### 6. **Install via Capacium** (`cap install`)
-SkillWeave is also available as a **Capacium** capability package. Install any skill directly:
-
-```bash
-# Install via Capacium (recommended)
-cap install skillweave-blueprint
-cap install skillweave-promptchain-generate
-cap install skillweave-promptchain-validate
-cap install skillweave-promptchain-execute
-cap install skillweave-releasechain
-```
-
-Each skill ships as a self-contained `capability.yaml` with all dependencies, gates, and tools declared — ready for the Capacium runtime.
 
 Instead of linear, slow development workflows, SkillWeave enables **parallel, intelligent product development flows** with dependency-aware execution and adaptive workflow selection.
 
@@ -454,11 +457,7 @@ SkillWeave v0.5.0+ provides separate skill directories for each command with dir
 If you have the [Capacium](https://github.com/Capacium/capacium) CLI installed:
 
 ```bash
-cap install skillweave-blueprint
-cap install skillweave-promptchain-generate
-cap install skillweave-promptchain-validate
-cap install skillweave-promptchain-execute
-cap install skillweave-releasechain
+cap install skillweave
 ```
 
 ### Online Installer (One-line)
