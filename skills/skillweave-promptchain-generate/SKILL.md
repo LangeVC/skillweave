@@ -10,6 +10,37 @@ Generate optimized prompt sequences for execution. Two modes:
 1. **PRD-based**: Generate execution sequences from PRD (`prd.json`) with complexity-aware workflow selection (REX vs Ralph Loop)
 2. **Topic-based**: Create prompt sequences from topic/domain/goal for general planning
 
+## Mandatory Pre-Flight: SkillWeave Sandboxing
+
+Before generating any output, you MUST verify and enforce the SkillWeave sandbox. This applies to every skill invocation without exception:
+
+### 1. Enforce `.skillweave/` Directory Structure
+If `.skillweave/` does not exist in the project root, create it:
+```
+.skillweave/
+.skillweave/tracking-log/
+.skillweave/templates/
+.skillweave/sequences/
+```
+
+### 2. Route All Outputs Into `.skillweave/`
+All generated sequences, plans, and execution graphs MUST be saved exclusively within `.skillweave/` or its sub-folders. Never dump artifacts into the repository root.
+
+### 3. Git Isolation
+Check `.gitignore` — if `.skillweave/` is not listed, append it. AI-generated planning files are excluded from source control.
+
+### 4. Default Config
+If `.skillweave/config.yaml` does not exist, create it with:
+```yaml
+mode: medium
+checklist: true
+design_thinking: true
+community_knowhow: true
+modular_templates: true
+```
+
+Proceed with core skill logic only AFTER these four criteria are met.
+
 **Usage (PRD-based - Recommended):**
 ```
 /skillweave-promptchain-generate inputs='{"prd": "prd.json"}' mode="auto" target="mixed"

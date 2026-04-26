@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  release:
+    types: [published, edited]
+
+permissions:
+  contents: write
+
+jobs:
+  validate-naming:
+    name: Validate Release Naming Convention
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: HARD GATE — Release name must match "SkillWeave vX.Y.Z"
+        run: |
+          RELEASE_NAME="${{ github.event.release.name }}"
+          TAG_NAME="${{ github.event.release.tag_name }}"
+
+          echo "Release name:  $RELEASE_NAME"
+          echo "Tag name:      $TAG_NAME"
+
+          if ! echo "$RELEASE_NAME" | grep -qE '^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo ""
+            echo "============================================================"
+            echo "  HARD GATE REJECTED"
+            echo "============================================================"
+            echo ""
+            echo "Release name '$RELEASE_NAME' does not follow convention."
+            echo "Required format: SkillWeave vX.Y.Z"
+            echo "Example:         SkillWeave v0.5.1"
+            echo ""
+            echo "Delete this release and create a new one with the correct name."
+            echo ""
+            exit 1
+          fi
+
+          TAG_SUFFIX="${TAG_NAME#v}"
+          VER="${RELEASE_NAME#SkillWeave v}"
+          if [ "$TAG_SUFFIX" != "$VER" ]; then
+            echo ""
+            echo "============================================================"
+            echo "  HARD GATE REJECTED — tag/name mismatch"
+            echo "============================================================"
+            echo ""
+            echo "Tag version ($TAG_SUFFIX) differs from release name version ($VER)."
+            echo "Tag must be vX.Y.Z matching SkillWeave vX.Y.Z"
+            echo ""
+            exit 1
+          fi
+
+          echo "Release naming convention check PASSED."
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [validate-naming]
+    runs-on: ubuntu-latest
+    if: github.event.action == 'published'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+        continue-on-error: true
+
+  update-homebrew:
+    name: Update Homebrew Tap Formula
+    needs: [validate-naming]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Homebrew tap update
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const releaseName = '${{ github.event.release.name }}';
+            const tagName = '${{ github.event.release.tag_name }}';
+            if (!releaseName.match(/^SkillWeave v\d+\.\d+\.\d+$/)) {
+              core.warn("Skipping Homebrew update — naming convention mismatch");
+              return;
+            }
+            const version = releaseName.replace('SkillWeave v', '');
+            core.notice(`Ready for Homebrew update: ${repo} v${version}`);

@@ -190,10 +190,9 @@ class SkillIntentMapper:
         if self.capability_registry and skill != Skill.UNKNOWN:
             capability_score = self._score_capability_availability(skill)
         
-        # Combine scores (weighted average)
         final_confidence = (
-            base_confidence * 0.4 +
-            parameter_score * 0.4 +
+            base_confidence * 0.5 +
+            parameter_score * 0.3 +
             capability_score * 0.2
         )
         
@@ -248,13 +247,17 @@ class SkillIntentMapper:
             elif required:
                 required_missing += 1
         
-        # Penalize missing required parameters
         penalty = required_missing * 0.3
         
-        # Base score: proportion of matched parameters
         base_score = matched / total_params
         
-        return max(base_score - penalty, 0.0)
+        score = max(base_score - penalty, 0.0)
+        
+        # Minimum baseline when no required params are missing
+        if required_missing == 0:
+            score = max(score, 0.5)
+        
+        return score
     
     def _score_capability_availability(self, skill: Skill) -> float:
         """Score based on capability availability."""

@@ -130,7 +130,7 @@ class SkillIntegrationHelper:
             }
             
             # Start onboarding flow
-            onboarding_result = self.onboarding_controller.start_onboarding(
+            onboarding_result = self.onboarding_controller.start(
                 user_interaction, onboarding_context
             )
             

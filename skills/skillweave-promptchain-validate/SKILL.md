@@ -8,6 +8,37 @@ argument-hint: sequence="[prompt sequence]" risk_mode="[conservative/medium/unic
 
 Review an existing prompt sequence against the SkillWeave standard and improve it if needed.
 
+## Mandatory Pre-Flight: SkillWeave Sandboxing
+
+Before generating any output, you MUST verify and enforce the SkillWeave sandbox. This applies to every skill invocation without exception:
+
+### 1. Enforce `.skillweave/` Directory Structure
+If `.skillweave/` does not exist in the project root, create it:
+```
+.skillweave/
+.skillweave/tracking-log/
+.skillweave/templates/
+.skillweave/sequences/
+```
+
+### 2. Route All Outputs Into `.skillweave/`
+All validation reports, corrected sequences, and improvement logs MUST be saved exclusively within `.skillweave/` or its sub-folders. Never dump artifacts into the repository root.
+
+### 3. Git Isolation
+Check `.gitignore` — if `.skillweave/` is not listed, append it. AI-generated validation files are excluded from source control.
+
+### 4. Default Config
+If `.skillweave/config.yaml` does not exist, create it with:
+```yaml
+mode: medium
+checklist: true
+design_thinking: true
+community_knowhow: true
+modular_templates: true
+```
+
+Proceed with core skill logic only AFTER these four criteria are met.
+
 **Usage:**
 ```
 /skillweave-promptchain-validate sequence="[prompt sequence text]"

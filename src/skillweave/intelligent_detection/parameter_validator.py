@@ -459,7 +459,10 @@ class ParameterValidator:
         corrections = {}
         
         for finding in findings:
-            if finding.severity == ValidationSeverity.ERROR and finding.suggestion:
+            if finding.suggestion and (
+                finding.severity == ValidationSeverity.ERROR or
+                (finding.severity == ValidationSeverity.WARNING and finding.current_value is None)
+            ):
                 param_name = finding.parameter
                 
                 # For missing parameters, suggest a placeholder
@@ -521,11 +524,9 @@ class ParameterValidator:
         findings: List[ValidationFinding]
     ) -> bool:
         """Determine if parameters are valid based on findings."""
-        # In strict mode, any missing required parameters makes it invalid
-        if self.strict_mode and missing_required:
+        if missing_required:
             return False
         
-        # Check for error-level findings
         has_errors = any(f.severity == ValidationSeverity.ERROR for f in findings)
         
         return not has_errors

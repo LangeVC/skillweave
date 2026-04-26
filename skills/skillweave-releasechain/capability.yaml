@@ -1,0 +1,17 @@
+kind: skill
+name: skillweave-releasechain
+version: 0.5.1
+description: Ralph Loop-powered development pipeline — handles review, testing, iteration with completion promises, memory systems, and multi-agent execution
+author: SkillWeave Team
+license: MIT
+owner: typelicious
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - releasechain
+  - pipeline
+  - review
+  - testing
+  - ralph-loop

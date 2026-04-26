@@ -1,0 +1,16 @@
+kind: skill
+name: skillweave-blueprint
+version: 0.5.1
+description: Create structured PRD through guided interview — adapts Ralph Loop concepts for multi-agent AI development
+author: SkillWeave Team
+license: MIT
+owner: typelicious
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - blueprint
+  - prd
+  - ralph-loop
+  - requirements

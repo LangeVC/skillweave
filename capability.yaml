@@ -1,0 +1,37 @@
+kind: bundle
+name: skillweave
+version: 0.5.1
+description: Multi-agent AI skill orchestration — blueprint, generate, validate, execute, release
+author: SkillWeave Team
+license: MIT
+owner: typelicious
+repository: https://github.com/typelicious/SkillWeave
+homepage: https://github.com/typelicious/SkillWeave
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - skills
+  - agents
+  - orchestration
+  - prompt-chains
+  - ralph-loop
+  - release-chain
+
+capabilities:
+  - name: skillweave-blueprint
+    source: ./skills/skillweave-blueprint
+    version: latest
+  - name: skillweave-promptchain-generate
+    source: ./skills/skillweave-promptchain-generate
+    version: latest
+  - name: skillweave-promptchain-validate
+    source: ./skills/skillweave-promptchain-validate
+    version: latest
+  - name: skillweave-promptchain-execute
+    source: ./skills/skillweave-promptchain-execute
+    version: latest
+  - name: skillweave-releasechain
+    source: ./skills/skillweave-releasechain
+    version: latest

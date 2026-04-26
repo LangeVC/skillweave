@@ -1,0 +1,17 @@
+kind: skill
+name: skillweave-promptchain-execute
+version: 0.5.1
+description: Execute SkillWeave prompt sequences with dependency-aware batching, Ralph Loop execution, binary gates, and safe parallel subagent orchestration
+author: SkillWeave Team
+license: MIT
+owner: typelicious
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - promptchain
+  - execute
+  - ralph-loop
+  - orchestration
+  - parallel
