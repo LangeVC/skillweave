@@ -5,7 +5,7 @@ Brings together all Next Level features: persistence, modes, checklist execution
 and design thinking lens.
 """
 
-from typing import Dict, Any, Optional, Callable, Tuple, Literal
+from typing import Dict, Any, List, Optional, Callable, Tuple, Literal
 from pathlib import Path
 
 from .persistence import SkillWeavePersistence, ensure_skillweave_folder, get_config, is_feature_enabled
