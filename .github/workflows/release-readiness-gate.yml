@@ -44,16 +44,11 @@ jobs:
         id: versions
         run: |
           if [ "${{ github.event.inputs.version }}" != "" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            VERSION="${{ github.event.inputs.version }}"
           else
-            VERSION=$(python3 -c "
-            import re
-            content = open('pyproject.toml').read()
-            match = re.search(r'^version\s*=\s*[\"]([^\"]+)[\"]', content, re.MULTILINE)
-            print(match.group(1) if match else 'unknown')
-            ")
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            VERSION=$(python3 -c 'import re; c=open("pyproject.toml").read(); m=re.search(r"^version\s*=\s*\"([^\"]+)\"",c,re.MULTILINE); print(m.group(1) if m else "unknown")')
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1 || echo "")
           echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
