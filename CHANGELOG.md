@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0
+- **FEATURE**: 7-phase lifecycle model with entry/exit conditions and bundle system (Initiative 01)
+- **FEATURE**: Discovery prompt library (11 prompts) and Design Thinking Lens (Initiative 02)
+- **FEATURE**: Release readiness assessment, premature invocation detection, Launch skill separation (Initiative 03)
+- **FEATURE**: Repo cleanup, dead code removal, archive with restore manifest (Initiative 04)
+- **FEATURE**: Execution system with Ralph Loop state machine, batch planner, retry, gate policy, observation layer, execution memory, sidecar manager (Initiative 05)
+- **FEATURE**: GitHub Action workflows (11 workflows), GitHub integration layer, auto-tag, auto-changelog, auto-issue, auto-PR, auto-docs-sync, release readiness gate (Initiative 06)
+- **FEATURE**: Phase-aware onboarding flow with state persistence
+- **FEATURE**: Phase boundary enforcement (soft) with violation logging
+- **FEATURE**: Ideation module (quantity-first, wild ideas, separate evaluation)
+- **FEATURE**: Assumption tracking with risk scoring and validation status
+- **FEATURE**: Iteration quality framework with evidence-driven revision
+- **FEATURE**: Release workflow with 5 gated sequential steps
+- **FEATURE**: Launch skill placeholder with separate lifecycle phase
+- **FEATURE**: Capability-based GitHub Actions (workflow-inventory, auto-tag, auto-release, auto-changelog, auto-issue, auto-PR, auto-docs-sync, release-readiness-gate, integration-test, auto-release-notes)
+- **IMPROVEMENT**: promptchain-execute redefined as orchestration substrate (release logic moved to releasechain)
+- **IMPROVEMENT**: All 510 tests passing across full system
+
 ## 0.5.6
 - **FEATURE**: Capacium badge and install section in README
 - **FEATURE**: Content boundary enforcement for release artifacts (AGENTS.md + prerelease.yml)
