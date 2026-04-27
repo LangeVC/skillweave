@@ -315,3 +315,36 @@ class ReleaseReadinessGate:
             ],
             "errors": result.errors,
         }, indent=2)
+
+
+def run_cli():
+    """CLI entry for GitHub Actions: reads env vars, runs gate, writes outputs."""
+    version = os.environ.get("RELEASE_VERSION", "unknown")
+    latest_tag = os.environ.get("RELEASE_LATEST_TAG") or None
+    gate = ReleaseReadinessGate()
+    result = gate.evaluate(
+        current_version=version,
+        latest_tag=latest_tag,
+        wip_scan_paths=["src", "README.md", "CHANGELOG.md"],
+    )
+
+    markdown = gate.generate_markdown(result)
+    with open("release-gate-report.md", "w") as f:
+        f.write(markdown)
+
+    json_out = gate.generate_json(result)
+    with open("release-gate-data.json", "w") as f:
+        f.write(json_out)
+
+    data = json.loads(json_out)
+    print(f"can_release={'true' if result.can_release else 'false'}")
+    print(f"passed_count={data['passed_count']}")
+    print(f"total_checks={data['total_checks']}")
+
+    for check in result.checks:
+        if not check.passed:
+            level = "error" if check.required else "warning"
+            print(f"::{level} title=ReleaseGate::{check.name}: {check.detail}")
+
+
+import os

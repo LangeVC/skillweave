@@ -56,44 +56,11 @@ jobs:
 
       - name: Run release readiness gate
         id: gate
+        env:
+          RELEASE_VERSION: ${{ steps.versions.outputs.version }}
+          RELEASE_LATEST_TAG: ${{ steps.versions.outputs.latest_tag }}
         run: |
-          python3 << 'PYEOF'
-          import sys, json
-          sys.path.insert(0, 'src')
-          from skillweave.github_integration.release_gate import ReleaseReadinessGate
-
-          VERSION = "${{ steps.versions.outputs.version }}"
-          LATEST_TAG = "${{ steps.versions.outputs.latest_tag }}"
-
-          gate = ReleaseReadinessGate()
-          result = gate.evaluate(
-              current_version=VERSION,
-              latest_tag=LATEST_TAG if LATEST_TAG else None,
-              wip_scan_paths=["src", "README.md", "CHANGELOG.md"],
-          )
-
-          markdown = gate.generate_markdown(result)
-          with open('release-gate-report.md', 'w') as f:
-            f.write(markdown)
-
-          json_out = gate.generate_json(result)
-          with open('release-gate-data.json', 'w') as f:
-            f.write(json_out)
-
-          # Output for GitHub Actions
-          print(f'can_release={json.dumps(result.can_release)}')
-
-          with open('release-gate-data.json') as f:
-              data = json.load(f)
-          print(f'passed_count={data[\"passed_count\"]}')
-          print(f'total_checks={data[\"total_checks\"]}')
-
-          # GitHub annotations for failed checks
-          for check in result.checks:
-              if not check.passed:
-                  level = "error" if check.required else "warning"
-                  print(f'::{level} title=ReleaseGate::{check.name}: {check.detail}')
-          PYEOF
+          cd src && python3 -c "from skillweave.github_integration.release_gate import run_cli; run_cli()"
 
       - name: Upload gate report
         uses: actions/upload-artifact@v4
