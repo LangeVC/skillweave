@@ -1,0 +1,326 @@
+metadata:
+  sequence_id: seq-02-discovery-design-thinking
+  version: 1.0.0
+  initiative: "02 — Discovery, Research, and Design Thinking Lens"
+  created: 2026-04-27
+  sequence_type: mixed
+  execution_mode: ralph_attended
+  complexity_score: 50
+  workflow: ralph-loop-attended
+  checkpoint_interval: 4
+
+objective:
+  goal: "Create Discovery & Research prompts and operational Design Thinking Lens"
+  success: "Prompt library, artifact templates, and lens configuration are implemented and tested"
+
+success_criteria:
+  - "10+ discovery prompts exist with clear I/O specifications"
+  - "5+ research artifact templates exist in .skillweave/templates/discovery/"
+  - "Design Thinking Lens configuration loads and applies rules"
+  - "Ideation mode produces 5+ options with wild idea"
+  - "Assumption tracking extracts and stores assumptions"
+  - "All existing tests pass (backward compatible)"
+
+phases:
+  - id: PHASE-1
+    name: "Design Thinking Lens Configuration"
+    description: "Define the lens configuration schema that maps workshop rules to prompt behaviors and UX principles to output rules"
+    order: 1
+    steps: [STEP-01]
+
+  - id: PHASE-2
+    name: "Discovery Prompts Library"
+    description: "Create structured discovery prompts for empathy, research, and framing — run in parallel with early feature work"
+    order: 2
+    steps: [STEP-02, STEP-03, STEP-04, STEP-05, STEP-06]
+
+  - id: PHASE-3
+    name: "Templates and Dependent Features"
+    description: "Build research artifact templates and assumption tracking (depends on prompt completion)"
+    order: 3
+    steps: [STEP-07, STEP-08]
+
+  - id: PHASE-4
+    name: "Integration"
+    description: "Connect lens and discovery outputs with existing Blueprint and PromptChain skills"
+    order: 4
+    steps: [STEP-09]
+
+  - id: PHASE-5
+    name: "Testing"
+    description: "Comprehensive test suite for all discovery and design thinking features"
+    order: 5
+    steps: [STEP-10]
+
+steps:
+  - id: "STEP-01"
+    task_id: "DESIGN-001"
+    title: "Define Design Thinking Lens configuration schema"
+    description: "Create the configuration schema mapping workshop rules to prompt behaviors and UX principles to output rules. Define how the lens is loaded, activated, and applied across skills."
+    estimated_minutes: 30
+    priority: "critical"
+    phase: 1
+    agent_type: "plan"
+    depends_on: []
+    gates:
+      - type: manual
+        description: "Approve schema design before proceeding to prompt and feature development"
+        criteria:
+          - "YAML validates"
+          - "All 6 workshop rules present as prompt behaviors"
+          - "All 5 UX principles present as output formatting rules"
+          - "Example config loads without error"
+    artifacts:
+      - target: ".skillweave/config.yaml"
+        description: "Extended config with lens section, workshop rules, UX principles, activation mechanism"
+      - target: ".skillweave/lenses/design-thinking.yaml"
+        description: "Lens definition file with rules and behaviors"
+    verification:
+      - "YAML validates"
+      - "All 6 workshop rules present"
+      - "All 5 UX principles present"
+      - "Example config loads without error"
+
+  - id: "STEP-02"
+    task_id: "DISC-001"
+    title: "Create discovery prompt library — empathy and user context"
+    description: "Write 3+ structured prompts for user empathy: persona development, user context mapping, pain point articulation. Each prompt has input requirements, expected output format, and artifact target."
+    estimated_minutes: 30
+    priority: "critical"
+    phase: 2
+    agent_type: "plan"
+    depends_on: ["STEP-01"]
+    gates:
+      - type: automatic
+        description: "Schema must exist to anchor prompt formatting rules"
+        criteria: ["STEP-01 complete"]
+    artifacts:
+      - target: ".skillweave/prompts/discovery/empathy-persona-dev.md"
+        description: "Persona development prompt template with placeholders"
+      - target: ".skillweave/prompts/discovery/empathy-user-context.md"
+        description: "User context mapping prompt template"
+      - target: ".skillweave/prompts/discovery/empathy-pain-points.md"
+        description: "Pain point articulation prompt template"
+      - target: ".skillweave/tracking-log/prompt-inventory.yaml"
+        description: "Updated prompt inventory with empathy prompts registered"
+    verification:
+      - "Review prompts for completeness"
+      - "Verify artifact output targets defined"
+      - "Test one prompt with sample input"
+
+  - id: "STEP-03"
+    task_id: "DISC-002"
+    title: "Create discovery prompt library — research and landscape"
+    description: "Write 3+ structured prompts for research: competitor analysis, landscape mapping, market opportunity assessment. Each produces structured artifacts."
+    estimated_minutes: 30
+    priority: "critical"
+    phase: 2
+    agent_type: "plan"
+    depends_on: ["STEP-01"]
+    gates:
+      - type: automatic
+        description: "Schema must exist to anchor prompt formatting rules"
+        criteria: ["STEP-01 complete"]
+    artifacts:
+      - target: ".skillweave/prompts/discovery/research-competitor-analysis.md"
+        description: "Competitor analysis prompt producing matrix artifact"
+      - target: ".skillweave/prompts/discovery/research-landscape-map.md"
+        description: "Landscape mapping prompt producing structured overview"
+      - target: ".skillweave/prompts/discovery/research-opportunity-assessment.md"
+        description: "Market opportunity assessment prompt"
+      - target: ".skillweave/tracking-log/prompt-inventory.yaml"
+        description: "Updated prompt inventory with research prompts registered"
+    verification:
+      - "Review prompts for completeness"
+      - "Verify artifact formats are practical"
+      - "Test one prompt with sample input"
+
+  - id: "STEP-04"
+    task_id: "DISC-003"
+    title: "Create discovery prompt library — framing and assumptions"
+    description: "Write 4+ structured prompts for problem framing, opportunity articulation, assumption surfacing, and assumption prioritization using risk matrix."
+    estimated_minutes: 30
+    priority: "high"
+    phase: 2
+    agent_type: "plan"
+    depends_on: ["STEP-01"]
+    gates:
+      - type: automatic
+        description: "Schema must exist to anchor prompt formatting rules"
+        criteria: ["STEP-01 complete"]
+    artifacts:
+      - target: ".skillweave/prompts/discovery/framing-problem-statement.md"
+        description: "Problem framing prompt producing structured problem statement"
+      - target: ".skillweave/prompts/discovery/framing-opportunity.md"
+        description: "Opportunity articulation prompt"
+      - target: ".skillweave/prompts/discovery/framing-assumption-surfacing.md"
+        description: "Assumption surfacing prompt — extracts 5+ assumptions from project description"
+      - target: ".skillweave/prompts/discovery/framing-assumption-prioritization.md"
+        description: "Assumption prioritization prompt using impact × probability risk matrix"
+      - target: ".skillweave/tracking-log/prompt-inventory.yaml"
+        description: "Updated prompt inventory with framing prompts registered"
+    verification:
+      - "Review prompts for completeness"
+      - "Test assumption surfacing with sample project description"
+      - "Verify outputs are compatible with Blueprint skill input"
+
+  - id: "STEP-05"
+    task_id: "FEAT-001"
+    title: "Implement ideation mode with divergent thinking"
+    description: "Build an ideation module that enforces quantity-first generation, deferred judgment, and wild idea inclusion. Configurable via lens settings."
+    estimated_minutes: 45
+    priority: "high"
+    phase: 2
+    agent_type: "build"
+    depends_on: ["STEP-01"]
+    gates:
+      - type: automatic
+        description: "Lens config schema must exist to define ideation settings"
+        criteria: ["STEP-01 complete"]
+    artifacts:
+      - target: ".skillweave/lib/ideation.py"
+        description: "Ideation module with generate, evaluate, and expand functions"
+      - target: ".skillweave/tracking-log/prompt-inventory.yaml"
+        description: "Updated with ideation mode registration"
+    verification:
+      - "Run ideation with sample problem → 5+ options"
+      - "Verify wild option is present"
+      - "Run evaluation step separately"
+      - "Run expansion on top of prior output"
+
+  - id: "STEP-06"
+    task_id: "FEAT-003"
+    title: "Implement iteration quality framework"
+    description: "Build feedback synthesis template and evidence-driven revision patterns. Each iteration extracts learnings and tracks what changed and why."
+    estimated_minutes: 30
+    priority: "medium"
+    phase: 2
+    agent_type: "build"
+    depends_on: ["STEP-01"]
+    gates:
+      - type: automatic
+        description: "Lens config schema must exist to define iteration behaviors"
+        criteria: ["STEP-01 complete"]
+    artifacts:
+      - target: ".skillweave/templates/discovery/feedback-synthesis.md"
+        description: "Feedback synthesis template for collecting input"
+      - target: ".skillweave/tracking-log/iterations.yaml"
+        description: "Iteration log tracking changes with rationale"
+      - target: ".skillweave/prompts/discovery/iteration-revision.md"
+        description: "Revision prompt referencing evidence, not opinion"
+    verification:
+      - "Run feedback synthesis with sample input"
+      - "Verify iteration log created"
+      - "Check learning extraction output"
+
+  - id: "STEP-07"
+    task_id: "TMPL-001"
+    title: "Create research artifact templates"
+    description: "Build 5 artifact templates: persona-card.md, competitor-matrix.md, assumption-log.yaml, opportunity-canvas.md, research-summary.md. Place in .skillweave/templates/discovery/."
+    estimated_minutes: 45
+    priority: "high"
+    phase: 3
+    agent_type: "build"
+    depends_on: ["STEP-02", "STEP-03", "STEP-04"]
+    gates:
+      - type: automatic
+        description: "All prompt libraries must exist to define compatible output templates"
+        criteria: ["STEP-02 complete", "STEP-03 complete", "STEP-04 complete"]
+    artifacts:
+      - target: ".skillweave/templates/discovery/persona-card.md"
+        description: "Persona card template with sections for demographics, goals, pain points, usage context"
+      - target: ".skillweave/templates/discovery/competitor-matrix.md"
+        description: "Competitor matrix template supporting multi-competitor comparison"
+      - target: ".skillweave/templates/discovery/assumption-log.yaml"
+        description: "Assumption log YAML template with risk categorization"
+      - target: ".skillweave/templates/discovery/opportunity-canvas.md"
+        description: "Opportunity canvas template"
+      - target: ".skillweave/templates/discovery/research-summary.md"
+        description: "Research summary template"
+    verification:
+      - "Verify all 5 files exist"
+      - "Check each template has placeholder sections"
+      - "Validate YAML template syntax"
+      - "Review templates against UX principles"
+
+  - id: "STEP-08"
+    task_id: "FEAT-002"
+    title: "Implement assumption tracking system"
+    description: "Build assumption extraction, categorization, and tracking. Assumptions stored in .skillweave/tracking-log/assumptions.yaml with risk scoring and validation status."
+    estimated_minutes: 30
+    priority: "medium"
+    phase: 3
+    agent_type: "build"
+    depends_on: ["STEP-04"]
+    gates:
+      - type: automatic
+        description: "Assumption surfacing prompt must exist to define extraction patterns"
+        criteria: ["STEP-04 complete"]
+    artifacts:
+      - target: ".skillweave/lib/assumptions.py"
+        description: "Assumption extraction and tracking module"
+      - target: ".skillweave/tracking-log/assumptions.yaml"
+        description: "Assumption tracking file with risk scoring and validation status"
+    verification:
+      - "Extract assumptions from sample project description"
+      - "Verify YAML file created with correct structure"
+      - "Update assumption status and verify persistence"
+
+  - id: "STEP-09"
+    task_id: "INTG-001"
+    title: "Integrate lens and discovery with existing skills"
+    description: "Connect the Design Thinking Lens to Blueprint and PromptChain skills. Discovery outputs feed into Blueprint inputs. Lens rules apply to skill outputs when activated."
+    estimated_minutes: 45
+    priority: "high"
+    phase: 4
+    agent_type: "build"
+    depends_on: ["STEP-05", "STEP-06", "STEP-07", "STEP-08"]
+    gates:
+      - type: manual
+        description: "All features and templates must be complete before integration"
+        criteria:
+          - "STEP-05 complete (ideation mode)"
+          - "STEP-06 complete (iteration quality framework)"
+          - "STEP-07 complete (research artifact templates)"
+          - "STEP-08 complete (assumption tracking)"
+    artifacts:
+      - target: ".skillweave/lenses/design-thinking.yaml"
+        description: "Finalized lens configuration with integration bindings"
+      - target: ".skillweave/tracking-log/integration-log.yaml"
+        description: "Integration verification log documenting skill connections"
+    verification:
+      - "Activate lens → verify output formatting changes"
+      - "Deactivate lens → verify original behavior"
+      - "Run Blueprint with discovery artifacts → verify they're used"
+      - "Check backward compatibility"
+
+  - id: "STEP-10"
+    task_id: "TEST-001"
+    title: "Test suite for discovery and design thinking features"
+    description: "Tests covering prompt library, templates, lens configuration, ideation mode, assumption tracking, and integration."
+    estimated_minutes: 30
+    priority: "high"
+    phase: 5
+    agent_type: "build"
+    depends_on: ["STEP-09"]
+    gates:
+      - type: automatic
+        description: "Integration must be complete to test end-to-end behavior"
+        criteria: ["STEP-09 complete"]
+    artifacts:
+      - target: "tests/test_discovery.py"
+        description: "Test file with 12+ test cases covering all discovery features"
+    verification:
+      - "Run test suite"
+      - "Verify 12+ tests exist"
+      - "All tests pass"
+
+checkpoints:
+  - step: "STEP-01"
+    description: "Lens configuration schema is defined and validated"
+  - step: "STEP-04"
+    description: "All 10+ discovery prompts exist and are verified"
+  - step: "STEP-07"
+    description: "All 5 artifact templates created and validated"
+  - step: "STEP-09"
+    description: "Full integration verified with backward compatibility"

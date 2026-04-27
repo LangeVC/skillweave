@@ -1,0 +1,22 @@
+kind: skill
+name: skillweave-observe
+version: 0.7.0
+description: "Execution Reports, Timing, Events, Memory, Summary, Health — Read-Only Observability"
+author: SkillWeave
+license: MIT
+owner: SkillWeave
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - observe
+  - reports
+  - metrics
+  - execution-memory
+  - observability
+capabilities:
+  - report_generation
+  - memory_access
+  - event_filtering
+  - health_check

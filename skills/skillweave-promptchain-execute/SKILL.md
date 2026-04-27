@@ -1,6 +1,7 @@
 ---
 name: skillweave-promptchain-execute
-description: Execute SkillWeave prompt sequences with dependency-aware batching, Ralph Loop execution, binary gates, and safe parallel subagent orchestration. Use when a validated prompt sequence or PRD-derived task set should be carried through real execution, especially for multi-step build, review, verification, release, or mixed plan/build work.
+type: orchestration
+description: Execute SkillWeave prompt sequences with dependency-aware batching, Ralph Loop execution, binary gates, and safe parallel subagent orchestration. Orchestration substrate — does NOT handle release-specific logic (see skillweave-releasechain for release).
 argument-hint: sequence="[prompt sequence]" inputs="[JSON]" execution_mode="[auto/rex/ralph_attended/ralph_overnight]" audience_mode="[auto/humanize/machinize/mixed]" risk_mode="[conservative/medium/unicorn]" (or attach .md/.txt file)
 ---
 
@@ -103,7 +104,7 @@ If `execution_mode=auto`, choose as follows:
 
 - there are 4+ steps
 - the work mutates a repository
-- code, tests, docs, or release flow are all involved
+- code, tests, or docs are all involved
 - binary gates are required
 - public/private or product-tier boundaries are involved
 - multiple safe parallel lanes exist
@@ -310,7 +311,7 @@ user experience and ensure successful outcomes.
    - critical path
    - safe parallel lanes
    - review gates
-   - release or deployment risk
+    - handoff boundary to releasechain/launch (see `.skillweave/release/skill-boundaries.yaml`)
 5. Resolve execution mode
 6. Resolve effective risk mode using hierarchical override system (CLI parameter > environment variable > project config > global config > default)
 7. Determine whether the sequence should run:
@@ -491,15 +492,33 @@ If a batch fails:
 
 Do not continue into the next batch after a failed gate.
 
-## Integration with ReleaseChain
+## Handoff to ReleaseChain / Launch
 
-Offer `/skillweave-releasechain` only when:
+This skill is an **orchestration substrate**. It does NOT handle release-specific logic.
 
-- build-oriented work completed successfully
-- outputs are in a reviewable state
-- the next logical step is review, test hardening, commit, release, or PR flow
+When build work completes successfully and outputs are in a reviewable state,
+offer the appropriate downstream skill:
 
-Do not automatically transfer partial or inconclusive build batches into ReleaseChain.
+| Downstream need | Skill |
+|-----------------|-------|
+| Release (version, changelog, publish) | `/skillweave-releasechain` |
+| Launch (deploy, communicate, go-live) | `/skillweave-launch` |
+
+### Conditions
+
+Hand off to releasechain when:
+- Build-oriented work completed successfully
+- Outputs are in a reviewable state
+- The next logical step is review, test hardening, commit, release, or PR flow
+
+Do not automatically transfer partial or inconclusive build batches.
+
+### Skill Boundaries
+
+For complete role definitions, see:
+- `.skillweave/release/skill-boundaries.yaml` — formal boundary specs
+- `skills/skillweave-releasechain/SKILL.md` — releasechain skill doc
+- `skills/launch/SKILL.md` — launch skill placeholder
 
 ## Agent-Agnostic Execution
 

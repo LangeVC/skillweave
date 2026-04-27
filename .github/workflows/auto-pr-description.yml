@@ -1,0 +1,117 @@
+name: Auto PR Description
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to generate description for"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  generate-pr-description:
+    name: Generate PR Description
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install PyYAML
+
+      - name: Gather PR commits and generate description
+        id: generate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'PYEOF'
+          import sys, subprocess, json, os
+          sys.path.insert(0, 'src')
+          from skillweave.github_integration.pr_description import PRDescriptionGenerator
+
+          PR_NUMBER = "${{ github.event.pull_request.number }}"
+          HEAD_SHA = "${{ github.event.pull_request.head.sha }}"
+          BASE_SHA = "${{ github.event.pull_request.base.sha }}"
+          BRANCH = "${{ github.event.pull_request.head.ref }}"
+
+          log_result = subprocess.run(
+            ['git', 'log', '--oneline', '--no-decorate', f'{BASE_SHA}..{HEAD_SHA}'],
+            capture_output=True, text=True, timeout=30
+          )
+
+          diff_result = subprocess.run(
+            ['git', 'diff', '--stat', f'{BASE_SHA}..{HEAD_SHA}'],
+            capture_output=True, text=True, timeout=30
+          )
+
+          messages = []
+          for line in log_result.stdout.strip().split('\n'):
+            if not line.strip():
+              continue
+            parts = line.strip().split(' ', 1)
+            messages.append((parts[0], parts[1] if len(parts) > 1 else ""))
+
+          files_changed = len(diff_result.stdout.strip().split('\n')) if diff_result.stdout.strip() else 0
+
+          gen = PRDescriptionGenerator()
+          result = gen.generate_from_commits(messages, branch_name=BRANCH, files_changed=files_changed)
+
+          markdown = gen.generate_markdown(result)
+          title = result.title
+
+          with open('pr-description.md', 'w') as f:
+            f.write(markdown)
+
+          with open('pr-title.txt', 'w') as f:
+            f.write(title)
+
+          print(f"Generated title: {title}")
+          print(f"Sections: {len(result.sections)}")
+          print(f"Commits: {result.commit_count}")
+          PYEOF
+
+      - name: Read generated title
+        id: title
+        run: echo "title=$(cat pr-title.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Update PR description
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('pr-description.md', 'utf8');
+            const title = fs.readFileSync('pr-title.txt', 'utf8').trim();
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: issue_number,
+              title: title.startsWith('feat:') || title.startsWith('fix:') || title.startsWith('chore:')
+                ? title
+                : `${{ steps.title.outputs.title }}`,
+              body: body.slice(0, 30000),
+            });
+            core.notice(`PR #${issue_number} description updated`);
+
+      - name: Upload PR description artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-description
+          path: pr-description.md

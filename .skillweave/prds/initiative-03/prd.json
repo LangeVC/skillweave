@@ -1,0 +1,235 @@
+{
+  "project": {
+    "name": "SkillWeave Initiative 03 — Release, Launch, and Workflow Rationalization",
+    "version": "1.0.0",
+    "description": "Resolve overlap between promptchain-execute and releasechain, separate Release from Launch, add intelligent workflow recommendation for premature invocations",
+    "domain": "developer-tooling",
+    "repository": "https://github.com/anomalyco/SkillWeave",
+    "created": "2026-04-27T00:00:00Z",
+    "status": "draft"
+  },
+  "settings": {
+    "max_iterations": 40,
+    "timeout_minutes": 600,
+    "required_capabilities": ["planning", "code_generation", "testing", "review"],
+    "verification_level": "standard"
+  },
+  "objectives": [
+    {
+      "id": "OBJ-01",
+      "description": "Eliminate redundancy between promptchain-execute and releasechain with clear role separation",
+      "priority": "critical",
+      "success_metrics": [{"metric": "Role separation documented and implemented", "target": "No overlapping release logic", "measurement": "Code review confirms separation"}]
+    },
+    {
+      "id": "OBJ-02",
+      "description": "Add release readiness assessment and premature invocation detection",
+      "priority": "critical",
+      "success_metrics": [{"metric": "Premature detection works", "target": "Redirects when prerequisites missing", "measurement": "Automated test passes"}]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "DESIGN-001",
+      "title": "Define release readiness model and skill boundary specifications",
+      "description": "Create the release prerequisite model (critical, recommended, optional checks) and define clear boundary between releasechain (phase-specific) and promptchain-execute (orchestration substrate).",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Release readiness model defined as YAML with critical/recommended/optional prerequisites",
+        "Skill boundary specs defined for both releasechain and promptchain-execute",
+        "Release vs Launch activities clearly separated",
+        "Remediation guidance exists for each prerequisite"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-001",
+      "title": "Implement release readiness assessment",
+      "description": "Build pre-flight check module that validates release prerequisites. Checks for test suite, passing tests, deployment config, release notes, version bump.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "critical",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Assessment module exists and is importable",
+        "Checks all critical prerequisites from readiness model",
+        "Returns readiness score with pass/fail per check",
+        "Provides gap analysis for failed prerequisites",
+        "Blocks release if critical prerequisites fail (with override)"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-002",
+      "title": "Implement premature invocation detection and redirect",
+      "description": "Detect when release is invoked without prerequisites, identify actual stage, explain gap, recommend upstream workflow, optionally generate readiness checklist.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "critical",
+      "dependencies": ["FEAT-001"],
+      "acceptance_criteria": [
+        "Detection runs in < 2 seconds",
+        "Returns recommended upstream workflow",
+        "Explains what is missing and why",
+        "Offers to generate release-readiness checklist",
+        "Override flag available to proceed anyway"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-003",
+      "title": "Implement release execution workflow",
+      "description": "Build structured release flow: verify tests → package → generate release notes → deploy → validate rollout. Each step has pass/fail gate.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "high",
+      "dependencies": ["FEAT-001"],
+      "acceptance_criteria": [
+        "Release workflow has 5 sequential steps with gates",
+        "Failed steps produce actionable error guidance",
+        "Progress tracked in .skillweave/tracking-log/",
+        "Completion produces release summary artifact",
+        "Workflow is configurable (steps can be skipped with flag)"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-004",
+      "title": "Implement release readiness checklist generator",
+      "description": "Generate markdown checklist from readiness assessment results. Checklist items are actionable, trackable, and integrate with Initiative 05 checklist system.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "dependencies": ["FEAT-001"],
+      "acceptance_criteria": [
+        "Checklist generated from assessment results",
+        "Items are actionable and specific",
+        "Saved to .skillweave/checklists/release-readiness.md",
+        "Uses checkbox format (- [ ] / - [x])",
+        "Items map to specific remediation actions"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "REFAC-001",
+      "title": "Refactor promptchain-execute role and remove release-specific logic",
+      "description": "Clarify promptchain-execute as orchestration substrate. Remove release-specific logic (moved to releasechain). Update documentation and skill metadata.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "high",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Release-specific logic removed from promptchain-execute",
+        "Execute skill metadata marks it as 'orchestration' type",
+        "Documentation updated to clarify execute's role",
+        "Execute remains usable for general prompt sequence execution",
+        "No user-facing behavior changes for non-release usage"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-005",
+      "title": "Create launch phase stub and separation documentation",
+      "description": "Define Launch as separate phase in lifecycle. Document activities, entry conditions, and relationship to Release. Create skill placeholder.",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Launch phase defined in lifecycle registry",
+        "Launch activities list documented",
+        "Launch entry condition: release completed",
+        "Skill placeholder exists with phase metadata",
+        "Release vs Launch separation clearly documented"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TEST-001",
+      "title": "Test suite for release rationalization",
+      "description": "Tests covering readiness assessment, premature detection, release workflow, checklist generation, execute refactoring, and backward compatibility.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "REFAC-001"],
+      "acceptance_criteria": [
+        "Test file exists with 12+ test cases",
+        "Readiness assessment tests pass",
+        "Premature detection tests pass",
+        "Release workflow tests pass",
+        "Execute backward compatibility tests pass",
+        "All tests run without errors"
+      ],
+      "type": "testing",
+      "passes": false,
+      "attempts": 0
+    }
+  ],
+  "assumptions": [
+    {
+      "description": "Overlap between execute and releasechain can be resolved without breaking changes",
+      "impact_if_wrong": "Major refactoring needed with potential breaking changes",
+      "validation_method": "Map all execute usage patterns before refactoring"
+    },
+    {
+      "description": "Release prerequisites are generalizable across project types",
+      "impact_if_wrong": "Need project-type-specific prerequisite models",
+      "validation_method": "Test with 3 different project types"
+    }
+  ],
+  "constraints": {
+    "technical": [
+      "Existing promptchain-execute invocations must continue to work",
+      "Releasechain API changes must be backward-compatible",
+      "Must integrate with Initiative 01 lifecycle phase system"
+    ]
+  },
+  "risks": [
+    {
+      "description": "Refactoring execute breaks existing workflows",
+      "probability": "medium",
+      "impact": "critical",
+      "mitigation": "Full backward compatibility test suite, gradual migration"
+    },
+    {
+      "description": "Release prerequisites too strict for small projects",
+      "probability": "medium",
+      "impact": "medium",
+      "mitigation": "Configurable strictness levels, override flag"
+    }
+  ],
+  "execution_recommendation": {
+    "mode": "standard",
+    "reason": "8 tasks, ~6 hours total, moderate dependencies, includes refactoring risk",
+    "suggested_workflow": "ralph-loop-attended",
+    "estimated_iterations": 12,
+    "parallel_opportunities": 2,
+    "recommended_capabilities": ["planning", "code_generation", "testing", "review"],
+    "complexity_score": 58
+  }
+}

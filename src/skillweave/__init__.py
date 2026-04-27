@@ -44,6 +44,19 @@ from .capability import (
     route_task,
 )
 
+from .execution import (
+    BatchPlanner, BatchPlan, BatchSpec,
+    RalphLoopState, RalphLoopStateMachine,
+    RetryHandler, RetryBudget,
+    GatePolicy, BinaryGateResult,
+)
+
+from .execution_checklist import ChecklistLoopEngine
+from .execution_memory import ExecutionMemory
+from .execution_integration import ExecutionIntegration
+from .observation import EventLogger, LogLevel, Timer, ReportGenerator
+from .sidecar_manager import SidecarManager, SidecarSpec
+
 __all__ = [
     # Persistence
     "SkillWeaveConfig",
@@ -92,4 +105,15 @@ __all__ = [
     "CapabilityRouter",
     "get_capability_router",
     "route_task",
+
+    # Execution System
+    "BatchPlanner", "BatchPlan", "BatchSpec",
+    "RalphLoopState", "RalphLoopStateMachine",
+    "RetryHandler", "RetryBudget",
+    "GatePolicy", "BinaryGateResult",
+    "ChecklistLoopEngine",
+    "ExecutionMemory",
+    "ExecutionIntegration",
+    "EventLogger", "LogLevel", "Timer", "ReportGenerator",
+    "SidecarManager", "SidecarSpec",
 ]

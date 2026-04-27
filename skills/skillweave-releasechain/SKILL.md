@@ -55,6 +55,8 @@ Proceed with core skill logic only AFTER these four criteria are met.
 - `completion_promise` (optional): Completion promise format (default: SkillWeave standard)
 - `auto_confirm` (optional): Automatically confirm safe operations (default: false)
 
+**Skill Boundaries:** This skill handles the Release lifecycle phase (order 5). It does NOT handle orchestration (promptchain-execute) or launch/rollout (launch skill). See `.skillweave/release/skill-boundaries.yaml`.
+
 **Ralph Loop Pipeline Architecture:**
 ## Next Level Features
 
@@ -452,9 +454,9 @@ Complete development chain: `Blueprint → PromptChain → ReleaseChain`
 ```
 # Execute skill runs parallel execution
 /skillweave-promptchain-execute sequence="..." inputs="..."
-# When build components detected, offers:
-"Build components detected. Initiate Ralph Loop pipeline? [Yes/No]"
-# If Yes: Initiates /skillweave-releasechain automatically
+# When build work completes successfully, execute skill
+# hands off to releasechain for release-phase tasks.
+# See: .skillweave/release/skill-boundaries.yaml
 ```
 
 **Safety Features:**

@@ -1,0 +1,292 @@
+{
+  "project": {
+    "name": "SkillWeave Initiative 05 — Execution System, Checklists, Memory, and Observability",
+    "version": "1.0.0",
+    "description": "Checklist-driven execution loops, persistent project memory, context compaction, selective loading, and execution observability",
+    "domain": "developer-tooling",
+    "repository": "https://github.com/anomalyco/SkillWeave",
+    "created": "2026-04-27T00:00:00Z",
+    "status": "draft"
+  },
+  "settings": {
+    "max_iterations": 60,
+    "timeout_minutes": 900,
+    "required_capabilities": ["planning", "code_generation", "testing", "infrastructure"],
+    "verification_level": "standard"
+  },
+  "objectives": [
+    {
+      "id": "OBJ-01",
+      "description": "Build a checklist-driven execution loop that reads, executes, and updates checklist items in a structured cycle",
+      "priority": "critical",
+      "success_metrics": [{"metric": "Checklist loop completes", "target": "Reads, executes, updates checklist items", "measurement": "Automated test with sample checklist"}]
+    },
+    {
+      "id": "OBJ-02",
+      "description": "Establish persistent project memory and context compaction for cross-session continuity",
+      "priority": "critical",
+      "success_metrics": [{"metric": "Memory persists across sessions", "target": "Write and read back entries", "measurement": "File round-trip test"}]
+    },
+    {
+      "id": "OBJ-03",
+      "description": "Add execution observability with token tracking, runtime metrics, and execution reports",
+      "priority": "high",
+      "success_metrics": [{"metric": "Metrics recorded", "target": "Token count and runtime per step", "measurement": "Metrics file has entries"}]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "DESIGN-001",
+      "title": "Define execution directory structure and format specifications",
+      "description": "Define the .skillweave/ directory layout for memory, checklists, tracking-log, and config. Specify YAML formats for all new file types.",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Directory structure documented: memory/, checklists/, tracking-log/",
+        "YAML format defined for: memory files, task-log, decisions, learnings, metrics",
+        "Checklist format documented (markdown with extensions)",
+        "Context summary format defined",
+        "All formats are agent-agnostic (plain YAML/Markdown)"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-001",
+      "title": "Implement checklist loop engine",
+      "description": "Core execution loop: read markdown checklist → identify next unchecked item → execute → update status → loop. Supports nested checklists and blocker detection.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 75,
+      "priority": "critical",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Reads markdown checklist files with - [ ] and - [x] syntax",
+        "Identifies next unchecked item in sequence",
+        "Updates checklist file with completion status after execution",
+        "Loops until all items checked or blocker encountered",
+        "Supports nested checklists (sub-items under items)",
+        "Blocker detection pauses loop and reports issue"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-002",
+      "title": "Implement project memory layer",
+      "description": "Persistent key-value store in .skillweave/memory/ with categories: rules, decisions, conventions, architecture, open-issues. Readable and writable at runtime.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "critical",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Memory stored as YAML files in .skillweave/memory/",
+        "5 categories: rules, decisions, conventions, architecture, open-issues",
+        "Read operation loads memory at skill startup",
+        "Write operation appends entries during execution",
+        "Memory portable across agent frameworks (plain files)",
+        "Search by key or category works"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-003",
+      "title": "Implement context compaction engine",
+      "description": "After each major step, produce compact summary: completed_items, key_decisions, current_state, next_steps. Save to tracking-log, loadable as starting context for next step.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Compaction runs after each checklist item completion",
+        "Produces structured summary with 4 sections",
+        "Summary saved to .skillweave/tracking-log/context-summary.yaml",
+        "Summary loadable by next execution step",
+        "Original detailed output preserved separately in tracking log"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-004",
+      "title": "Implement execution observability",
+      "description": "Track per-step metrics: step_id, tokens_used, runtime_seconds, success/failure, retries. Generate summary report after execution.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Metrics recorded per step in .skillweave/tracking-log/metrics.yaml",
+        "Tracks: step_id, tokens_used, runtime_seconds, success, retries",
+        "Summary report generated after execution completes",
+        "Cumulative metrics across sessions supported",
+        "Report saved to .skillweave/tracking-log/execution-report.md"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-005",
+      "title": "Implement selective context loader",
+      "description": "Load only files and sections needed for current step. Each checklist item can declare required_context. Default context: memory + current checklist + last summary.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["FEAT-002", "FEAT-003"],
+      "acceptance_criteria": [
+        "Checklist items can declare required_context (file paths, sections)",
+        "Loader reads only declared context",
+        "Default context includes: memory, checklist, last context summary",
+        "Overridable with explicit context specification",
+        "Measurably less context than full-load approach"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-006",
+      "title": "Implement artifact-first progress tracking",
+      "description": "Decision log, learning log, and task log as append-only YAML files. All progress written to files instead of remaining in chat.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Decision log at .skillweave/tracking-log/decisions.yaml",
+        "Learning log at .skillweave/tracking-log/learnings.yaml",
+        "Task log at .skillweave/tracking-log/task-log.yaml",
+        "Each entry has timestamp, context, and rationale",
+        "Logs are append-only"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-007",
+      "title": "Implement correction by regeneration",
+      "description": "When a step fails, retry from clean state using last good context summary. Track retry count, max retries configurable, human review after max retries.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "dependencies": ["FEAT-001", "FEAT-003"],
+      "acceptance_criteria": [
+        "Failed steps marked in checklist with failure reason",
+        "Retry creates fresh context from last good summary",
+        "Retry count tracked per item",
+        "Max retries configurable (default: 3)",
+        "After max retries, item flagged for human review"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "INTG-001",
+      "title": "Integrate execution system with existing skills",
+      "description": "Connect checklist loop, memory, compaction, and observability to existing SkillWeave skill infrastructure. Ensure backward compatibility.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "FEAT-005", "FEAT-006", "FEAT-007"],
+      "acceptance_criteria": [
+        "Skills can opt into checklist-driven execution",
+        "Memory layer loadable from any skill",
+        "Observability metrics collected during skill execution",
+        "Existing skill invocations work unchanged",
+        "Execution system is opt-in via config"
+      ],
+      "type": "integration",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TEST-001",
+      "title": "Comprehensive test suite for execution system",
+      "description": "Tests for checklist loop, memory, compaction, observability, selective loading, artifact tracking, correction, and integration.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["INTG-001"],
+      "acceptance_criteria": [
+        "Test file exists with 18+ test cases",
+        "Checklist loop tests pass",
+        "Memory round-trip tests pass",
+        "Compaction output validation tests pass",
+        "Observability metrics tests pass",
+        "Backward compatibility tests pass",
+        "All tests run without errors"
+      ],
+      "type": "testing",
+      "passes": false,
+      "attempts": 0
+    }
+  ],
+  "assumptions": [
+    {
+      "description": "YAML-based file persistence is sufficient for project memory",
+      "impact_if_wrong": "May need database or more structured storage",
+      "validation_method": "Test with projects having 100+ memory entries"
+    },
+    {
+      "description": "Markdown checklist format is expressive enough for all execution patterns",
+      "impact_if_wrong": "May need custom checklist DSL",
+      "validation_method": "Map 5 real workflows to checklist format"
+    }
+  ],
+  "constraints": {
+    "technical": [
+      "All state as plain files (YAML, Markdown) — no databases",
+      "Agent-agnostic: works across Claude, OpenCode, Gemini",
+      "Execution system is opt-in via config",
+      "Must survive agent crashes (file-based persistence)"
+    ]
+  },
+  "risks": [
+    {
+      "description": "Checklist format too rigid for complex workflows",
+      "probability": "medium",
+      "impact": "medium",
+      "mitigation": "Support nested checklists and conditional items"
+    },
+    {
+      "description": "Context compaction loses important details",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Preserve full output in tracking log, compaction is summary only"
+    },
+    {
+      "description": "Memory files grow large over time",
+      "probability": "medium",
+      "impact": "low",
+      "mitigation": "Retention policy, archive old entries"
+    }
+  ],
+  "execution_recommendation": {
+    "mode": "complex",
+    "reason": "10 tasks, ~8 hours total, complex dependencies, core infrastructure work",
+    "suggested_workflow": "ralph-loop-overnight",
+    "estimated_iterations": 16,
+    "parallel_opportunities": 3,
+    "recommended_capabilities": ["planning", "code_generation", "testing", "infrastructure"],
+    "complexity_score": 72
+  }
+}

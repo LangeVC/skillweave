@@ -1,0 +1,97 @@
+name: Auto Changelog
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for changelog entry"
+        required: false
+        type: string
+      since:
+        description: "Git ref to start from (default: latest tag)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  generate-changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install PyYAML
+
+      - name: Gather commits and generate changelog
+        id: changelog
+        run: |
+          python3 << 'PYEOF'
+          import sys, subprocess, json
+          sys.path.insert(0, 'src')
+          from skillweave.github_integration.changelog import ChangelogGenerator
+
+          SINCE = "${{ github.event.inputs.since }}"
+          VERSION = "${{ github.event.inputs.version }}"
+
+          if not SINCE:
+            try:
+              result = subprocess.run(
+                ['git', 'describe', '--tags', '--abbrev=0'],
+                capture_output=True, text=True, timeout=30
+              )
+              SINCE = result.stdout.strip() if result.returncode == 0 else None
+            except Exception:
+              SINCE = None
+
+          range_arg = f"{SINCE}..HEAD" if SINCE else "HEAD"
+          log_result = subprocess.run(
+            ['git', 'log', '--oneline', '--no-decorate', range_arg],
+            capture_output=True, text=True, timeout=30
+          )
+
+          messages = []
+          for line in log_result.stdout.strip().split('\n'):
+            if not line.strip():
+              continue
+            parts = line.strip().split(' ', 1)
+            sha = parts[0]
+            message = parts[1] if len(parts) > 1 else ""
+            messages.append((sha, message))
+
+          gen = ChangelogGenerator()
+          entries = gen.parse_commits(messages)
+          result = gen.generate(entries, version=VERSION or "Unreleased")
+
+          markdown = gen.generate_markdown(result)
+          with open('CHANGELOG.autogen.md', 'w') as f:
+            f.write(markdown)
+
+          json_out = gen.generate_json(result)
+          with open('changelog-data.json', 'w') as f:
+            f.write(json_out)
+
+          print(f"Generated changelog: {result.total_commits} commits, {len(result.sections)} sections")
+          PYEOF
+
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-changelog
+          path: |
+            CHANGELOG.autogen.md
+            changelog-data.json

@@ -1,0 +1,80 @@
+name: Auto Release Notes
+
+on:
+  release:
+    types: [published, edited, prereleased]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for release notes (e.g. 0.6.0)"
+        required: true
+        type: string
+      since:
+        description: "Git ref to start from (default: previous tag)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  generate-notes:
+    name: Generate Release Notes
+    runs-on: ubuntu-latest
+    outputs:
+      notes_path: ${{ steps.gen.outputs.notes_path }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install PyYAML
+
+      - name: Generate release notes
+        id: gen
+        run: |
+          VERSION="${{ github.event.inputs.version || github.event.release.tag_name }}"
+          SINCE="${{ github.event.inputs.since }}"
+
+          if [ -z "$SINCE" ]; then
+            PREVIOUS=$(git tag --list 'v*' --sort=-v:refname | head -2 | tail -1 || echo "")
+            SINCE="$PREVIOUS"
+          fi
+
+          python3 << PYEOF
+          import sys, json
+          sys.path.insert(0, 'src')
+          from skillweave.github_integration.release_notes import ReleaseNotesGenerator
+
+          VERSION = "$VERSION"
+          SINCE = "$SINCE" if "$SINCE" else None
+
+          gen = ReleaseNotesGenerator()
+          notes = gen.generate(version=VERSION, since=SINCE)
+
+          with open('RELEASE_NOTES.autogen.md', 'w') as f:
+            f.write(notes)
+
+          json_out = gen.generate_json(version=VERSION, since=SINCE)
+          with open('release-notes-data.json', 'w') as f:
+            f.write(json_out)
+
+          commit_count = notes.count('- ')
+          print(f"Generated release notes for {VERSION}")
+          print(f"notes_path=RELEASE_NOTES.autogen.md")
+          PYEOF
+
+      - name: Upload release notes artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: |
+            RELEASE_NOTES.autogen.md
+            release-notes-data.json

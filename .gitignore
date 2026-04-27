@@ -19,5 +19,8 @@ prd-skillweave-*.json
 prd-skillweave-*.md
 generated/
 
+# External tool configurations (not part of SkillWeave)
+.codenomad/
+
 # Coverage
 .coverage

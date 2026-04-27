@@ -1,0 +1,89 @@
+name: Auto Docs Sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**/*.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**/*.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs-coverage:
+    name: Scan Documentation Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install PyYAML
+
+      - name: Run docs coverage scan
+        id: scan
+        run: |
+          python3 << 'PYEOF'
+          import sys, json
+          sys.path.insert(0, 'src')
+          from skillweave.github_integration.docs_sync import DocsSynchronizer
+
+          syncer = DocsSynchronizer()
+          result = syncer.scan_python_files()
+
+          markdown = syncer.generate_markdown(result)
+          with open('docs-coverage-report.md', 'w') as f:
+            f.write(markdown)
+
+          json_out = syncer.generate_json(result)
+          with open('docs-coverage-data.json', 'w') as f:
+            f.write(json_out)
+
+          print(f"Coverage: {result.coverage_pct}% ({result.documented}/{result.total_functions})")
+          print(f"Missing: {len(result.missing_docs)}")
+          PYEOF
+
+      - name: Annotate missing docs
+        run: |
+          python3 << 'PYEOF'
+          import json
+          with open('docs-coverage-data.json') as f:
+            data = json.load(f)
+          for item in data.get('missing_docs', []):
+            file_path = item.get('file', '')
+            cls = item.get('class', '')
+            func = item.get('function', '')
+            name = cls or func
+            if name:
+              print(f"::warning title=Missing docstring::{file_path}: {name}")
+          PYEOF
+
+      - name: Upload docs report
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-coverage
+          path: |
+            docs-coverage-report.md
+            docs-coverage-data.json
+
+      - name: Fail on low coverage
+        if: failure()
+        run: |
+          python3 -c "
+          import json
+          with open('docs-coverage-data.json') as f:
+              data = json.load(f)
+          cov = data.get('coverage_pct', 0)
+          print(f'Documentation coverage: {cov}%')
+          if cov < 30:
+              print('::warning::Documentation coverage below 30%')
+          "

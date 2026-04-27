@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "sequence_id": "seq-06-github-integration",
+    "version": "1.0.0",
+    "initiative": "06 — GitHub Action, GitHub App, and Integration Layer",
+    "created": "2026-04-27",
+    "assignment_strategy": "capability-based",
+    "total_capabilities_required": ["planning", "code_generation", "infrastructure", "testing", "documentation"]
+  },
+  "assignments": [
+    {
+      "task_id": "DESIGN-001",
+      "title": "Define Action specifications and output format",
+      "agent_type": "plan",
+      "reason": "Specification design requires planning capability to define all checks, inputs, and outputs before any code is written",
+      "required_capabilities": ["planning", "documentation"],
+      "estimated_minutes": 45,
+      "priority": "critical",
+      "constraints": ["Must produce unambiguous spec that both INFRA tasks can implement independently"]
+    },
+    {
+      "task_id": "INFRA-001",
+      "title": "Set up skillweave-action-validate repository",
+      "agent_type": "build",
+      "reason": "Repository scaffolding requires infrastructure setup and code generation for action.yml, CI workflow, and README",
+      "required_capabilities": ["infrastructure", "code_generation"],
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "constraints": ["Repository must be separate from core SkillWeave repo", "Must include CI workflow that validates the Action"]
+    },
+    {
+      "task_id": "FEAT-001",
+      "title": "Implement bundle validation logic",
+      "agent_type": "build",
+      "reason": "Core validation engine requires code generation for directory traversal, schema validation, reference checking, and JSON output",
+      "required_capabilities": ["code_generation", "infrastructure"],
+      "estimated_minutes": 90,
+      "priority": "critical",
+      "constraints": ["No proprietary dependencies", "Must complete in < 60s on ubuntu-latest", "Strictness levels must be configurable"]
+    },
+    {
+      "task_id": "INFRA-002",
+      "title": "Set up skillweave-action-release-check repository",
+      "agent_type": "build",
+      "reason": "Repository scaffolding for second Action, parallel to INFRA-001; same infrastructure pattern",
+      "required_capabilities": ["infrastructure", "code_generation"],
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "constraints": ["Repository must be separate from core SkillWeave repo", "Must include CI workflow that validates the Action"]
+    },
+    {
+      "task_id": "FEAT-002",
+      "title": "Implement release readiness check logic",
+      "agent_type": "build",
+      "reason": "Release readiness engine requires code generation for version comparison, changelog parsing, test detection, and WIP marker scanning",
+      "required_capabilities": ["code_generation", "infrastructure"],
+      "estimated_minutes": 75,
+      "priority": "critical",
+      "constraints": ["Must compare version against previous release tag", "PR merge blocking as status check is optional but designed for"]
+    },
+    {
+      "task_id": "FEAT-003",
+      "title": "Implement trust signal generation",
+      "agent_type": "build",
+      "reason": "Badge generation, release asset attachment, and attestation-ready output require code generation with GitHub API integration",
+      "required_capabilities": ["code_generation", "infrastructure"],
+      "estimated_minutes": 45,
+      "priority": "medium",
+      "constraints": ["Badge must be shields.io compatible", "Output must support future supply chain signing"]
+    },
+    {
+      "task_id": "DOC-001",
+      "title": "GitHub App feasibility assessment",
+      "agent_type": "plan",
+      "reason": "Assessment requires strategic planning capability to evaluate build cost, maintenance burden, and user value across 4 use cases",
+      "required_capabilities": ["planning", "documentation"],
+      "estimated_minutes": 60,
+      "priority": "medium",
+      "constraints": ["Must cover all 4 use cases: repo sync, release signals, trust, discovery", "Must produce clear proceed/defer/skip recommendation"]
+    },
+    {
+      "task_id": "TEST-001",
+      "title": "Test Actions on SkillWeave repository",
+      "agent_type": "build",
+      "reason": "End-to-end testing of both Actions against real SkillWeave bundle data requires testing capability and the SkillWeave repo as test target",
+      "required_capabilities": ["testing", "code_generation"],
+      "estimated_minutes": 45,
+      "priority": "high",
+      "constraints": ["Must test against actual SkillWeave repo", "Must verify no false positives on known-good structure", "Must verify false negatives on intentionally broken structure"]
+    },
+    {
+      "task_id": "DIST-001",
+      "title": "Prepare Actions for distribution",
+      "agent_type": "build",
+      "reason": "Version tagging, dist/ building, and marketplace preparation require infrastructure and code_generation capabilities",
+      "required_capabilities": ["infrastructure", "code_generation", "documentation"],
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "constraints": ["Both Actions must be tagged v1.0.0 and v1", "dist/ folder must be built and committed"]
+    }
+  ],
+  "parallel_groups": [
+    {
+      "group_id": "pg-01",
+      "description": "Track A and Track B run in parallel after DESIGN-001 completes",
+      "tasks": ["INFRA-001", "FEAT-001", "INFRA-002", "FEAT-002"],
+      "dependencies": ["DESIGN-001"]
+    },
+    {
+      "group_id": "pg-02",
+      "description": "Trust signal generation and GitHub App assessment run in parallel after both tracks complete",
+      "tasks": ["FEAT-003", "DOC-001"],
+      "dependencies": ["FEAT-001", "FEAT-002"]
+    }
+  ],
+  "capability_load": {
+    "planning": {
+      "total_minutes": 105,
+      "tasks": ["DESIGN-001", "DOC-001"]
+    },
+    "code_generation": {
+      "total_minutes": 315,
+      "tasks": ["INFRA-001", "FEAT-001", "INFRA-002", "FEAT-002", "FEAT-003", "DIST-001"]
+    },
+    "infrastructure": {
+      "total_minutes": 300,
+      "tasks": ["INFRA-001", "FEAT-001", "INFRA-002", "FEAT-002", "FEAT-003", "DIST-001"]
+    },
+    "testing": {
+      "total_minutes": 45,
+      "tasks": ["TEST-001"]
+    },
+    "documentation": {
+      "total_minutes": 135,
+      "tasks": ["DESIGN-001", "DOC-001", "DIST-001"]
+    }
+  },
+  "agent_continuity_rules": [
+    "DESIGN-001 agent must hand off complete spec before Track A/Track B agents begin",
+    "FEAT-001 and FEAT-002 can be assigned to different agents since repos are independent",
+    "TEST-001 agent must have access to both Action repos and the SkillWeave repo",
+    "DIST-001 agent must coordinate both repos for synchronized version tagging"
+  ]
+}

@@ -1,0 +1,22 @@
+kind: skill
+name: skillweave-lifecycle
+version: 0.7.0
+description: "Bundle-Navigator, Phasen-Status und Workflow-Empfehlung"
+author: SkillWeave
+license: MIT
+owner: SkillWeave
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - lifecycle
+  - phases
+  - bundles
+  - navigation
+  - workflow-recommendation
+capabilities:
+  - lifecycle_management
+  - phase_detection
+  - bundle_navigation
+  - workflow_recommendation

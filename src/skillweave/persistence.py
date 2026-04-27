@@ -30,6 +30,7 @@ class SkillWeaveConfig:
         "community_patterns": False,
         "modular_templates": False,
         "capability_routing": False,
+        "execution_system": False,
         "intelligent_detection": True,  # New in v0.5.5
         "interactive_guidance": True,   # New in v0.5.5
     }

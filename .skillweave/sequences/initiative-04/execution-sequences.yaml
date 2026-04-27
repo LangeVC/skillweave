@@ -1,0 +1,219 @@
+metadata:
+  sequence_id: seq-04-repo-cleanup
+  version: 1.0.0
+  initiative: "04 — Repo Cleanup and Lean Core"
+  created: 2026-04-27
+  sequence_type: build
+  execution_mode: ralph_attended
+  complexity_score: 52
+  workflow: ralph-loop-attended
+  checkpoint_interval: 4
+
+objective:
+  goal: "Catalog and classify all repository files, define a lean core manifest, and execute a structured, reversible cleanup with archive preservation"
+  success: "Every file classified, lean core defined, non-core items archived with reversible manifests, all tests pass post-cleanup"
+
+success_criteria:
+  - "Full inventory generated at .skillweave/cleanup/inventory.yaml with path, type, last_modified, size_bytes, suggested_category for every file"
+  - "All files classified into 5 categories: active-core, consolidation-candidate, legacy-valuable, deprecated, needs-review"
+  - "Archive manager supports move-to-archive and restore-from-archive with human-readable YAML manifest"
+  - "Duplication report at .skillweave/cleanup/duplications.yaml with file pairs and similarity scores"
+  - "Cleanup report at .skillweave/cleanup/report.md ready for human review before any destructive action"
+  - "Lean core manifest at .skillweave/cleanup/lean-core.yaml with required/recommended/optional tiers"
+  - "No archived item breaks active functionality — full test suite passes post-cleanup"
+  - "All archive operations are reversible with working restore function"
+
+assumptions:
+  - "Repository can be classified with rule-based heuristics without deep code analysis"
+  - "Archive structure (.skillweave/archive/) does not interfere with active tools"
+  - "Human approval will be required before executing any archive moves"
+  - "Classification rules are configurable via YAML for iterative improvement"
+
+usage_notes:
+  execute_from: ".skillweave/"
+  inputs_required: "Full SkillWeave repository tree"
+  parallel_strategy: "TOOL-001 + TOOL-003 first (parallel), then TOOL-002, then TOOL-004 + DESIGN-001 (parallel), then TOOL-005, then EXEC-001, then TEST-001"
+
+inputs_required:
+  - name: repo_root
+    description: "Path to SkillWeave repository root"
+    default: "."
+  - name: gitignore_patterns
+    description: "Existing .gitignore patterns for scanner exclusion"
+
+outputs_required:
+  - name: inventory
+    path: ".skillweave/cleanup/inventory.yaml"
+    format: yaml
+  - name: classifications
+    path: ".skillweave/cleanup/classifications.yaml"
+    format: yaml
+  - name: duplications
+    path: ".skillweave/cleanup/duplications.yaml"
+    format: yaml
+  - name: cleanup_report
+    path: ".skillweave/cleanup/report.md"
+    format: markdown
+  - name: lean_core_manifest
+    path: ".skillweave/cleanup/lean-core.yaml"
+    format: yaml
+  - name: archive_manifest
+    path: ".skillweave/archive/manifest.yaml"
+    format: yaml
+  - name: test_results
+    format: test-run
+
+sequence_steps:
+  - phase: "tool-building"
+    parallel: true
+    steps:
+      - id: "TOOL-001"
+        title: "Build repository inventory scanner"
+        description: "Create a scanner that catalogs all files with path, type, last_modified, size_bytes, and suggested_category. Output to .skillweave/cleanup/inventory.yaml. Respects .gitignore patterns and handles 500+ files."
+        type: infrastructure
+        estimated_minutes: 45
+        priority: critical
+        depends_on: []
+        gates:
+          - "Scanner processes entire repo directory tree"
+          - "Each file entry has: path, type, last_modified, size_bytes, suggested_category"
+          - "Output saved to .skillweave/cleanup/inventory.yaml"
+          - "Respects .gitignore patterns"
+          - "Handles 500+ files without performance issues"
+
+      - id: "TOOL-003"
+        title: "Build archive manager"
+        description: "Tool for moving files to .skillweave/archive/{category}/ with metadata preservation. Supports move-to-archive and restore-from-archive operations. Creates human-readable YAML manifest entries with original_path, category, rationale, date, and reversible flag."
+        type: infrastructure
+        estimated_minutes: 45
+        priority: high
+        depends_on: []
+        gates:
+          - "Moves files to .skillweave/archive/{category}/"
+          - "Creates manifest entry with: original_path, category, rationale, date, reversible"
+          - "Archive manifest is human-readable YAML"
+          - "Restore function moves files back to original path"
+          - "Manifest tracks all archive operations"
+
+  - phase: "classification"
+    parallel: false
+    steps:
+      - id: "TOOL-002"
+        title: "Build classification engine"
+        description: "Rule-based classifier that assigns categories (active-core, consolidation-candidate, legacy-valuable, deprecated, needs-review) based on file patterns, location, age, and naming conventions. Each classification has a confidence score (high/medium/low). Low-confidence items default to needs-review. Rules are configurable via YAML."
+        type: infrastructure
+        estimated_minutes: 60
+        priority: critical
+        depends_on: ["TOOL-001"]
+        gates:
+          - "5 categories implemented: active-core, consolidation-candidate, legacy-valuable, deprecated, needs-review"
+          - "Rules consider: file location, naming convention, age, reference patterns"
+          - "Each classification has confidence score (high/medium/low)"
+          - "Low-confidence items default to needs-review"
+          - "Rules are configurable via YAML"
+
+  - phase: "analysis-and-design"
+    parallel: true
+    steps:
+      - id: "TOOL-004"
+        title: "Build duplication detector"
+        description: "Identify duplicated or highly similar logic across skills, prompts, and configurations. Report duplication with file pairs and similarity indicators. Output saved to .skillweave/cleanup/duplications.yaml."
+        type: infrastructure
+        estimated_minutes: 30
+        priority: medium
+        depends_on: ["TOOL-001"]
+        gates:
+          - "Detects similar file names across directories"
+          - "Identifies overlapping content in skill definitions"
+          - "Reports duplication with file pairs and similarity score"
+          - "Suggests consolidation candidates"
+          - "Output saved to .skillweave/cleanup/duplications.yaml"
+
+      - id: "DESIGN-001"
+        title: "Define lean core manifest"
+        description: "Document the minimal set of files needed for SkillWeave operation. Distinguish required, recommended, and optional files. Align with future architecture from Initiative 01 lifecycle model. Saved to .skillweave/cleanup/lean-core.yaml."
+        type: documentation
+        estimated_minutes: 45
+        priority: high
+        depends_on: ["TOOL-002"]
+        gates:
+          - "Lean core manifest lists all essential files"
+          - "Files categorized as: required, recommended, optional"
+          - "Non-core files are candidates for archive"
+          - "Manifest aligned with Initiative 01 lifecycle model"
+          - "Saved to .skillweave/cleanup/lean-core.yaml"
+
+      - id: "TOOL-005"
+        title: "Build cleanup report generator"
+        description: "Generate human-readable cleanup report summarizing inventory, classifications, duplications, and recommended actions. Markdown formatted with tables and summaries. Includes reversibility info for all proposed actions."
+        type: documentation
+        estimated_minutes: 30
+        priority: medium
+        depends_on: ["TOOL-002", "TOOL-004"]
+        gates:
+          - "Report includes: total files, per-category counts, duplication findings, action recommendations"
+          - "Saved to .skillweave/cleanup/report.md"
+          - "Includes reversibility info for all proposed actions"
+          - "Human-reviewable before any destructive action"
+          - "Markdown formatted with tables and summaries"
+
+  - phase: "execution"
+    parallel: false
+    steps:
+      - id: "EXEC-001"
+        title: "Execute cleanup process on SkillWeave repo"
+        description: "Run the full cleanup pipeline: scan → classify → detect duplicates → generate report → review → archive non-core items. Human approval required before archiving. Full test suite run after every archive batch."
+        type: infrastructure
+        estimated_minutes: 60
+        priority: high
+        depends_on: ["TOOL-001", "TOOL-002", "TOOL-003", "TOOL-004", "TOOL-005", "DESIGN-001"]
+        gates:
+          - "Full inventory generated"
+          - "All files classified"
+          - "Duplication report produced"
+          - "Cleanup report generated and reviewed"
+          - "Non-core items archived with manifest entries"
+          - "No active functionality broken"
+
+  - phase: "validation"
+    parallel: false
+    steps:
+      - id: "TEST-001"
+        title: "Post-cleanup validation"
+        description: "Run full test suite after cleanup to verify no functionality was broken. Verify archive is complete and reversible. Confirm restore function works and lean core files are all present."
+        type: testing
+        estimated_minutes: 30
+        priority: critical
+        depends_on: ["EXEC-001"]
+        gates:
+          - "All existing tests pass after cleanup"
+          - "Archive manifest is complete and valid"
+          - "Restore function works for at least 1 archived item"
+          - "Lean core files all present and functional"
+          - "No unclassified files remain"
+
+final_assembly:
+  steps:
+    - "Verify .skillweave/cleanup/ directory contains all outputs: inventory.yaml, classifications.yaml, duplications.yaml, report.md, lean-core.yaml"
+    - "Verify .skillweave/archive/ directory contains archived files with manifest.yaml"
+    - "Run full test suite to confirm backward compatibility"
+    - "Update .gitignore to exclude .skillweave/archive/ from active scans"
+    - "Generate cleanup summary for documentation"
+
+validation_rules:
+  - "All YAML files must be valid and parseable"
+  - "No unclassified files remain in repository (every file has a classification entry)"
+  - "Archive manifest must have complete reversal metadata for every entry"
+  - "All existing tests must pass (no functionality broken)"
+  - "Lean core manifest must have required/recommended/optional tiers"
+
+failure_handling:
+  classification_failure:
+    action: "Default low-confidence items to needs-review category"
+    max_retries: 2
+  archive_failure:
+    action: "Log error, do NOT delete source file, report issue"
+    max_retries: 1
+  validation_failure:
+    action: "Halt pipeline, restore archived items from manifest, report failures"
+    max_retries: 0

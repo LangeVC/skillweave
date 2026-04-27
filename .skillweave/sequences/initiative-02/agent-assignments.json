@@ -1,0 +1,119 @@
+{
+  "assignments": [
+    {
+      "task_id": "DESIGN-001",
+      "required_capabilities": ["planning"],
+      "context_load": "PRD initiative-02",
+      "notes": "Schema design for lens configuration — defines workshop rules, UX principles, activation mechanism, and runtime loading pattern. Foundation for all subsequent tasks."
+    },
+    {
+      "task_id": "DISC-001",
+      "required_capabilities": ["planning", "research"],
+      "context_load": "PRD initiative-02, DESIGN-001 output",
+      "notes": "Empathy and user context prompts (3+). Must follow Design Thinking Lens rules defined in DESIGN-001. Outputs are reusable templates with placeholders producing artifact files."
+    },
+    {
+      "task_id": "DISC-002",
+      "required_capabilities": ["planning", "research"],
+      "context_load": "PRD initiative-02, DESIGN-001 output",
+      "notes": "Research and landscape prompts (3+). Competitor analysis produces matrix artifact. Follows Scan Before Read principle."
+    },
+    {
+      "task_id": "DISC-003",
+      "required_capabilities": ["planning", "research"],
+      "context_load": "PRD initiative-02, DESIGN-001 output",
+      "notes": "Framing and assumption prompts (4+). Assumption surfacing extracts 5+ assumptions from project descriptions. Prioritization uses risk matrix. Outputs feed into Blueprint phase inputs."
+    },
+    {
+      "task_id": "TMPL-001",
+      "required_capabilities": ["planning", "code_generation"],
+      "context_load": "PRD initiative-02, DISC-001 output, DISC-002 output, DISC-003 output",
+      "notes": "5 artifact templates in .skillweave/templates/discovery/. Must be fillable from discovery prompt outputs. YAML template for assumption log needs syntax validation."
+    },
+    {
+      "task_id": "FEAT-001",
+      "required_capabilities": ["code_generation"],
+      "context_load": "PRD initiative-02, DESIGN-001 output",
+      "notes": "Ideation module with quantity-first generation, deferred judgment, wild idea flagging, and expansion mode. Configurable via lens settings from DESIGN-001."
+    },
+    {
+      "task_id": "FEAT-002",
+      "required_capabilities": ["code_generation", "planning"],
+      "context_load": "PRD initiative-02, DISC-003 output",
+      "notes": "Assumption extraction and tracking with impact × probability categorization. Persists to .skillweave/tracking-log/assumptions.yaml. Depends on DISC-003 for extraction patterns."
+    },
+    {
+      "task_id": "FEAT-003",
+      "required_capabilities": ["code_generation", "planning"],
+      "context_load": "PRD initiative-02, DESIGN-001 output",
+      "notes": "Iteration quality framework with feedback synthesis, evidence-driven revision, and learning extraction. Iteration log persists in .skillweave/tracking-log/."
+    },
+    {
+      "task_id": "INTG-001",
+      "required_capabilities": ["planning", "code_generation"],
+      "context_load": "PRD initiative-02, FEAT-001 output, FEAT-002 output, FEAT-003 output, TMPL-001 output, DESIGN-001 output",
+      "notes": "Integration layer connecting Design Thinking Lens to Blueprint and PromptChain skills. Requires all features and templates complete. Backward compatibility is mandatory."
+    },
+    {
+      "task_id": "TEST-001",
+      "required_capabilities": ["code_generation"],
+      "context_load": "PRD initiative-02, INTG-001 output",
+      "notes": "Test suite with 12+ test cases covering prompt library completeness, template validation, lens configuration, ideation mode, assumption tracking, and backward compatibility."
+    }
+  ],
+  "critical_path": [
+    "DESIGN-001",
+    "DISC-001",
+    "DISC-002",
+    "DISC-003",
+    "TMPL-001",
+    "INTG-001",
+    "TEST-001"
+  ],
+  "parallel_groups": [
+    {
+      "id": "group-1",
+      "depends_on": ["DESIGN-001"],
+      "tasks": ["DISC-001", "DISC-002", "DISC-003", "FEAT-001", "FEAT-003"],
+      "rationale": "All depend only on DESIGN-001. Prompt authoring and early feature work can proceed concurrently after lens schema is defined."
+    },
+    {
+      "id": "group-2",
+      "depends_on": ["DISC-001", "DISC-002", "DISC-003"],
+      "tasks": ["TMPL-001"],
+      "rationale": "Templates depend on all prompt libraries being complete. Single task group."
+    },
+    {
+      "id": "group-3",
+      "depends_on": ["DISC-003"],
+      "tasks": ["FEAT-002"],
+      "rationale": "Assumption tracking depends on DISC-003 (assumption surfacing prompt). Can run in parallel with TMPL-001 since both depend on the prompt phase but not each other."
+    },
+    {
+      "id": "group-4",
+      "depends_on": ["FEAT-001", "FEAT-002", "FEAT-003", "TMPL-001"],
+      "tasks": ["INTG-001"],
+      "rationale": "Integration requires all features and templates. Single task, no parallelism within group."
+    },
+    {
+      "id": "group-5",
+      "depends_on": ["INTG-001"],
+      "tasks": ["TEST-001"],
+      "rationale": "Testing requires integration complete. Final group."
+    }
+  ],
+  "capability_coverage": {
+    "planning": {
+      "assigned_tasks": ["DESIGN-001", "DISC-001", "DISC-002", "DISC-003", "TMPL-001", "FEAT-002", "FEAT-003", "INTG-001"],
+      "coverage_pct": 80
+    },
+    "research": {
+      "assigned_tasks": ["DISC-001", "DISC-002", "DISC-003"],
+      "coverage_pct": 30
+    },
+    "code_generation": {
+      "assigned_tasks": ["TMPL-001", "FEAT-001", "FEAT-002", "FEAT-003", "INTG-001", "TEST-001"],
+      "coverage_pct": 60
+    }
+  }
+}

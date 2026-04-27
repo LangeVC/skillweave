@@ -1,0 +1,161 @@
+"""Release notes generation module.
+
+Generates structured GitHub release notes from git history,
+with sections for features, fixes, breaking changes, and contributors.
+"""
+
+import re
+import json
+from pathlib import Path
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Optional
+
+from .changelog import ChangelogGenerator
+
+
+@dataclass
+class ReleaseNotesResult:
+    timestamp: str = ""
+    version: str = ""
+    title: str = ""
+    sections: list = field(default_factory=list)
+    commit_count: int = 0
+    has_breaking_changes: bool = False
+    contributors: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+
+class ReleaseNotesGenerator:
+    def __init__(self, repo_root: str | None = None):
+        self.repo_root = Path(repo_root) if repo_root else Path.cwd()
+        self._changelog = ChangelogGenerator(repo_root)
+
+    def generate(self, version: str = "", since: Optional[str] = None) -> str:
+        result = self._build_result(version, since)
+        return self._format_markdown(result)
+
+    def _build_result(
+        self, version: str = "", since: Optional[str] = None
+    ) -> ReleaseNotesResult:
+        result = ReleaseNotesResult(
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            version=version.lstrip("v") if version else "",
+        )
+
+        range_arg = f"{since}..HEAD" if since else "HEAD"
+        try:
+            import subprocess
+            log_result = subprocess.run(
+                ["git", "log", "--oneline", "--no-decorate", range_arg],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(self.repo_root),
+            )
+            messages = []
+            for line in log_result.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.strip().split(" ", 1)
+                messages.append((parts[0], parts[1] if len(parts) > 1 else ""))
+
+            log_full = subprocess.run(
+                ["git", "log", "--format=%an", range_arg],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(self.repo_root),
+            )
+            contributors = sorted(set(
+                c.strip() for c in log_full.stdout.strip().split("\n") if c.strip()
+            ))
+            result.contributors = contributors
+
+            entries = self._changelog.parse_commits(messages)
+            changelog_result = self._changelog.generate(entries, version=result.version)
+            result.sections = changelog_result.sections
+            result.commit_count = changelog_result.total_commits
+            result.has_breaking_changes = changelog_result.has_breaking_changes
+        except Exception as e:
+            result.errors.append(f"Git log failed: {e}")
+
+        ver = result.version
+        if ver:
+            result.title = f"SkillWeave v{ver}"
+        else:
+            result.title = "SkillWeave Release"
+
+        return result
+
+    def _format_markdown(self, result: ReleaseNotesResult) -> str:
+        lines = [
+            f"# {result.title}",
+            "",
+            f"_Released: {datetime.utcnow().strftime('%Y-%m-%d')}_",
+            f"_Commits: {result.commit_count}_",
+            "",
+        ]
+
+        if result.has_breaking_changes:
+            lines.append("> ⚠️ This release contains breaking changes.")
+            lines.append("")
+
+        section_order = [
+            "Breaking Changes", "Features", "Improvements",
+            "Bug Fixes", "Refactoring", "Documentation",
+            "Performance", "Tests", "Build System",
+            "Continuous Integration", "Chores",
+        ]
+
+        for cat in section_order:
+            section_items = None
+            for s in result.sections:
+                if s.category == cat:
+                    section_items = s.entries
+                    break
+            if section_items:
+                lines.append(f"## {cat}")
+                for entry in section_items:
+                    scope = f"**{entry.scope}**: " if entry.scope else ""
+                    lines.append(f"- {scope}{entry.description} ({entry.sha})")
+                lines.append("")
+
+        # Remaining uncategorized
+        categorized = set()
+        for s in result.sections:
+            categorized.add(s.category)
+        for s in result.sections:
+            if s.category not in section_order:
+                lines.append(f"## {s.category}")
+                for entry in s.entries:
+                    lines.append(f"- {entry.description} ({entry.sha})")
+                lines.append("")
+
+        if result.contributors:
+            lines.append("## Contributors")
+            for c in result.contributors:
+                lines.append(f"- {c}")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("_Release notes auto-generated by SkillWeave_")
+        return "\n".join(lines)
+
+    def generate_json(self, version: str = "", since: Optional[str] = None) -> str:
+        result = self._build_result(version, since)
+        return json.dumps({
+            "version": result.version,
+            "title": result.title,
+            "timestamp": result.timestamp,
+            "commit_count": result.commit_count,
+            "has_breaking_changes": result.has_breaking_changes,
+            "contributors": result.contributors,
+            "changelog": [
+                {
+                    "category": s.category,
+                    "entries": [
+                        {"sha": e.sha, "type": e.type, "scope": e.scope,
+                         "description": e.description, "breaking": e.breaking}
+                        for e in s.entries
+                    ],
+                }
+                for s in result.sections
+            ],
+        }, indent=2)

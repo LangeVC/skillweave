@@ -1,0 +1,242 @@
+metadata:
+  sequence_id: seq-03-release-launch
+  version: 1.0.0
+  initiative: "03 — Release, Launch, and Workflow Rationalization"
+  created: 2026-04-27
+  sequence_type: build
+  execution_mode: ralph_attended
+  complexity_score: 58
+  workflow: ralph-loop-attended
+  checkpoint_interval: 3
+
+objective:
+  goal: "Resolve promptchain-execute/releasechain overlap, separate Release from Launch, add readiness assessment and premature invocation detection"
+  success: "Role separation, readiness assessment, premature detection, release workflow, and checklist generation implemented and tested"
+
+success_criteria:
+  - "Release readiness model defined in .skillweave/release/readiness-model.yaml with critical/recommended/optional checks"
+  - "Skill boundary specs documented for releasechain and promptchain-execute"
+  - "Readiness assessment module validates prerequisites with pass/fail per check"
+  - "Premature detection redirects to correct upstream workflow in < 2 seconds"
+  - "Release workflow executes 5 sequential steps with pass/fail gates"
+  - "Checklist generator produces actionable items from assessment results"
+  - "Release-specific logic removed from promptchain-execute"
+  - "Launch phase defined as separate lifecycle stage with entry conditions"
+  - "All 12+ test cases pass"
+
+assumptions:
+  - "Overlap between execute and releasechain can be resolved without breaking changes"
+  - "Release prerequisites are generalizable across project types"
+  - "Launch phase is a separate concern from release"
+
+usage_notes:
+  execute_from: ".skillweave/release/"
+  inputs_required: "Project state, deployment config, current lifecycle phase"
+  parallel_strategy: "DESIGN first, then parallel CORE tasks, then parallel DETECTION+CHECKLIST, sequential WORKFLOW+REFACTOR, then TESTING"
+
+inputs_required:
+  - name: project_root
+    description: "Path to SkillWeave project root"
+    default: "."
+  - name: project_type
+    description: "Type of project (library, app, config)"
+    default: "library"
+
+outputs_required:
+  - name: readiness_model
+    path: ".skillweave/release/readiness-model.yaml"
+    format: yaml
+  - name: skill_boundaries
+    path: ".skillweave/release/skill-boundaries.yaml"
+    format: yaml
+  - name: assessment_module
+    path: "skillweave/release/readiness.py"
+    format: python
+  - name: detection_module
+    path: "skillweave/release/detection.py"
+    format: python
+  - name: workflow_module
+    path: "skillweave/release/workflow.py"
+    format: python
+  - name: checklist_module
+    path: "skillweave/release/checklist.py"
+    format: python
+  - name: launch_stub
+    path: "skills/launch/SKILL.md"
+    format: markdown
+  - name: execute_skill
+    path: "skills/promptchain-execute/SKILL.md"
+    format: markdown
+  - name: test_results
+    format: test-run
+
+sequence_steps:
+  - phase: "design"
+    parallel: false
+    steps:
+      - id: "DESIGN-001"
+        title: "Define release readiness model and skill boundary specifications"
+        description: "Create .skillweave/release/readiness-model.yaml with release prerequisite model (critical, recommended, optional checks). Define clear boundary between releasechain (phase-specific) and promptchain-execute (orchestration substrate). Separate Release vs Launch activities with remediation guidance for each prerequisite."
+        type: documentation
+        estimated_minutes: 30
+        priority: critical
+        depends_on: []
+        gates:
+          - "Readiness model YAML defines critical/recommended/optional prerequisite tiers"
+          - "Skill boundary specs documented for both releasechain and promptchain-execute"
+          - "Release vs Launch activities clearly separated with rationale"
+          - "Remediation guidance exists for every prerequisite check"
+          - "YAML validates against schema"
+
+  - phase: "core-development"
+    parallel: true
+    steps:
+      - id: "FEAT-001"
+        title: "Implement release readiness assessment"
+        description: "Build skillweave/release/readiness.py pre-flight check module that validates release prerequisites. Checks for: test suite existence, passing tests, deployment config, release notes, version bump. Returns readiness score with pass/fail per check and gap analysis."
+        type: infrastructure
+        estimated_minutes: 45
+        priority: critical
+        depends_on: ["DESIGN-001"]
+        gates:
+          - "Assessment module exists and is importable"
+          - "Checks all critical prerequisites from readiness model"
+          - "Returns readiness score with pass/fail per check"
+          - "Provides gap analysis for failed prerequisites"
+          - "Blocks release if critical prerequisites fail (with override flag)"
+          - "Override bypass produces warning log entry"
+
+      - id: "FEAT-005"
+        title: "Create launch phase stub and separation documentation"
+        description: "Define Launch as separate phase in lifecycle. Document activities, entry conditions, and relationship to Release. Create skill placeholder at skills/launch/SKILL.md with phase metadata."
+        type: documentation
+        estimated_minutes: 30
+        priority: medium
+        depends_on: ["DESIGN-001"]
+        gates:
+          - "Launch phase defined in lifecycle registry with order=6"
+          - "Launch activities list documented"
+          - "Launch entry condition: release completed"
+          - "Skill placeholder exists with phase metadata"
+          - "Release vs Launch separation clearly documented in skill boundary specs"
+
+  - phase: "detection-and-checklist"
+    parallel: true
+    steps:
+      - id: "FEAT-002"
+        title: "Implement premature invocation detection and redirect"
+        description: "Build skillweave/release/detection.py that detects when release is invoked without prerequisites, identifies actual stage, explains gap, recommends upstream workflow, optionally generates readiness checklist."
+        type: infrastructure
+        estimated_minutes: 45
+        priority: critical
+        depends_on: ["FEAT-001"]
+        gates:
+          - "Detection completes in < 2 seconds"
+          - "Returns recommended upstream workflow"
+          - "Explains what is missing and why"
+          - "Offers to generate release-readiness checklist"
+          - "Override flag available to proceed anyway"
+          - "Integrates with releasechain entry point"
+
+      - id: "FEAT-004"
+        title: "Implement release readiness checklist generator"
+        description: "Build skillweave/release/checklist.py that generates markdown checklist from readiness assessment results. Items are actionable, trackable, and integrate with Initiative 05 checklist system."
+        type: infrastructure
+        estimated_minutes: 30
+        priority: medium
+        depends_on: ["FEAT-001"]
+        gates:
+          - "Checklist generated from assessment results"
+          - "Items are actionable and specific"
+          - "Saved to .skillweave/checklists/release-readiness.md"
+          - "Uses checkbox format (- [ ] / - [x])"
+          - "Items map to specific remediation actions from readiness model"
+
+  - phase: "workflow-implementation"
+    parallel: false
+    steps:
+      - id: "FEAT-003"
+        title: "Implement release execution workflow"
+        description: "Build skillweave/release/workflow.py with structured release flow: verify tests → package → generate release notes → deploy → validate rollout. Each step has pass/fail gate with actionable error guidance."
+        type: infrastructure
+        estimated_minutes: 60
+        priority: high
+        depends_on: ["FEAT-001"]
+        gates:
+          - "Release workflow has 5 sequential steps with gates"
+          - "Failed steps produce actionable error guidance"
+          - "Progress tracked in .skillweave/tracking-log/"
+          - "Completion produces release summary artifact"
+          - "Workflow is configurable (steps can be skipped with flag)"
+          - "Integrates with readiness assessment before execution"
+
+  - phase: "refactoring"
+    parallel: false
+    steps:
+      - id: "REFAC-001"
+        title: "Refactor promptchain-execute role and remove release-specific logic"
+        description: "Clarify promptchain-execute as orchestration substrate. Remove release-specific logic (moved to releasechain). Update SKILL.md metadata to mark as 'orchestration' type. Update documentation."
+        type: infrastructure
+        estimated_minutes: 60
+        priority: high
+        depends_on: ["DESIGN-001"]
+        gates:
+          - "Release-specific logic removed from promptchain-execute"
+          - "Execute skill metadata marks it as 'orchestration' type"
+          - "Documentation updated to clarify execute's role"
+          - "Execute remains usable for general prompt sequence execution"
+          - "No user-facing behavior changes for non-release usage"
+
+  - phase: "testing"
+    parallel: false
+    steps:
+      - id: "TEST-001"
+        title: "Test suite for release rationalization"
+        description: "Create tests covering readiness assessment, premature detection, release workflow, checklist generation, execute refactoring, and backward compatibility. Minimum 12 test cases."
+        type: testing
+        estimated_minutes: 45
+        priority: high
+        depends_on: ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004", "REFAC-001"]
+        gates:
+          - "Test file exists with 12+ test cases"
+          - "Readiness assessment tests pass"
+          - "Premature detection tests pass"
+          - "Release workflow tests pass"
+          - "Execute backward compatibility tests pass"
+          - "Checklist generation tests pass"
+          - "All tests run without errors"
+
+final_assembly:
+  steps:
+    - "Merge .skillweave/release/ directory into project"
+    - "Update .skillweave/config.yaml with release module references"
+    - "Update skill metadata files (releasechain, promptchain-execute, launch)"
+    - "Install new skills/launch/ skill placeholder"
+    - "Run full test suite to confirm backward compatibility"
+    - "Generate release rationalization summary for documentation"
+
+validation_rules:
+  - "All existing promptchain-execute usages must continue to work"
+  - "Releasechain must refuse work when prerequisites not met (with override)"
+  - "Readiness assessment must not block with override flag"
+  - "Launch phase must be separate from release"
+  - "Detection must run in < 2 seconds"
+  - "Checklist format must use Initiative 05 compatible format"
+  - "All YAML files must validate against schema"
+
+failure_handling:
+  assessment_failure:
+    action: "Return detailed gap analysis with remediation suggestions"
+    max_retries: 2
+  detection_failure:
+    action: "Fall back to interactive stage selection"
+    max_retries: 2
+  workflow_failure:
+    action: "Log step failure, produce partial progress artifact, suggest remediation"
+    max_retries: 1
+  refactoring_breakage:
+    action: "Revert promptchain-execute changes, report incompatibility"
+    max_retries: 0
+  validation_failure:
+    action: "Log error and report issues without blocking"
+    max_retries: 0

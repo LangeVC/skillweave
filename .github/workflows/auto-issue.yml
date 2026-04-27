@@ -1,0 +1,94 @@
+name: Auto Issue Management
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  analyze-commits:
+    name: Analyze Commits for Issue Tracking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install PyYAML
+
+      - name: Analyze commit messages for issue references
+        id: analyze
+        run: |
+          python3 << 'PYEOF'
+          import sys, subprocess, json
+          sys.path.insert(0, 'src')
+          from skillweave.github_integration.issue_manager import IssueManager
+
+          log_result = subprocess.run(
+            ['git', 'log', '--oneline', '--no-decorate', '-50'],
+            capture_output=True, text=True, timeout=30
+          )
+
+          messages = []
+          for line in log_result.stdout.strip().split('\n'):
+            if not line.strip():
+              continue
+            parts = line.strip().split(' ', 1)
+            messages.append((parts[0], parts[1] if len(parts) > 1 else ""))
+
+          mgr = IssueManager()
+          result = mgr.analyze_commits(messages)
+
+          print(json.dumps(json.loads(mgr.generate_json(result)), indent=2))
+          PYEOF
+
+      - name: Suggest issues for feature commits
+        run: |
+          python3 << 'PYEOF'
+          import sys, subprocess, json
+          sys.path.insert(0, 'src')
+          from skillweave.github_integration.issue_manager import IssueManager
+
+          log_result = subprocess.run(
+            ['git', 'log', '--oneline', '--no-decorate', '-50'],
+            capture_output=True, text=True, timeout=30
+          )
+
+          messages = []
+          for line in log_result.stdout.strip().split('\n'):
+            if not line.strip():
+              continue
+            parts = line.strip().split(' ', 1)
+            messages.append((parts[0], parts[1] if len(parts) > 1 else ""))
+
+          mgr = IssueManager()
+          result = mgr.analyze_commits(messages)
+
+          for s in result.suggestions:
+              print(f"[SUGGEST] {s.title}")
+              print(f"  Labels: {', '.join(s.labels)}")
+              print()
+
+          print(f"Closed issues detected: {len(result.closed_issues)}")
+          for c in result.closed_issues:
+              print(f"  {c.issue_ref} closed by {c.sha}")
+          PYEOF
+
+      - name: Upload issue analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-analysis
+          path: issue-analysis.json

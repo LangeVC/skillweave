@@ -1,0 +1,140 @@
+# SkillWeave 7-Phase Lifecycle Model
+# Each phase defines entry/exit conditions, associated skills, and capabilities.
+
+phases:
+  - id: discovery
+    name: "Discovery"
+    order: 1
+    description: "Problem definition, user research, and opportunity validation before any build work begins"
+    entry_conditions:
+      - "No formal PRD or project specification exists"
+      - "At most: rough notes, ideas, or external references"
+    exit_conditions:
+      - "Validated problem statement documented"
+      - "PRD skeleton or equivalent exists"
+      - "Decision to proceed or stop recorded"
+    skills:
+      - skillweave-blueprint
+      - last30days
+    capabilities:
+      - planning
+      - research
+    phase_type: optional
+
+  - id: blueprint
+    name: "Blueprint"
+    order: 2
+    description: "Structured planning, PRD authoring, architecture design, and execution strategy"
+    entry_conditions:
+      - "Discovery complete or intentionally skipped"
+      - "Problem statement is defined"
+    exit_conditions:
+      - "PRD is complete and validated"
+      - "Prompt sequences are generated"
+      - "Execution strategy is determined"
+    skills:
+      - skillweave-blueprint
+      - skillweave-promptchain-generate
+      - skillweave-promptchain-validate
+    capabilities:
+      - planning
+      - architecture
+    phase_type: recommended
+
+  - id: design
+    name: "Design"
+    order: 3
+    description: "UI/UX design, component architecture, design tokens, and frontend system design"
+    entry_conditions:
+      - "Blueprint phase complete or intentionally skipped"
+      - "Requirements are sufficiently clear for design decisions"
+    exit_conditions:
+      - "Design system or component plan exists"
+      - "Design tokens defined (if applicable)"
+      - "Frontend architecture decisions made"
+    skills:
+      - frontend-design
+    capabilities:
+      - design
+      - architecture
+    phase_type: optional
+
+  - id: build
+    name: "Build"
+    order: 4
+    description: "Implementation of code, configuration, tests, and infrastructure"
+    entry_conditions:
+      - "Design decisions made or intentionally skipped"
+      - "Prompt sequences are validated and ready for execution"
+    exit_conditions:
+      - "Feature implementation complete"
+      - "Tests pass"
+      - "Code is in a reviewable state"
+    skills:
+      - skillweave-promptchain-execute
+      - skillweave-releasechain
+    capabilities:
+      - code_generation
+      - testing
+      - infrastructure
+    phase_type: core
+
+  - id: release
+    name: "Release"
+    order: 5
+    description: "Versioning, changelog generation, prerelease validation, and artifact publishing"
+    entry_conditions:
+      - "Build phase complete or changes are ready for release"
+      - "Code is in a releasable state"
+    exit_conditions:
+      - "Version bump applied"
+      - "Changelog generated and reviewed"
+      - "Release artifacts published"
+      - "Git tag created"
+    skills:
+      - skillweave-releasechain
+    capabilities:
+      - release
+      - testing
+    phase_type: core
+
+  - id: launch
+    name: "Launch"
+    order: 6
+    description: "Deployment, user communication, marketing materials, and go-live coordination"
+    entry_conditions:
+      - "Release is published and available"
+      - "Launch checklist is prepared"
+    exit_conditions:
+      - "Deployment complete and verified"
+      - "User-facing communication sent"
+      - "Launch metrics baseline captured"
+    skills: []
+    capabilities:
+      - deployment
+      - communication
+    phase_type: optional
+
+  - id: post-release
+    name: "Post-Release"
+    order: 7
+    description: "Monitoring, feedback collection, retrospective, and iteration planning"
+    entry_conditions:
+      - "Launch complete"
+      - "System is in production"
+    exit_conditions:
+      - "Retrospective documented"
+      - "Feedback collected and categorized"
+      - "Next iteration planned or decision to stop"
+    skills: []
+    capabilities:
+      - analysis
+      - planning
+    phase_type: optional
+
+# Phase transition rules
+transitions:
+  sequential: true
+  skip_allowed: true
+  skip_policy: "Any phase can be skipped. Skipped phases' entry/exit conditions are assumed met."
+  default_start: discovery

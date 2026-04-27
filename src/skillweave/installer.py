@@ -39,6 +39,14 @@ SKILLS = [
     "skillweave-promptchain-validate",
     "skillweave-promptchain-execute",
     "skillweave-releasechain",
+    "frontend-design",
+    "skillweave-lifecycle",
+    "skillweave-discovery",
+    "skillweave-design",
+    "skillweave-launch",
+    "skillweave-post-release",
+    "skillweave-repo-health",
+    "skillweave-observe",
 ]
 
 # Central repository directory

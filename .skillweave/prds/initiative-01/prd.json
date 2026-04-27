@@ -1,0 +1,323 @@
+{
+  "project": {
+    "name": "SkillWeave Initiative 01 — Process Architecture and Bundle System",
+    "version": "1.0.0",
+    "description": "Redesign the SkillWeave lifecycle model with 7 explicit phases, modular bundle variants, entry point detection, and workflow recommendation",
+    "domain": "developer-tooling",
+    "repository": "https://github.com/anomalyco/SkillWeave",
+    "created": "2026-04-27T00:00:00Z",
+    "status": "draft"
+  },
+  "settings": {
+    "max_iterations": 50,
+    "timeout_minutes": 600,
+    "required_capabilities": ["planning", "code_generation", "testing"],
+    "verification_level": "standard"
+  },
+  "objectives": [
+    {
+      "id": "OBJ-01",
+      "description": "Define a 7-phase lifecycle model with clear boundaries, entry/exit conditions, and phase transitions",
+      "priority": "critical",
+      "success_metrics": [
+        {
+          "metric": "Phase definitions complete",
+          "target": "7 phases with entry/exit conditions",
+          "measurement": "YAML validates against schema"
+        }
+      ]
+    },
+    {
+      "id": "OBJ-02",
+      "description": "Create a modular bundle system supporting 5+ predefined bundle variants",
+      "priority": "critical",
+      "success_metrics": [
+        {
+          "metric": "Bundle variants defined",
+          "target": "5 bundles with metadata",
+          "measurement": "Configuration validates and is loadable"
+        }
+      ]
+    },
+    {
+      "id": "OBJ-03",
+      "description": "Build entry point detection and workflow recommendation",
+      "priority": "high",
+      "success_metrics": [
+        {
+          "metric": "Detection accuracy",
+          "target": "Correct stage identification for 3+ scenarios",
+          "measurement": "Automated test passes"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "ARCH-001",
+      "title": "Define lifecycle phase registry schema",
+      "description": "Create the YAML schema for phase definitions including id, name, order, entry_conditions, exit_conditions, skills, and capabilities. Write as .skillweave/lifecycle/phases.yaml with all 7 phases fully specified.",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "phases.yaml exists in .skillweave/lifecycle/",
+        "7 phases defined: discovery, blueprint, design, build, release, launch, post-release",
+        "Each phase has id, name, order, entry_conditions, exit_conditions",
+        "Each phase lists associated skills and required capabilities",
+        "Phase transitions are explicit and unambiguous"
+      ],
+      "verification_steps": [
+        "Validate YAML syntax",
+        "Verify all 7 phases present",
+        "Check each phase has required fields",
+        "Verify phase order is sequential"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "ARCH-002",
+      "title": "Define bundle variant configurations",
+      "description": "Create bundle definitions for all 5 predefined variants (full-lifecycle, discovery-to-blueprint, design-and-build, release-and-launch, post-release-improvement). Each bundle specifies phases, entry requirements, recommended use case, and estimated effort.",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "dependencies": ["ARCH-001"],
+      "acceptance_criteria": [
+        "bundles.yaml exists in .skillweave/lifecycle/",
+        "5 predefined bundles defined with phase references",
+        "Each bundle has entry_requires, recommended_for, and estimated_effort",
+        "Bundle references valid phase IDs from phases.yaml",
+        "Custom bundle composition pattern documented"
+      ],
+      "verification_steps": [
+        "Validate YAML syntax",
+        "Verify all 5 bundles present",
+        "Cross-reference phase IDs with phases.yaml",
+        "Check entry requirements are testable"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-001",
+      "title": "Implement entry point detection logic",
+      "description": "Build a detection module that analyzes project artifacts to determine the user's current lifecycle stage. Checks for: PRD files, source code, test files, deployment configs, release notes, and other stage indicators. Returns a confidence-scored stage assessment.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "high",
+      "dependencies": ["ARCH-001"],
+      "acceptance_criteria": [
+        "Detection module exists and is importable",
+        "Checks for presence of key artifacts per phase",
+        "Returns stage ID and confidence score (0-1)",
+        "Handles empty project (returns 'discovery' with high confidence)",
+        "Handles project with PRD but no code (returns 'blueprint' or 'design')",
+        "Handles project with code and tests (returns 'build' or 'release')"
+      ],
+      "verification_steps": [
+        "Run detection on empty directory",
+        "Run detection on project with only prd.md",
+        "Run detection on project with code + tests",
+        "Run detection on current SkillWeave repo"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-002",
+      "title": "Implement workflow recommendation engine",
+      "description": "Build a recommendation module that takes the detected stage and user's declared goal, then recommends the appropriate bundle variant and next concrete action. Integrates with existing intelligent detection system.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "high",
+      "dependencies": ["ARCH-002", "FEAT-001"],
+      "acceptance_criteria": [
+        "Recommendation module exists and is importable",
+        "Takes detected_stage and goal as inputs",
+        "Returns recommended_bundle, next_action, and gap_analysis",
+        "Identifies prerequisites not yet met",
+        "Provides human-readable explanation for recommendation",
+        "Integrates with existing integrate_with_skill() function"
+      ],
+      "verification_steps": [
+        "Test: idea stage + 'build an app' goal → recommends full-lifecycle",
+        "Test: blueprint stage + 'ship it' goal → recommends release-and-launch with gap warning",
+        "Test: build stage + 'finish feature' goal → recommends design-and-build",
+        "Test: unknown stage → triggers onboarding flow"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-003",
+      "title": "Implement phase-aware onboarding flow",
+      "description": "Create an interactive onboarding flow that guides new users through stage identification, bundle selection, and first-step recommendation. State persists in .skillweave/ for session continuity.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "medium",
+      "dependencies": ["FEAT-002"],
+      "acceptance_criteria": [
+        "Onboarding asks about current stage, available artifacts, and goal",
+        "Onboarding recommends a bundle and starting skill",
+        "Onboarding state persists in .skillweave/onboarding-state.yaml",
+        "Onboarding can be skipped with a flag",
+        "Onboarding adapts questions based on detected artifacts"
+      ],
+      "verification_steps": [
+        "Run onboarding in empty project",
+        "Run onboarding in project with existing PRD",
+        "Verify state file is created",
+        "Verify skip flag works"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-004",
+      "title": "Implement phase boundary enforcement",
+      "description": "Add phase-awareness to skills so they can detect when invoked outside their intended phase and provide appropriate guidance. Enforcement is soft (recommends, does not block) with override option.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "medium",
+      "dependencies": ["ARCH-001", "FEAT-001"],
+      "acceptance_criteria": [
+        "Skills can declare their phase membership",
+        "Phase check runs before skill execution",
+        "Out-of-phase invocation triggers recommendation message",
+        "Override is possible with explicit parameter",
+        "Phase violations are logged to .skillweave/tracking-log/"
+      ],
+      "verification_steps": [
+        "Invoke release skill on project without code → triggers recommendation",
+        "Invoke blueprint skill on project with PRD → proceeds normally",
+        "Use override flag → proceeds despite phase mismatch",
+        "Check tracking log for phase violation entry"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "INTG-001",
+      "title": "Integrate phase system with existing skill infrastructure",
+      "description": "Connect the new phase registry, bundle system, and recommendation engine with the existing SkillWeave intelligent detection and skill integration systems. Ensure backward compatibility.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "high",
+      "dependencies": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+      "acceptance_criteria": [
+        "integrate_with_skill() uses phase detection when available",
+        ".skillweave/config.yaml supports active_bundle and current_phase fields",
+        "Existing skill invocations work unchanged (backward compatible)",
+        "Phase system is opt-in — no impact when not configured",
+        "All existing tests continue to pass"
+      ],
+      "verification_steps": [
+        "Run existing test suite — all pass",
+        "Invoke skill without phase system → works as before",
+        "Invoke skill with phase system configured → enhanced behavior",
+        "Check config.yaml extension does not break existing parsing"
+      ],
+      "type": "integration",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TEST-001",
+      "title": "Create test suite for lifecycle and bundle system",
+      "description": "Comprehensive tests covering phase registry loading, bundle composition, entry detection, workflow recommendation, onboarding flow, phase boundary enforcement, and backward compatibility.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["INTG-001"],
+      "acceptance_criteria": [
+        "Test file exists with 15+ test cases",
+        "Phase registry loading tests pass",
+        "Bundle composition tests pass",
+        "Entry detection tests pass for 5+ scenarios",
+        "Recommendation engine tests pass",
+        "Backward compatibility tests pass",
+        "All tests run without errors"
+      ],
+      "verification_steps": [
+        "Run test suite",
+        "Verify 15+ test cases exist",
+        "Verify all tests pass",
+        "Check coverage of core scenarios"
+      ],
+      "type": "testing",
+      "passes": false,
+      "attempts": 0
+    }
+  ],
+  "assumptions": [
+    {
+      "description": "Current SkillWeave skill interfaces remain stable during redesign",
+      "impact_if_wrong": "Integration work increases significantly, possible breaking changes",
+      "validation_method": "Review current skill API surface before starting"
+    },
+    {
+      "description": "7-phase model covers all practical SkillWeave use cases",
+      "impact_if_wrong": "May need additional phases or different granularity",
+      "validation_method": "Map 5 real-world scenarios to the phase model"
+    },
+    {
+      "description": "Users will accept guided workflow over free-form skill invocation",
+      "impact_if_wrong": "Phase system may be ignored, reducing its value",
+      "validation_method": "Make phase system opt-in with clear value demonstration"
+    }
+  ],
+  "constraints": {
+    "technical": [
+      "Must maintain backward compatibility with SkillWeave v0.5.x",
+      "Phase system must be opt-in, not mandatory",
+      "Configuration must use existing .skillweave/ directory structure",
+      "Must work across all supported agent frameworks"
+    ]
+  },
+  "risks": [
+    {
+      "description": "Over-engineering the phase system with too much complexity",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Start minimal with 7 phases max, iterate based on real usage"
+    },
+    {
+      "description": "Breaking existing SkillWeave workflows during integration",
+      "probability": "low",
+      "impact": "critical",
+      "mitigation": "Backward compatibility as hard requirement, full test coverage"
+    },
+    {
+      "description": "Phase boundaries too rigid for real-world usage",
+      "probability": "medium",
+      "impact": "medium",
+      "mitigation": "Soft enforcement with override, log violations for learning"
+    }
+  ],
+  "execution_recommendation": {
+    "mode": "standard",
+    "reason": "8 tasks, ~6 hours total, moderate dependencies with clear dependency chain",
+    "suggested_workflow": "ralph-loop-attended",
+    "estimated_iterations": 12,
+    "parallel_opportunities": 2,
+    "recommended_capabilities": ["planning", "code_generation", "testing"],
+    "complexity_score": 55
+  }
+}

@@ -1,0 +1,274 @@
+{
+  "project": {
+    "name": "SkillWeave Initiative 06 — GitHub Action, GitHub App, and Integration Layer",
+    "version": "1.0.0",
+    "description": "GitHub-native validation and release readiness Actions, trust signal generation, and GitHub App feasibility assessment",
+    "domain": "developer-tooling",
+    "repository": "https://github.com/anomalyco/SkillWeave",
+    "created": "2026-04-27T00:00:00Z",
+    "status": "draft"
+  },
+  "settings": {
+    "max_iterations": 50,
+    "timeout_minutes": 720,
+    "required_capabilities": ["planning", "code_generation", "testing", "infrastructure"],
+    "verification_level": "standard"
+  },
+  "objectives": [
+    {
+      "id": "OBJ-01",
+      "description": "Create a Bundle Validation GitHub Action that validates SkillWeave bundle structure and metadata",
+      "priority": "critical",
+      "success_metrics": [{"metric": "Validation Action works", "target": "Validates SkillWeave repo correctly", "measurement": "Action runs without false positives"}]
+    },
+    {
+      "id": "OBJ-02",
+      "description": "Create a Release Readiness GitHub Action that checks release prerequisites",
+      "priority": "critical",
+      "success_metrics": [{"metric": "Readiness check works", "target": "Correctly identifies ready/not-ready", "measurement": "Automated test"}]
+    },
+    {
+      "id": "OBJ-03",
+      "description": "Assess GitHub App feasibility and document recommendation",
+      "priority": "medium",
+      "success_metrics": [{"metric": "Assessment complete", "target": "Recommendation documented", "measurement": "Assessment document exists"}]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "DESIGN-001",
+      "title": "Define Action specifications and output format",
+      "description": "Specify validation checks, release readiness checks, input parameters, and standardized JSON/Markdown output format for both Actions.",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "critical",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Validation checks list defined (structure, metadata, manifest, docs)",
+        "Release readiness checks list defined (version, changelog, tests, files)",
+        "Input parameters specified for both Actions",
+        "Output format defined: JSON with checks[], summary, pass/fail counts",
+        "GitHub annotations format defined (error/warning)"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "INFRA-001",
+      "title": "Set up skillweave-action-validate repository",
+      "description": "Create separate repository for Bundle Validation Action with action.yml, src/, dist/, README, and CI workflow.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Repository structure: action.yml, src/, dist/, README.md",
+        "action.yml has inputs: path, strictness",
+        "README has usage examples",
+        "CI workflow validates the Action itself",
+        "Semantic versioning configured"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-001",
+      "title": "Implement bundle validation logic",
+      "description": "Core validation: skill directory structure, SKILL.md presence, capability.yaml schema, required fields, manifest consistency, no broken internal references.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 90,
+      "priority": "critical",
+      "dependencies": ["INFRA-001"],
+      "acceptance_criteria": [
+        "Validates skill directory structure",
+        "Checks SKILL.md presence per skill",
+        "Validates capability.yaml against schema",
+        "Checks required fields in skill metadata",
+        "Detects broken internal references",
+        "Produces structured JSON output with per-check results",
+        "Configurable strictness (lenient, standard, strict)"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "INFRA-002",
+      "title": "Set up skillweave-action-release-check repository",
+      "description": "Create separate repository for Release Readiness Action with action.yml, src/, dist/, README, and CI workflow.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "dependencies": ["DESIGN-001"],
+      "acceptance_criteria": [
+        "Repository structure: action.yml, src/, dist/, README.md",
+        "action.yml has inputs: require_changelog, require_version_bump, require_tests",
+        "README has usage examples",
+        "CI workflow validates the Action itself",
+        "Semantic versioning configured"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-002",
+      "title": "Implement release readiness check logic",
+      "description": "Check version bump, CHANGELOG updated, tests passing, required files present, no WIP markers. Produce readiness report.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 75,
+      "priority": "critical",
+      "dependencies": ["INFRA-002"],
+      "acceptance_criteria": [
+        "Checks version bump (compares to previous release)",
+        "Checks CHANGELOG has entry for new version",
+        "Checks test suite exists and passes",
+        "Checks required files present (configurable list)",
+        "Detects WIP/draft markers in release candidate",
+        "Produces readiness report (JSON + Markdown)",
+        "Can block PR merge as status check"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "FEAT-003",
+      "title": "Implement trust signal generation",
+      "description": "Generate validation badge for README, store validation results as release assets, create attestation-ready output format.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "medium",
+      "dependencies": ["FEAT-001", "FEAT-002"],
+      "acceptance_criteria": [
+        "Validation badge generatable (shields.io compatible)",
+        "Validation results stored as GitHub release asset",
+        "Validation history trackable across releases",
+        "Output format supports future supply chain signing",
+        "Badge URL documented in README"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "DOC-001",
+      "title": "GitHub App feasibility assessment",
+      "description": "Assess whether a GitHub App adds value beyond Actions. Evaluate: repo sync, release signal capture, trust enrichment, discovery support. Recommend proceed/defer/skip.",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "medium",
+      "dependencies": ["FEAT-001", "FEAT-002"],
+      "acceptance_criteria": [
+        "Assessment covers 4 use cases: repo sync, release signals, trust, discovery",
+        "Build cost and maintenance burden evaluated",
+        "User value assessed per use case",
+        "Clear recommendation: proceed / defer / skip with rationale",
+        "If proceed: MVP scope defined",
+        "Assessment saved to .skillweave/prds/initiative-06/github-app-assessment.md"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TEST-001",
+      "title": "Test Actions on SkillWeave repository",
+      "description": "Run both Actions against the SkillWeave repo. Validate output format, check accuracy, verify no false positives.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["FEAT-001", "FEAT-002"],
+      "acceptance_criteria": [
+        "Validation Action runs on SkillWeave repo without errors",
+        "Release Readiness Action runs and produces correct assessment",
+        "No false positives on known-good structure",
+        "False negatives detected on intentionally broken structure",
+        "Output JSON validates against defined schema",
+        "Markdown output is human-readable"
+      ],
+      "type": "testing",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "DIST-001",
+      "title": "Prepare Actions for distribution",
+      "description": "Version tag both Actions, prepare for GitHub Marketplace (or direct reference), document version pinning.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "dependencies": ["TEST-001"],
+      "acceptance_criteria": [
+        "Both Actions tagged with v1.0.0",
+        "Major version tag (v1) created for version pinning",
+        "dist/ folder built and committed",
+        "Marketplace listing prepared (or direct-reference README)",
+        "Usage examples in both READMEs"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    }
+  ],
+  "assumptions": [
+    {
+      "description": "SkillWeave bundle structure is stable enough to validate",
+      "impact_if_wrong": "Validation rules need frequent updates",
+      "validation_method": "Review structure stability across last 3 releases"
+    },
+    {
+      "description": "Separate repos for Actions is the right architectural choice",
+      "impact_if_wrong": "May need monorepo approach instead",
+      "validation_method": "Survey GitHub Actions ecosystem conventions"
+    }
+  ],
+  "constraints": {
+    "technical": [
+      "Actions must work on ubuntu-latest GitHub runners",
+      "No proprietary dependencies",
+      "Core SkillWeave repo has no Action-related code",
+      "Actions must complete in < 60 seconds"
+    ]
+  },
+  "risks": [
+    {
+      "description": "Actions too rigid for diverse bundle structures",
+      "probability": "medium",
+      "impact": "medium",
+      "mitigation": "Configurable strictness levels, extensible check system"
+    },
+    {
+      "description": "Maintenance burden of separate repos",
+      "probability": "medium",
+      "impact": "medium",
+      "mitigation": "Minimal scope, automated testing, shared CI patterns"
+    },
+    {
+      "description": "False positives in validation erode trust",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Conservative defaults, whitelist mechanism, thorough testing"
+    }
+  ],
+  "execution_recommendation": {
+    "mode": "standard",
+    "reason": "9 tasks, ~8 hours total, moderate dependencies, involves separate repos",
+    "suggested_workflow": "ralph-loop-attended",
+    "estimated_iterations": 14,
+    "parallel_opportunities": 3,
+    "recommended_capabilities": ["planning", "code_generation", "testing", "infrastructure"],
+    "complexity_score": 62
+  }
+}

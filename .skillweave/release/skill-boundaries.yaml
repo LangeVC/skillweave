@@ -1,0 +1,105 @@
+# SkillWeave Skill Boundary Specifications
+# Defines clear role boundaries between promptchain-execute, releasechain, and launch.
+# Part of Initiative 03 — Release, Launch, and Workflow Rationalization.
+
+boundaries:
+  version: 1.0.0
+  description: "Role boundaries and interface contracts between release-related skills"
+
+skills:
+  - id: skillweave-promptchain-execute
+    type: orchestration
+    description: "Orchestration substrate for executing prompt sequences"
+    responsibilities:
+      - "Resolve execution mode (rex / ralph_attended / ralph_overnight)"
+      - "Plan batches with dependency-aware scheduling"
+      - "Identify safe parallel lanes and sidecar tasks"
+      - "Execute sequence steps with binary gates"
+      - "Track batch progress and emit batch results"
+      - "Apply Ralph Loop state machine for build sequences"
+    does_not_handle:
+      - "Release readiness assessment"
+      - "Version bumping"
+      - "Changelog generation"
+      - "Release artifact packaging"
+      - "Deployment"
+      - "Launch coordination"
+    integration_points:
+      - name: "releasechain handoff"
+        description: "After build completion, offer releasechain for release-phase tasks"
+        condition: "Build-oriented work completed successfully with passing verification"
+        output: "Batch completion summary with build artifacts"
+      - name: "launch handoff"
+        description: "After release completion, offer launch for go-live tasks"
+        condition: "Release phase completed (artifacts published, tag created)"
+        output: "Release summary with published version and artifact locations"
+
+  - id: skillweave-releasechain
+    type: phase-specific
+    description: "Phase-specific release workflow for the Release lifecycle phase"
+    responsibilities:
+      - "Run release readiness assessment against prerequisite model"
+      - "Detect premature invocation and redirect to correct upstream workflow"
+      - "Execute release workflow: verify tests → package → generate release notes → deploy → validate rollout"
+      - "Generate release readiness checklists"
+      - "Manage version bumping and git tagging"
+      - "Generate changelog entries"
+      - "Track release progress across workflow steps"
+    does_not_handle:
+      - "General prompt sequence execution"
+      - "Design-phase activities"
+      - "Launch coordination and deployment to production"
+      - "User-facing communication"
+    integration_points:
+      - name: "promptchain-execute handoff (inbound)"
+        description: "Receives build completion summary from promptchain-execute"
+        expected_input: "Batch completion summary with build artifacts and verification results"
+      - name: "launch handoff (outbound)"
+        description: "Passes release summary to launch for go-live"
+        output: "Release summary with published version, artifact locations, and changelog"
+
+  - id: skillweave-launch
+    type: phase-specific
+    description: "Launch coordination for the Launch lifecycle phase"
+    responsibilities:
+      - "Coordinate production deployment"
+      - "Prepare and distribute user-facing communication"
+      - "Capture launch metrics baseline"
+      - "Coordinate go-live activities"
+    does_not_handle:
+      - "Release artifact creation"
+      - "Version management"
+      - "Changelog generation"
+      - "Pre-release validation"
+    integration_points:
+      - name: "releasechain handoff (inbound)"
+        description: "Receives release summary from releasechain"
+        expected_input: "Release summary with published version, artifact locations, and changelog"
+
+role_summary:
+  promptchain_execute: "The 'what' — executes the sequence of tasks to build the thing"
+  releasechain: "The 'ship' — validates readiness, versions, packages, and publishes"
+  launch: "The 'go-live' — deploys to production, communicates, and monitors"
+
+contract:
+  promptchain_execute_to_releasechain:
+    handoff_artifact_type: "batch_completion_summary"
+    required_fields:
+      - build_status
+      - verification_results
+      - write_scope
+    expected_at: "End of build phase when build work completed successfully"
+
+  releasechain_to_launch:
+    handoff_artifact_type: "release_summary"
+    required_fields:
+      - version
+      - artifact_locations
+      - changelog
+      - release_date
+    expected_at: "After release workflow completes successfully"
+
+  launch_entry_condition:
+    description: "Launch phase can begin"
+    condition: "Release is published and available"
+    verification: "Release phase completed (artifacts published, git tag created)"

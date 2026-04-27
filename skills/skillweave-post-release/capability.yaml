@@ -1,0 +1,23 @@
+kind: skill
+name: skillweave-post-release
+version: 0.7.0
+description: "Retrospektive, Feedback, Monitoring, Iterationsplanung"
+author: SkillWeave
+license: MIT
+owner: SkillWeave
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - post-release
+  - retrospective
+  - feedback
+  - iteration
+  - monitoring
+capabilities:
+  - retrospective_conduct
+  - feedback_collection
+  - metric_monitoring
+  - iteration_planning
+  - health_check

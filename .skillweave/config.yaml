@@ -1,8 +1,35 @@
-mode: medium
 features:
-  checklist_execution: false
-  design_thinking_lens: false
-  community_patterns: false
-  modular_templates: false
   capability_routing: false
+  checklist_execution: false
+  community_patterns: false
+  design_thinking_lens: false
+  modular_templates: false
+  execution_system: false
+lifecycle:
+  active_bundle: design-and-build
+  current_phase: blueprint
+  phase_confidence: 1.0
+lens:
+  design_thinking:
+    enabled: false
+    rules:
+      - empathy_first
+      - quantity_before_quality
+      - deferred_judgment
+      - show_dont_tell
+      - yes_and
+      - bias_toward_action
+    principles:
+      - value_over_noise
+      - scan_before_read
+      - hierarchy_of_needs
+      - progressive_disclosure
+      - recognition_over_recall
+    strictness: medium
+mode: medium
 overrides: {}
+release:
+  readiness_model: ".skillweave/release/readiness-model.yaml"
+  skill_boundaries: ".skillweave/release/skill-boundaries.yaml"
+  detection_fast_path: true
+  override_allowed: true

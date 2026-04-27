@@ -1,0 +1,136 @@
+name: Release Readiness Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled]
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to check (e.g., 0.6.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  readiness-check:
+    name: Check Release Readiness
+    runs-on: ubuntu-latest
+    outputs:
+      can_release: ${{ steps.gate.outputs.can_release }}
+      passed_count: ${{ steps.gate.outputs.passed_count }}
+      failed_count: ${{ steps.gate.outputs.failed_count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install PyYAML
+
+      - name: Determine version and latest tag
+        id: versions
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(python3 -c "
+            import re
+            content = open('pyproject.toml').read()
+            match = re.search(r'^version\s*=\s*[\"]([^\"]+)[\"]', content, re.MULTILINE)
+            print(match.group(1) if match else 'unknown')
+            ")
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | head -1 || echo "")
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION, Latest tag: $LATEST_TAG"
+
+      - name: Run release readiness gate
+        id: gate
+        run: |
+          python3 << 'PYEOF'
+          import sys, json
+          sys.path.insert(0, 'src')
+          from skillweave.github_integration.release_gate import ReleaseReadinessGate
+
+          VERSION = "${{ steps.versions.outputs.version }}"
+          LATEST_TAG = "${{ steps.versions.outputs.latest_tag }}"
+
+          gate = ReleaseReadinessGate()
+          result = gate.evaluate(
+              current_version=VERSION,
+              latest_tag=LATEST_TAG if LATEST_TAG else None,
+              wip_scan_paths=["src", "README.md", "CHANGELOG.md"],
+          )
+
+          markdown = gate.generate_markdown(result)
+          with open('release-gate-report.md', 'w') as f:
+            f.write(markdown)
+
+          json_out = gate.generate_json(result)
+          with open('release-gate-data.json', 'w') as f:
+            f.write(json_out)
+
+          # Output for GitHub Actions
+          print(f'can_release={json.dumps(result.can_release)}')
+
+          with open('release-gate-data.json') as f:
+              data = json.load(f)
+          print(f'passed_count={data[\"passed_count\"]}')
+          print(f'total_checks={data[\"total_checks\"]}')
+
+          # GitHub annotations for failed checks
+          for check in result.checks:
+              if not check.passed:
+                  level = "error" if check.required else "warning"
+                  print(f'::{level} title=ReleaseGate::{check.name}: {check.detail}')
+          PYEOF
+
+      - name: Upload gate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-readiness-gate
+          path: |
+            release-gate-report.md
+            release-gate-data.json
+
+      - name: Comment PR with gate result
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('release-gate-report.md', 'utf8');
+            const data = JSON.parse(fs.readFileSync('release-gate-data.json', 'utf8'));
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const header = data.can_release
+              ? '## ✅ Release Readiness: PASSED'
+              : '## ❌ Release Readiness: BLOCKED';
+
+            const body = header + '\n\n' + report;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number,
+              body: body.slice(0, 65000),
+            });
+
+            core.notice(`Release readiness comment posted on PR #${issue_number}`);

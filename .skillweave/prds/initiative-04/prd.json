@@ -1,0 +1,237 @@
+{
+  "project": {
+    "name": "SkillWeave Initiative 04 — Repo Cleanup and Lean Core",
+    "version": "1.0.0",
+    "description": "Structured repository cleanup with classification, preservation, and lean core definition aligned to future architecture",
+    "domain": "developer-tooling",
+    "repository": "https://github.com/anomalyco/SkillWeave",
+    "created": "2026-04-27T00:00:00Z",
+    "status": "draft"
+  },
+  "settings": {
+    "max_iterations": 40,
+    "timeout_minutes": 480,
+    "required_capabilities": ["planning", "code_generation", "review"],
+    "verification_level": "standard"
+  },
+  "objectives": [
+    {
+      "id": "OBJ-01",
+      "description": "Catalog and classify all repository files with structured categories",
+      "priority": "critical",
+      "success_metrics": [{"metric": "Every file classified", "target": "No unclassified entries", "measurement": "Inventory file coverage check"}]
+    },
+    {
+      "id": "OBJ-02",
+      "description": "Define lean core and establish structured archive for non-core assets",
+      "priority": "high",
+      "success_metrics": [{"metric": "Lean core manifest exists", "target": "Essential files identified", "measurement": "Manifest validates"}]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TOOL-001",
+      "title": "Build repository inventory scanner",
+      "description": "Create a scanner that catalogs all files with path, type, last_modified, size_bytes, and suggested_category. Output to .skillweave/cleanup/inventory.yaml.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "critical",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Scanner processes entire repo directory tree",
+        "Each file entry has: path, type, last_modified, size_bytes, suggested_category",
+        "Output saved to .skillweave/cleanup/inventory.yaml",
+        "Respects .gitignore patterns",
+        "Handles 500+ files without performance issues"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TOOL-002",
+      "title": "Build classification engine",
+      "description": "Rule-based classifier that assigns categories (active-core, consolidation-candidate, legacy-valuable, deprecated, needs-review) based on file patterns, location, age, and naming conventions.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "critical",
+      "dependencies": ["TOOL-001"],
+      "acceptance_criteria": [
+        "5 categories implemented: active-core, consolidation-candidate, legacy-valuable, deprecated, needs-review",
+        "Rules consider: file location, naming convention, age, reference patterns",
+        "Each classification has confidence score (high/medium/low)",
+        "Low-confidence items default to needs-review",
+        "Rules are configurable via YAML"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TOOL-003",
+      "title": "Build archive manager",
+      "description": "Tool for moving files to .skillweave/archive/ with metadata preservation. Supports move-to-archive and restore-from-archive operations.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Moves files to .skillweave/archive/{category}/",
+        "Creates manifest entry with: original_path, category, rationale, date, reversible",
+        "Archive manifest is human-readable YAML",
+        "Restore function moves files back to original path",
+        "Manifest tracks all archive operations"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TOOL-004",
+      "title": "Build duplication detector",
+      "description": "Identify duplicated or highly similar logic across skills, prompts, and configurations. Report duplication with file pairs and similarity indicators.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "dependencies": ["TOOL-001"],
+      "acceptance_criteria": [
+        "Detects similar file names across directories",
+        "Identifies overlapping content in skill definitions",
+        "Reports duplication with file pairs and similarity score",
+        "Suggests consolidation candidates",
+        "Output saved to .skillweave/cleanup/duplications.yaml"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TOOL-005",
+      "title": "Build cleanup report generator",
+      "description": "Generate human-readable cleanup report summarizing inventory, classifications, duplications, and recommended actions.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "medium",
+      "dependencies": ["TOOL-002", "TOOL-004"],
+      "acceptance_criteria": [
+        "Report includes: total files, per-category counts, duplication findings, action recommendations",
+        "Saved to .skillweave/cleanup/report.md",
+        "Includes reversibility info for all proposed actions",
+        "Human-reviewable before any destructive action",
+        "Markdown formatted with tables and summaries"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "DESIGN-001",
+      "title": "Define lean core manifest",
+      "description": "Document the minimal set of files needed for SkillWeave operation. Distinguish required, recommended, and optional files. Align with future architecture from Initiative 01.",
+      "agent_type": "plan",
+      "target_agent": "any",
+      "estimated_minutes": 45,
+      "priority": "high",
+      "dependencies": ["TOOL-002"],
+      "acceptance_criteria": [
+        "Lean core manifest lists all essential files",
+        "Files categorized as: required, recommended, optional",
+        "Non-core files are candidates for archive",
+        "Manifest aligned with Initiative 01 lifecycle model",
+        "Saved to .skillweave/cleanup/lean-core.yaml"
+      ],
+      "type": "documentation",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "EXEC-001",
+      "title": "Execute cleanup process on SkillWeave repo",
+      "description": "Run the full cleanup pipeline: scan → classify → detect duplicates → generate report → review → archive non-core items. Human approval required before archiving.",
+      "agent_type": "mixed",
+      "target_agent": "any",
+      "estimated_minutes": 60,
+      "priority": "high",
+      "dependencies": ["TOOL-001", "TOOL-002", "TOOL-003", "TOOL-004", "TOOL-005", "DESIGN-001"],
+      "acceptance_criteria": [
+        "Full inventory generated",
+        "All files classified",
+        "Duplication report produced",
+        "Cleanup report generated and reviewed",
+        "Non-core items archived with manifest entries",
+        "No active functionality broken"
+      ],
+      "type": "infrastructure",
+      "passes": false,
+      "attempts": 0
+    },
+    {
+      "id": "TEST-001",
+      "title": "Post-cleanup validation",
+      "description": "Run full test suite after cleanup to verify no functionality was broken. Verify archive is complete and reversible.",
+      "agent_type": "build",
+      "target_agent": "any",
+      "estimated_minutes": 30,
+      "priority": "critical",
+      "dependencies": ["EXEC-001"],
+      "acceptance_criteria": [
+        "All existing tests pass after cleanup",
+        "Archive manifest is complete and valid",
+        "Restore function works for at least 1 archived item",
+        "Lean core files all present and functional",
+        "No unclassified files remain"
+      ],
+      "type": "testing",
+      "passes": false,
+      "attempts": 0
+    }
+  ],
+  "assumptions": [
+    {
+      "description": "Repository can be classified with rule-based heuristics without deep code analysis",
+      "impact_if_wrong": "Classification quality lower, more items in needs-review",
+      "validation_method": "Test classifier on 50 files, measure accuracy"
+    },
+    {
+      "description": "Archive structure does not interfere with active tools",
+      "impact_if_wrong": "Tools may accidentally process archived files",
+      "validation_method": "Verify .gitignore and tool configs exclude archive"
+    }
+  ],
+  "constraints": {
+    "technical": [
+      "No file deletion without human approval",
+      "All archive operations must be reversible",
+      "Cleanup must not break any active functionality",
+      "Must align with future architecture from Initiative 01"
+    ]
+  },
+  "risks": [
+    {
+      "description": "Archiving breaks active functionality",
+      "probability": "medium",
+      "impact": "critical",
+      "mitigation": "Full test suite after every archive batch"
+    },
+    {
+      "description": "Valuable files classified as deprecated",
+      "probability": "medium",
+      "impact": "high",
+      "mitigation": "Conservative classification, human review for uncertain items"
+    }
+  ],
+  "execution_recommendation": {
+    "mode": "standard",
+    "reason": "8 tasks, ~6 hours total, sequential pipeline with tool-building + execution",
+    "suggested_workflow": "ralph-loop-attended",
+    "estimated_iterations": 10,
+    "parallel_opportunities": 2,
+    "recommended_capabilities": ["planning", "code_generation", "review"],
+    "complexity_score": 52
+  }
+}
