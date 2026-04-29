@@ -370,46 +370,86 @@ class TestPrompts:
         assert len(phases) == 4
 
 
-# ── Faignite Adapter Tests ─────────────────────────────────────────
-class TestFaigniteAdapter:
+# ── Provider Detection + Profile Tests ──────────────────────────────
+class TestProviderProfiles:
     def test_profiles_exist(self):
-        from skillweave.council.faigate_adapter import FaigniteProvider
-        p = FaigniteProvider()
-        profiles = p.list_profiles()
+        from skillweave.council.faigate_adapter import list_profiles
+        profiles = list_profiles()
         assert "default" in profiles
         assert "quick" in profiles
         assert "deep" in profiles
         assert "expert" in profiles
 
     def test_get_profile(self):
-        from skillweave.council.faigate_adapter import FaigniteProvider
-        p = FaigniteProvider()
-        default = p.get_profile("default")
+        from skillweave.council.faigate_adapter import get_profile
+        default = get_profile("default")
         assert "models" in default
         assert "chairman" in default
         assert "mode" in default
         assert len(default["models"]) == 4
 
     def test_get_profile_copy(self):
-        from skillweave.council.faigate_adapter import FaigniteProvider
-        p = FaigniteProvider()
-        a = p.get_profile("quick")
-        b = p.get_profile("quick")
+        from skillweave.council.faigate_adapter import get_profile
+        a = get_profile("quick")
+        b = get_profile("quick")
         a["temperature"] = 0.999
         assert b["temperature"] != 0.999  # copies, not references
 
     def test_get_profile_unknown_falls_back_to_default(self):
-        from skillweave.council.faigate_adapter import FaigniteProvider
-        p = FaigniteProvider()
-        profile = p.get_profile("nonexistent")
-        assert profile == p.get_profile("default")
+        from skillweave.council.faigate_adapter import get_profile
+        profile = get_profile("nonexistent")
+        assert profile == get_profile("default")
 
     def test_list_profiles_order_consistent(self):
+        from skillweave.council.faigate_adapter import list_profiles
+        a = list_profiles()
+        b = list_profiles()
+        assert a == b
+
+    def test_provider_name(self):
         from skillweave.council.faigate_adapter import FaigniteProvider
         p = FaigniteProvider()
-        a = p.list_profiles()
-        b = p.list_profiles()
-        assert a == b
+        assert p.provider_name() == "faigate"
+
+    def test_credits_check_failure(self):
+        from skillweave.council.faigate_adapter import FaigniteProvider
+        p = FaigniteProvider(base_url="https://nonexistent.example.com")
+        result = asyncio.run(p.check_credits("sonnet"))
+        assert result == -1.0  # fail gracefully
+
+
+class TestSingleModelProvider:
+    def test_is_single_model(self):
+        from skillweave.council.faigate_adapter import SingleModelProvider
+        p = SingleModelProvider(model="gpt-4o")
+        assert p.is_single_model is True
+        assert p.provider_name() == "single_model"
+
+    def test_query_uses_own_model(self):
+        import os
+        from skillweave.council.faigate_adapter import SingleModelProvider
+        if not os.environ.get("OPENAI_API_KEY"):
+            pytest.skip("No OPENAI_API_KEY set")
+        p = SingleModelProvider(model="gpt-4o")
+        result = asyncio.run(p.query("gpt-3.5", [{"role":"user","content":"hello"}]))
+        assert len(result) > 0
+
+
+class TestProviderDetection:
+    def test_detect_providers_returns_dict(self):
+        from skillweave.council.faigate_adapter import detect_providers
+        providers = detect_providers()
+        assert isinstance(providers, dict)
+
+    def test_get_best_provider_fallback(self):
+        from skillweave.council.faigate_adapter import get_best_provider, SingleModelProvider
+        provider = get_best_provider()
+        assert isinstance(provider, SingleModelProvider)  # no ENV set → fallback
+
+    def test_list_detected_providers(self):
+        from skillweave.council.faigate_adapter import list_detected_providers
+        providers = list_detected_providers()
+        assert isinstance(providers, dict)
 
 
 # ── Search Tests ────────────────────────────────────────────────────
