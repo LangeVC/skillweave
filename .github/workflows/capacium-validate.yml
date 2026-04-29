@@ -65,5 +65,5 @@ jobs:
 
       - uses: Capacium/capacium-action-validate@v1
         with:
-          manifest-path: ${{ matrix.manifest }}
+          manifest-path: ${{ github.workspace }}/${{ matrix.manifest }}
           strict-mode: "true"
