@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
+from .capability_sync import CapaciumManifestSync
+
 
 @dataclass
 class GateCheck:
@@ -244,6 +246,39 @@ class ReleaseReadinessGate:
             required=True,
         )
 
+    def check_capacium_manifests(self) -> GateCheck:
+        try:
+            syncer = CapaciumManifestSync(repo_root=str(self.repo_root))
+            issues = syncer.check()
+        except Exception as exc:
+            return GateCheck(
+                id="capacium-manifests",
+                name="Capacium manifests synced",
+                passed=False,
+                detail=f"Could not validate Capacium manifests: {exc}",
+                required=True,
+            )
+
+        if issues:
+            preview = ", ".join(issue.path for issue in issues[:5])
+            remainder = "" if len(issues) <= 5 else f" (+{len(issues) - 5} more)"
+            return GateCheck(
+                id="capacium-manifests",
+                name="Capacium manifests synced",
+                passed=False,
+                detail=f"{len(issues)} manifest(s) out of sync: {preview}{remainder}",
+                required=True,
+            )
+
+        manifest_count = len(syncer.manifest_paths())
+        return GateCheck(
+            id="capacium-manifests",
+            name="Capacium manifests synced",
+            passed=True,
+            detail=f"{manifest_count} manifest(s) match pyproject version and bundle layout",
+            required=True,
+        )
+
     def evaluate(
         self,
         current_version: str,
@@ -259,6 +294,7 @@ class ReleaseReadinessGate:
         result.checks.append(self.check_changelog(current_version))
         result.checks.append(self.check_tests())
         result.checks.append(self.check_pyproject_toml())
+        result.checks.append(self.check_capacium_manifests())
         result.checks.extend(self.check_required_files(required_files))
         result.checks.append(self.check_wip_markers(wip_scan_paths))
 

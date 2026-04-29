@@ -1,0 +1,26 @@
+kind: skill
+name: skillweave-council
+version: 0.8.0
+description: "Multi-Model LLM Council — Deliberation, Peer Review, and Chairman Synthesis with Web Search and Faigate Routing"
+author: SkillWeave
+license: MIT
+owner: SkillWeave
+frameworks:
+  - opencode-command
+  - claude-code
+  - gemini-cli
+keywords:
+  - council
+  - deliberation
+  - peer-review
+  - synthesis
+  - web-search
+  - multi-model
+  - faigate
+capabilities:
+  - council_deliberation
+  - peer_review
+  - chairman_synthesis
+  - web_search
+  - model_routing
+  - phase_context_injection

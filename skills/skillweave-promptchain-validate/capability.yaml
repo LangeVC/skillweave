@@ -1,16 +1,19 @@
 kind: skill
 name: skillweave-promptchain-validate
-version: 0.5.1
+version: 0.7.0
 description: Validate and improve SkillWeave prompt sequences — detects sequence type and adapts output format
 author: SkillWeave Team
-license: MIT
+license: Apache-2.0
 owner: typelicious
+repository: https://github.com/typelicious/SkillWeave
+homepage: https://github.com/typelicious/SkillWeave
 frameworks:
-  - opencode-command
-  - claude-code
-  - gemini-cli
+- opencode
+- opencode-command
+- claude-code
+- gemini-cli
 keywords:
-  - promptchain
-  - validate
-  - quality
-  - format-check
+- promptchain
+- validate
+- quality
+- format-check

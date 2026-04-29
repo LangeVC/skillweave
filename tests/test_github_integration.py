@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from skillweave.github_integration.inventory import WorkflowInventory, WorkflowInfo, InventoryResult
 from skillweave.github_integration.autotag import AutoTagger, TagCandidate, AutoTagResult
+from skillweave.github_integration.capability_sync import CapaciumManifestSync
 from skillweave.github_integration.changelog import ChangelogGenerator, ChangelogResult, CommitEntry
 from skillweave.github_integration.issue_manager import IssueManager, IssueManagerResult, IssueSuggestion
 from skillweave.github_integration.pr_description import PRDescriptionGenerator, PRDescriptionResult
@@ -60,12 +61,50 @@ def temp_pyproject():
 def temp_project_full():
     root = Path(tempfile.mkdtemp())
     (root / "src" / "app").mkdir(parents=True)
+    (root / "skills" / "skillweave-blueprint").mkdir(parents=True)
     (root / "tests").mkdir()
     (root / "tests" / "test_app.py").write_text("def test_pass(): assert True")
     (root / "pyproject.toml").write_text('[project]\nversion = "0.2.0"\n')
     (root / "CHANGELOG.md").write_text("# Changelog\n\n## [0.2.0] - 2026-04-27\n### Added\n- Foo\n")
     (root / "README.md").write_text("# App")
-    (root / "LICENSE").write_text("MIT")
+    (root / "LICENSE").write_text("Apache-2.0")
+    (root / "capability.yaml").write_text(
+        "kind: bundle\n"
+        "name: skillweave\n"
+        "version: 0.2.0\n"
+        "description: temp bundle\n"
+        "author: SkillWeave Team\n"
+        "license: Apache-2.0\n"
+        "owner: typelicious\n"
+        "repository: https://github.com/typelicious/SkillWeave\n"
+        "homepage: https://github.com/typelicious/SkillWeave\n"
+        "frameworks:\n"
+        "  - opencode\n"
+        "  - claude-code\n"
+        "  - gemini-cli\n"
+        "capabilities:\n"
+        "  - name: skillweave-blueprint\n"
+        "    source: ./skills/skillweave-blueprint\n"
+        "    version: 0.2.0\n"
+    )
+    (root / "skills" / "skillweave-blueprint" / "capability.yaml").write_text(
+        "kind: skill\n"
+        "name: skillweave-blueprint\n"
+        "version: 0.2.0\n"
+        "description: temp skill\n"
+        "author: SkillWeave Team\n"
+        "license: Apache-2.0\n"
+        "owner: typelicious\n"
+        "repository: https://github.com/typelicious/SkillWeave\n"
+        "homepage: https://github.com/typelicious/SkillWeave\n"
+        "frameworks:\n"
+        "  - opencode\n"
+        "  - claude-code\n"
+        "  - gemini-cli\n"
+        "keywords:\n"
+        "  - prd\n"
+    )
+    CapaciumManifestSync(repo_root=str(root)).write()
     yield root
     shutil.rmtree(str(root))
 
@@ -177,6 +216,35 @@ class TestAutoTagger:
         data = json.loads(tagger.generate_json(result))
         assert data["current_version"] == "1.0.0"
         assert data["should_release"] is True
+
+
+# ─── Capacium Sync Tests ───────────────────────────────────────────────
+
+
+class TestCapaciumManifestSync:
+    def test_check_detects_drift(self, temp_project_full):
+        (temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml").write_text(
+            (temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml")
+            .read_text()
+            .replace("version: 0.2.0", "version: 0.1.0")
+        )
+        syncer = CapaciumManifestSync(repo_root=str(temp_project_full))
+        issues = syncer.check()
+        assert issues
+        assert any("skillweave-blueprint/capability.yaml" in issue.path for issue in issues)
+
+    def test_write_repairs_drift(self, temp_project_full):
+        (temp_project_full / "capability.yaml").write_text(
+            (temp_project_full / "capability.yaml").read_text().replace("version: 0.2.0", "version: 0.1.0", 1)
+        )
+        syncer = CapaciumManifestSync(repo_root=str(temp_project_full))
+        issues = syncer.write()
+        assert issues
+        assert syncer.check() == []
+        root_manifest = (temp_project_full / "capability.yaml").read_text()
+        assert "version: 0.2.0" in root_manifest
+        assert "opencode-command" in root_manifest
+        assert "source: ./skills/skillweave-blueprint" in root_manifest
 
 
 # ─── Changelog Tests ───────────────────────────────────────────────────
@@ -508,6 +576,19 @@ class TestReleaseReadinessGate:
         check = gate.check_wip_markers(["src"])
         assert check.passed is False
         assert check.detail.startswith("Found")
+
+    def test_check_capacium_manifests(self, temp_project_full):
+        gate = ReleaseReadinessGate(repo_root=str(temp_project_full))
+        check = gate.check_capacium_manifests()
+        assert check.passed is True
+
+    def test_check_capacium_manifests_detects_drift(self, temp_project_full):
+        drifted = temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml"
+        drifted.write_text(drifted.read_text().replace("version: 0.2.0", "version: 0.1.0"))
+        gate = ReleaseReadinessGate(repo_root=str(temp_project_full))
+        check = gate.check_capacium_manifests()
+        assert check.passed is False
+        assert "out of sync" in check.detail
 
     def test_evaluate_passes(self, temp_project_full):
         gate = ReleaseReadinessGate(repo_root=str(temp_project_full))

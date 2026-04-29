@@ -107,6 +107,12 @@ git pull origin main
 python3 -m pytest tests/ -v
 
 # Update version references (if applicable)
+# Sync Capacium manifests to the new version
+python3 scripts/sync-capacium-manifests.py
+
+# Verify Capacium manifests are in sync
+python3 scripts/sync-capacium-manifests.py --check
+
 # Check CHANGELOG.md is updated
 # Verify documentation is current
 ```
@@ -146,6 +152,8 @@ Brief description of release highlights.
 ```bash
 git clone https://github.com/typelicious/skillweave.git
 cd skillweave
+cap install skillweave --source .
+# or use the compatibility wrapper
 ./scripts/install-skills.sh
 ```
 
@@ -262,6 +270,7 @@ python3 -m pytest tests/test_performance.py -v
 - [ ] Documentation updated
 - [ ] Examples working
 - [ ] CHANGELOG.md updated
+- [ ] Capacium manifests synced and validated
 - [ ] No breaking changes (or documented if necessary)
 - [ ] Version numbers updated in code (if applicable)
 

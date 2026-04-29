@@ -1,22 +1,20 @@
 kind: skill
 name: skillweave-discovery
 version: 0.7.0
-description: "Problemdefinition, User Research, Empathy Mapping, Opportunity Validation"
-author: SkillWeave
-license: MIT
-owner: SkillWeave
+description: Problemdefinition, User Research, Empathy Mapping, Opportunity Validation
+author: SkillWeave Team
+license: Apache-2.0
+owner: typelicious
+repository: https://github.com/typelicious/SkillWeave
+homepage: https://github.com/typelicious/SkillWeave
 frameworks:
-  - opencode-command
-  - claude-code
-  - gemini-cli
+- opencode
+- opencode-command
+- claude-code
+- gemini-cli
 keywords:
-  - discovery
-  - research
-  - empathy
-  - problem-validation
-  - opportunity
-capabilities:
-  - problem_definition
-  - user_research
-  - empathy_mapping
-  - opportunity_validation
+- discovery
+- research
+- empathy
+- problem-validation
+- opportunity

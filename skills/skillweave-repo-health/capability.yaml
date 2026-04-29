@@ -1,23 +1,20 @@
 kind: skill
 name: skillweave-repo-health
 version: 0.7.0
-description: "Repo Assessment & Cleanup: Inventory-Scan, Klassifikation, Archive, Duplikate, Report"
-author: SkillWeave
-license: MIT
-owner: SkillWeave
+description: 'Repo Assessment & Cleanup: Inventory-Scan, Klassifikation, Archive, Duplikate, Report'
+author: SkillWeave Team
+license: Apache-2.0
+owner: typelicious
+repository: https://github.com/typelicious/SkillWeave
+homepage: https://github.com/typelicious/SkillWeave
 frameworks:
-  - opencode-command
-  - claude-code
-  - gemini-cli
+- opencode
+- opencode-command
+- claude-code
+- gemini-cli
 keywords:
-  - repo-health
-  - cleanup
-  - archive
-  - hygiene
-  - inventory
-capabilities:
-  - repo_inventory
-  - dead_code_detection
-  - archive_management
-  - deduplication
-  - hygiene_reporting
+- repo-health
+- cleanup
+- archive
+- hygiene
+- inventory

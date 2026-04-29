@@ -1,37 +1,59 @@
 kind: bundle
 name: skillweave
-version: 0.5.1
-description: Multi-agent AI skill orchestration — blueprint, generate, validate, execute, release
+version: 0.7.0
+description: A complete 7-phase AI-assisted development lifecycle ecosystem.
 author: SkillWeave Team
-license: MIT
+license: Apache-2.0
 owner: typelicious
 repository: https://github.com/typelicious/SkillWeave
 homepage: https://github.com/typelicious/SkillWeave
 frameworks:
-  - opencode-command
-  - claude-code
-  - gemini-cli
+- opencode
+- opencode-command
+- claude-code
+- gemini-cli
 keywords:
-  - skills
-  - agents
-  - orchestration
-  - prompt-chains
-  - ralph-loop
-  - release-chain
-
+- skills
+- agents
+- orchestration
+- lifecycle
+- prompt-chains
+- ralph-loop
+- release-chain
 capabilities:
-  - name: skillweave-blueprint
-    source: ./skills/skillweave-blueprint
-    version: latest
-  - name: skillweave-promptchain-generate
-    source: ./skills/skillweave-promptchain-generate
-    version: latest
-  - name: skillweave-promptchain-validate
-    source: ./skills/skillweave-promptchain-validate
-    version: latest
-  - name: skillweave-promptchain-execute
-    source: ./skills/skillweave-promptchain-execute
-    version: latest
-  - name: skillweave-releasechain
-    source: ./skills/skillweave-releasechain
-    version: latest
+- name: skillweave-blueprint
+  source: ./skills/skillweave-blueprint
+  version: 0.7.0
+- name: skillweave-design
+  source: ./skills/skillweave-design
+  version: 0.7.0
+- name: skillweave-discovery
+  source: ./skills/skillweave-discovery
+  version: 0.7.0
+- name: skillweave-launch
+  source: ./skills/skillweave-launch
+  version: 0.7.0
+- name: skillweave-lifecycle
+  source: ./skills/skillweave-lifecycle
+  version: 0.7.0
+- name: skillweave-observe
+  source: ./skills/skillweave-observe
+  version: 0.7.0
+- name: skillweave-post-release
+  source: ./skills/skillweave-post-release
+  version: 0.7.0
+- name: skillweave-promptchain-execute
+  source: ./skills/skillweave-promptchain-execute
+  version: 0.7.0
+- name: skillweave-promptchain-generate
+  source: ./skills/skillweave-promptchain-generate
+  version: 0.7.0
+- name: skillweave-promptchain-validate
+  source: ./skills/skillweave-promptchain-validate
+  version: 0.7.0
+- name: skillweave-releasechain
+  source: ./skills/skillweave-releasechain
+  version: 0.7.0
+- name: skillweave-repo-health
+  source: ./skills/skillweave-repo-health
+  version: 0.7.0

@@ -1,16 +1,19 @@
 kind: skill
 name: skillweave-promptchain-generate
-version: 0.5.1
+version: 0.7.0
 description: Generate standardized SkillWeave prompt sequences from PRD or topic — creates execution plans optimized for REX or Ralph Loop workflows
 author: SkillWeave Team
-license: MIT
+license: Apache-2.0
 owner: typelicious
+repository: https://github.com/typelicious/SkillWeave
+homepage: https://github.com/typelicious/SkillWeave
 frameworks:
-  - opencode-command
-  - claude-code
-  - gemini-cli
+- opencode
+- opencode-command
+- claude-code
+- gemini-cli
 keywords:
-  - promptchain
-  - generate
-  - workflow
-  - execution-plan
+- promptchain
+- generate
+- workflow
+- execution-plan

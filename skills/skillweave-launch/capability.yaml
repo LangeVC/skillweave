@@ -1,23 +1,20 @@
 kind: skill
 name: skillweave-launch
 version: 0.7.0
-description: "Pre-Launch-Check, Deployment, Announce, Verify, Metrics"
-author: SkillWeave
-license: MIT
-owner: SkillWeave
+description: Pre-Launch-Check, Deployment, Announce, Verify, Metrics
+author: SkillWeave Team
+license: Apache-2.0
+owner: typelicious
+repository: https://github.com/typelicious/SkillWeave
+homepage: https://github.com/typelicious/SkillWeave
 frameworks:
-  - opencode-command
-  - claude-code
-  - gemini-cli
+- opencode
+- opencode-command
+- claude-code
+- gemini-cli
 keywords:
-  - launch
-  - deployment
-  - release-notes
-  - go-live
-  - metrics
-capabilities:
-  - pre_launch_check
-  - deployment_execution
-  - release_announcement
-  - health_verification
-  - metric_comparison
+- launch
+- deployment
+- release-notes
+- go-live
+- metrics

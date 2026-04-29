@@ -1,0 +1,69 @@
+name: Capacium Validate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "capability.yaml"
+      - "skills/**/capability.yaml"
+      - "pyproject.toml"
+      - "scripts/sync-capacium-manifests.py"
+      - "src/skillweave/github_integration/capability_sync.py"
+      - ".github/workflows/capacium-validate.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "capability.yaml"
+      - "skills/**/capability.yaml"
+      - "pyproject.toml"
+      - "scripts/sync-capacium-manifests.py"
+      - "src/skillweave/github_integration/capability_sync.py"
+      - ".github/workflows/capacium-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manifest-list:
+    name: Discover Capacium Manifests
+    runs-on: ubuntu-latest
+    outputs:
+      manifests: ${{ steps.collect.outputs.manifests }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect manifests
+        id: collect
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifests = ["capability.yaml"]
+          manifests += [str(path) for path in sorted(Path("skills").glob("skillweave-*/capability.yaml"))]
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"manifests={json.dumps(manifests)}\n")
+
+          print("Manifests to validate:")
+          for manifest in manifests:
+              print(f" - {manifest}")
+          PY
+
+  validate:
+    name: Validate ${{ matrix.manifest }}
+    needs: manifest-list
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        manifest: ${{ fromJson(needs.manifest-list.outputs.manifests) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Capacium/capacium-action-validate@v1
+        with:
+          manifest-path: ${{ matrix.manifest }}
+          strict-mode: "true"

@@ -1,7 +1,7 @@
 phases:
   - id: discovery
     order: 1
-    skills: [skillweave-discovery, skillweave-blueprint, last30days]
+    skills: [skillweave-discovery, skillweave-blueprint, skillweave-council]
     promptchain_types: [plan]
     phase_type: optional
   - id: blueprint

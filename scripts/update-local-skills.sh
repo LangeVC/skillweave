@@ -1,21 +1,25 @@
 #!/bin/bash
 
-# SkillWeave Local Skills Update Script
-# For developers who maintain a local fork/repo and want to update the installation
+# Refresh a local SkillWeave development install with Capacium as the source of truth.
 
-set -e
+set -euo pipefail
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_DIR="$HOME/.skillweave"
+INSTALLER="$SOURCE_DIR/scripts/install-skills.sh"
 
 echo "SkillWeave Local Skills Update"
 echo "=============================="
 echo ""
 echo "Source (development repo): $SOURCE_DIR"
-echo "Target (installation dir): $TARGET_DIR"
+echo "Local config dir:          $TARGET_DIR"
 echo ""
 
-# Check if source has git
+if [ ! -x "$INSTALLER" ]; then
+    echo "Installer not found: $INSTALLER" >&2
+    exit 1
+fi
+
 if [ -d "$SOURCE_DIR/.git" ]; then
     echo "✓ Source is a git repository"
     echo "  Current branch: $(cd "$SOURCE_DIR" && git branch --show-current)"
@@ -24,68 +28,32 @@ else
     echo "⚠ Source is not a git repository"
 fi
 
-# Check target directory
-if [ -d "$TARGET_DIR/.git" ]; then
-    echo "⚠ WARNING: Target directory appears to be a git repository!"
-    echo "  This is not recommended. Target should be a plain directory."
-    echo "  Consider: rm -rf $TARGET_DIR/.git"
-    read -p "  Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Update cancelled."
-        exit 1
-    fi
-fi
-
-echo ""
-echo "Updating skills from source to target..."
-echo ""
-
-# Create target directories
-mkdir -p "$TARGET_DIR/skills"
 mkdir -p "$TARGET_DIR/scripts"
-
-# Copy skills
-echo "Copying skills directory..."
-rm -rf "$TARGET_DIR/skills"/*
-cp -r "$SOURCE_DIR/skills"/* "$TARGET_DIR/skills/"
-echo "  ✓ Copied $(find "$SOURCE_DIR/skills" -type d | wc -l | tr -d ' ') skill directories"
-
-# Copy installer
-echo "Copying installer script..."
-cp "$SOURCE_DIR/scripts/install-skills.sh" "$TARGET_DIR/scripts/"
+cp "$INSTALLER" "$TARGET_DIR/scripts/install-skills.sh"
 chmod +x "$TARGET_DIR/scripts/install-skills.sh"
-echo "  ✓ Copied installer script"
-
-# Copy .gitignore if it exists
-if [ -f "$SOURCE_DIR/.gitignore" ]; then
-    cp "$SOURCE_DIR/.gitignore" "$TARGET_DIR/"
-    echo "  ✓ Copied .gitignore"
-fi
 
 echo ""
-echo "Update complete!"
+echo "Capacium-backed refresh is ready."
 echo ""
 echo "Next steps:"
-echo "1. Run the installer to update agent skills:"
-echo "   $TARGET_DIR/scripts/install-skills.sh --interactive"
+echo "1. Refresh the local bundle and compatibility bridges:"
+echo "   $SOURCE_DIR/scripts/install-skills.sh --update"
 echo ""
-echo "2. Or use the installer from the source directory:"
-echo "   $SOURCE_DIR/scripts/install-skills.sh --interactive"
+echo "2. Or run the cached wrapper from ~/.skillweave:"
+echo "   $TARGET_DIR/scripts/install-skills.sh --update"
 echo ""
 echo "Options:"
 echo "  --dry-run        Preview changes without making them"
-echo "  --interactive    Interactive agent selection"
-echo "  --update         Update existing installations"
+echo "  --interactive    Choose bridge agents after Capacium install"
+echo "  --uninstall      Remove the bundle and compatibility links"
 echo "  --troubleshoot   Diagnose installation issues"
 echo ""
 
-# Offer to run installer
 read -p "Run installer now? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
     echo "Starting installer..."
     echo ""
-    "$TARGET_DIR/scripts/install-skills.sh" --interactive
+    "$INSTALLER" --update
 fi

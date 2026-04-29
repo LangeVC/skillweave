@@ -1,0 +1,266 @@
+{
+  "projectName": "skillweave-council — LLM Council Skill v0.8.0",
+  "version": "0.8.0",
+  "status": "draft",
+  "complexity": 48,
+  "execution_recommendation": {
+    "mode": "standard",
+    "reason": "10 tasks, ~12h estimated, moderate dependencies, 3 parallel lanes",
+    "suggested_workflow": "ralph_attended",
+    "estimated_iterations": 6,
+    "parallel_opportunities": 3,
+    "batch_groups": [
+      {
+        "batch": 1,
+        "name": "Engine Core + Faigate Adapter",
+        "tasks": ["CNL-001", "CNL-002", "CNL-003", "CNL-004"],
+        "reason": "Council Engine + Faigate Routing = Kern-Logik, abhängig"
+      },
+      {
+        "batch": 2,
+        "name": "Web Search + Output + Profiles",
+        "tasks": ["CNL-005", "CNL-006", "CNL-007"],
+        "reason": "Search auf Stage 0, dann Output + Profiles parallel"
+      },
+      {
+        "batch": 3,
+        "name": "Skill-Files + Lifecycle-Update",
+        "tasks": ["CNL-008", "CNL-009"],
+        "reason": "SKILL.md + capability.yaml + phases.yaml Update"
+      },
+      {
+        "batch": 4,
+        "name": "Tests",
+        "tasks": ["CNL-010"],
+        "reason": "Alle Komponenten müssen vorher existieren"
+      }
+    ]
+  },
+  "objectives": [
+    "LLM Council Engine mit 3-Stage-Deliberation (Opinions → Peer Review → Synthesis)",
+    "Faignite als Model-Router (Verfügbarkeit + Guthaben-Check vor Query)",
+    "Web-Search Integration (DuckDuckGo default, 4 Provider, 5 Zeiträume)",
+    "Structured JSON Output mit Schema-Validierung",
+    "Council Profiles (default/quick/deep/expert) mit vordefinierten Modell-Sets",
+    "Ablösung von last30days in Discovery-Phase durch council"
+  ],
+  "out_of_scope": [
+    "Keine Web-UI (React frontend)",
+    "Kein API-Key-Management (Faignite macht das)",
+    "Keine Conversation History",
+    "Keine Ollama/Local-Model-Unterstützung (nur via Faigate)"
+  ],
+  "tasks": [
+    {
+      "id": "CNL-001",
+      "title": "src/skillweave/council/engine.py",
+      "description": "CouncilEngine: asyncio.gather-basierte 3-Stage-Orchestrierung (deliberate, stage1_opinions, stage2_review, stage3_synthesis), anonmyization via label_to_model, ranking aggregation",
+      "acceptanceCriteria": [
+        "deliberate(query, config) returns CouncilResult mit stage1/stage2/stage3",
+        "Stage 1: Alle Modelle parallel via asyncio.gather, failed models gracefully skipped",
+        "Stage 2: Responses anonymized (Response A/B/C), FINAL RANKING: Format geparst",
+        "Stage 3: Chairman erhält alle Responses + Rankings + Search Context",
+        "Timeout: 30s pro Modell, 120s Gesamt"
+      ],
+      "priority": "high",
+      "estimatedEffort": "3",
+      "dependsOn": [],
+      "type": "feature",
+      "sequence_type": "build",
+      "passes": false
+    },
+    {
+      "id": "CNL-002",
+      "title": "src/skillweave/council/faigate_adapter.py",
+      "description": "FaigniteProvider: check_availability, check_credits, query, get_available_models, best_fit (nach Council-Profil)",
+      "acceptanceCriteria": [
+        "check_availability(models) prüft alle Modelle via Faigate API",
+        "check_credits(model) liefert Guthaben-Stand",
+        "query(model, messages, temperature) sendet via Faigate API",
+        "best_fit(profile) wählt optimale Modelle für quick/standard/deep/expert",
+        "Failed availability → Modell wird aus Council ausgeschlossen (kein Abbruch)"
+      ],
+      "priority": "high",
+      "estimatedEffort": "2",
+      "dependsOn": [],
+      "type": "feature",
+      "sequence_type": "build",
+      "passes": false
+    },
+    {
+      "id": "CNL-003",
+      "title": "src/skillweave/council/search.py",
+      "description": "WebSearch: DuckDuckGo (default, free), Serper, Tavily, Brave — hybrid web+news, relevance reranking, Jina Reader für Full Content",
+      "acceptanceCriteria": [
+        "DuckDuckGo funktioniert ohne API-Key (default)",
+        "Serper/Tavily/Brave via configurable API-Keys",
+        "Relevance-Reranking: Token-Overlap auf Title (0.4), Summary (0.35), URL (0.15), Freshness (0.1)",
+        "Jina Reader fetch für top 3 results (optional, on/off)",
+        "Result-Format: Result N: Title / URL / Content (truncated 2000 chars)",
+        "60s total search budget"
+      ],
+      "priority": "high",
+      "estimatedEffort": "3",
+      "dependsOn": [],
+      "type": "feature",
+      "sequence_type": "build",
+      "passes": false
+    },
+    {
+      "id": "CNL-004",
+      "title": "Zeitraum-Suche in search.py + engine.py",
+      "description": "time_range Parameter (30d/quarter/6mo/1yr/any) — DuckDuckGo timelimit + post-hoc date filter für Serper/Tavily",
+      "acceptanceCriteria": [
+        "30d: DuckDuckGo timelimit='m', post-hoc filter auf alle results",
+        "quarter: DuckDuckGo timelimit='m', post-hoc filter (weiter wegen DDG limitation)",
+        "6mo: DuckDuckGo timelimit='w' (best effort), strict post-hoc filter",
+        "1yr: DuckDuckGo timelimit='y', post-hoc filter",
+        "any: Kein Filter",
+        "Post-hoc: parse date from result, filter by range"
+      ],
+      "priority": "high",
+      "estimatedEffort": "1.5",
+      "dependsOn": ["CNL-003"],
+      "type": "feature",
+      "sequence_type": "build",
+      "passes": false
+    },
+    {
+      "id": "CNL-005",
+      "title": "src/skillweave/council/synthesis.py mit JSON Schema Output",
+      "description": "Structured JSON Output mit JSON Schema-Validierung — Chairman-Synthese als optionaler JSON-Output neben Markdown",
+      "acceptanceCriteria": [
+        "output_format='json' → Chairman antwortet mit JSON nach Schema",
+        "JSON Schema: {title, summary, key_insights: [], consensus_score: float, dissent: str|null, sources: []}",
+        "Schema-Validierung via jsonschema vor Return",
+        "output_format='markdown' → Standard-Markdown wie bisher",
+        "Fallback: bei JSON-Validierungsfehler → Markdown (mit warning)"
+      ],
+      "priority": "high",
+      "estimatedEffort": "2",
+      "dependsOn": ["CNL-001"],
+      "type": "feature",
+      "sequence_type": "build",
+      "passes": false
+    },
+    {
+      "id": "CNL-006",
+      "title": "src/skillweave/council/profiles.py — Council Profiles",
+      "description": "4 vordefinierte Council-Profile: default (4 models balanced), quick (2 models fast), deep (6 models diverse), expert (4 models domain-specific)",
+      "acceptanceCriteria": [
+        "default: 4 models (balanced mix), chairman via Faigate best_fit",
+        "quick: 2 models (fastest available), no chairman (mode=quick)",
+        "deep: 6 models (diverse providers), mode=full",
+        "expert: 4 models (domain-tuned), chairman scientific",
+        "Jedes Profil definiert: models[], chairman, mode, temperature"
+      ],
+      "priority": "medium",
+      "estimatedEffort": "1",
+      "dependsOn": ["CNL-002"],
+      "type": "config",
+      "sequence_type": "plan",
+      "passes": false
+    },
+    {
+      "id": "CNL-007",
+      "title": "prompts.py + engine.py Integration",
+      "description": "Stage 1/2/3 Prompt-Templates mit Phasen-Kontext (phase parameter injects domain-specific prompts)",
+      "acceptanceCriteria": [
+        "Stage 1 Prompt: Council persona + search context + query",
+        "Stage 2 Prompt: Anonymized responses + FINAL RANKING: format enforcement",
+        "Stage 3 Prompt: Chairman persona + all data + output_format instruction",
+        "phase='discovery' injects market-research prompt prefix",
+        "phase='design' injects design-evaluation prompt prefix",
+        "Phase-Null (standalone): generic prompt"
+      ],
+      "priority": "medium",
+      "estimatedEffort": "1.5",
+      "dependsOn": ["CNL-001"],
+      "type": "feature",
+      "sequence_type": "build",
+      "passes": false
+    },
+    {
+      "id": "CNL-008",
+      "title": "skills/skillweave-council/ SKILL.md + capability.yaml",
+      "description": "Volle SKILL.md mit YAML-Frontmatter, Usage, Commands, Council-Profile, Search-Provider, Output-Format + capability.yaml",
+      "acceptanceCriteria": [
+        "SKILL.md YAML: name=skillweave-council, description, argument-hint: topic=\"[topic]\" time_range=\"[30d|quarter|6mo|1yr|any]\" mode=\"[quick|standard|full]\" profile=\"[default|quick|deep|expert]\" output=\"[markdown|json]\"",
+        "Commands: deliberate, search, compare (nur Stage 1), profiles",
+        "capability.yaml: kind=skill, capabilities: council_deliberation, web_search, model_routing, peer_review, synthesis"
+      ],
+      "priority": "high",
+      "estimatedEffort": "1.5",
+      "dependsOn": ["CNL-001", "CNL-003", "CNL-006"],
+      "type": "content",
+      "sequence_type": "plan",
+      "passes": false
+    },
+    {
+      "id": "CNL-009",
+      "title": "phases.yaml Update: last30days → council",
+      "description": "In phases.yaml: discovery-Phase bekommt council statt last30days, design und post-release optional council erhalten",
+      "acceptanceCriteria": [
+        "discovery: skills=[skillweave-discovery, skillweave-blueprint, skillweave-council]",
+        "design: skills=[skillweave-design, frontend-design] + optional skillweave-council",
+        "post-release: skills=[... bestehende, skillweave-council]",
+        "last30days entfernt aus phases.yaml (war nie originär)",
+        "global_skills unverändert (lifecycle, repo-health, observe)"
+      ],
+      "priority": "high",
+      "estimatedEffort": "0.5",
+      "dependsOn": ["CNL-008"],
+      "type": "config",
+      "sequence_type": "plan",
+      "passes": false
+    },
+    {
+      "id": "CNL-010",
+      "title": "Council Tests (15+)",
+      "description": "Unit + Integration Tests für Engine, Faignite Adapter, Search, Synthesis, Profiles",
+      "acceptanceCriteria": [
+        "Test: Stage 1 parallel execution (4 models, all succeed)",
+        "Test: Stage 1 graceful failure (1 model fails, 3 succeed)",
+        "Test: Stage 2 anonymization + ranking parse",
+        "Test: Stage 3 markdown synthesis",
+        "Test: Stage 3 JSON output + schema validation",
+        "Test: Faignite availability check (mock)",
+        "Test: Web Search DuckDuckGo (real call, no key)",
+        "Test: Zeitraum-Filter (30d/quarter/6mo/1yr)",
+        "Test: Council Profile default/quick/deep/expert",
+        "Test: Phase-context prompt injection",
+        "Test: standalone mode (no phase)"
+      ],
+      "priority": "high",
+      "estimatedEffort": "2",
+      "dependsOn": ["CNL-001", "CNL-002", "CNL-003", "CNL-005", "CNL-006", "CNL-007"],
+      "type": "test",
+      "sequence_type": "test",
+      "passes": false
+    }
+  ],
+  "assumptions": [
+    "Faignite REST API ist erreichbar mit Endpunkten: /models (availability), /credits/{model}, /query",
+    "DuckDuckGo Python Library (duckduckgo_search) ist installierbar",
+    "Serper/Tavily/Brave API Keys via .skillweave/config.yaml oder ENV",
+    "Keine Web-UI nötig — reiner CLI-Skill für Agenten",
+    "Council arbeitet standalone und als Phase-Skill (discovery, design, post-release)"
+  ],
+  "risks": [
+    {
+      "risk": "Faignite API nicht verfügbar oder ändert sich",
+      "severity": "high",
+      "mitigation": "Mock-fähiger Adapter — Engine läuft auch mit Mock-Provider für Tests"
+    },
+    {
+      "risk": "DuckDuckGo Rate Limiting blockiert viele Queries",
+      "severity": "medium",
+      "mitigation": "Serper/Tavily als Fallback; DuckDuckGo nur für default/low-cost"
+    },
+    {
+      "risk": "Council mit 6 Modellen + Chairman wird teuer (Credits)",
+      "severity": "medium",
+      "mitigation": "quick-Mode mit 2 Modellen als Standard; deep nur auf explizite Anforderung"
+    }
+  ]
+}
