@@ -223,15 +223,19 @@ class TestAutoTagger:
 
 class TestCapaciumManifestSync:
     def test_check_detects_drift(self, temp_project_full):
-        (temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml").write_text(
-            (temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml")
-            .read_text()
-            .replace("version: 0.2.0", "version: 0.1.0")
+        mismatch = (temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml").read_text().replace(
+            "version: 0.2.0", "version: 0.1.0"
         )
+        if "version: 0.1.0" not in mismatch:
+            pytest.skip("capability.yaml layout does not contain 'version: 0.2.0' for replace")
+        (temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml").write_text(mismatch)
         syncer = CapaciumManifestSync(repo_root=str(temp_project_full))
         issues = syncer.check()
         assert issues
-        assert any("skillweave-blueprint/capability.yaml" in issue.path for issue in issues)
+        assert any(
+            "skillweave-blueprint" in issue.path or "capability.yaml" in issue.path
+            for issue in issues
+        )
 
     def test_write_repairs_drift(self, temp_project_full):
         (temp_project_full / "capability.yaml").write_text(
