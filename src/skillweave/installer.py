@@ -57,6 +57,7 @@ SKILLS = [
     "skillweave-post-release",
     "skillweave-repo-health",
     "skillweave-observe",
+    "skillweave-council",
 ]
 
 CAPACIUM_SPEC = "skillweave"
