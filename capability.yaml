@@ -57,3 +57,6 @@ capabilities:
 - name: skillweave-repo-health
   source: ./skills/skillweave-repo-health
   version: 0.7.0
+- name: skillweave-council
+  source: ./skills/skillweave-council
+  version: 0.8.0
