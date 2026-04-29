@@ -5,7 +5,7 @@ Single-model fallback: council roles work with just 1 model (no peer review, cha
 
 Architecture:
   CouncilEngine → CouncilProvider (interface)
-    ├── FaigniteProvider
+    ├── FaigateProvider
     ├── OpenRouterProvider
     ├── GenericRouterProvider (kilo, claw, llmai)
     └── SingleModelProvider (fallback — no router needed)
@@ -98,7 +98,7 @@ def detect_providers() -> dict[str, CouncilProvider]:
     
     # Faigate
     if os.environ.get("FAGIATE_API_KEY") or os.path.exists(os.path.expanduser("~/.faigate")):
-        providers["faigate"] = FaigniteProvider()
+        providers["faigate"] = FaigateProvider()
     
     # OpenRouter
     if os.environ.get("OPENROUTER_API_KEY"):
@@ -137,9 +137,9 @@ def get_best_provider() -> CouncilProvider:
     return SingleModelProvider()
 
 
-# ── FaigniteProvider ────────────────────────────────────────────────
+# ── FaigateProvider ────────────────────────────────────────────────
 
-class FaigniteProvider(CouncilProvider):
+class FaigateProvider(CouncilProvider):
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
         self.base_url = (base_url or os.environ.get("FAGIATE_BASE_URL", "https://faigate.ai/api/v1")).rstrip("/")
         self.api_key = api_key or os.environ.get("FAGIATE_API_KEY")
@@ -176,7 +176,7 @@ class FaigniteProvider(CouncilProvider):
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: self._req("/query", "POST", body))
         if result.get("error"):
-            raise RuntimeError(f"Faignite query failed: {result['error']}")
+            raise RuntimeError(f"Faigate query failed: {result['error']}")
         return result.get("content", result.get("response", ""))
 
     def provider_name(self) -> str:

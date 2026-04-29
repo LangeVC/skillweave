@@ -65,7 +65,7 @@ class CouncilEngine:
     def __init__(self, provider, searcher=None):
         """
         Args:
-            provider: ModelProvider implementation (e.g. FaigniteProvider)
+            provider: ModelProvider implementation (e.g. FaigateProvider)
             searcher: Optional WebSearch instance for Stage 0
         """
         self.provider = provider

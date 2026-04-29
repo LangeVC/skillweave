@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import AsyncMock, Mock, patch, MagicMock
 
 
-# ── Mock FaigniteProvider ──────────────────────────────────────────
+# ── Mock Provider ──────────────────────────────────────────────────
 class MockProvider:
     """Mock provider that returns deterministic responses."""
 
@@ -407,13 +407,13 @@ class TestProviderProfiles:
         assert a == b
 
     def test_provider_name(self):
-        from skillweave.council.faigate_adapter import FaigniteProvider
-        p = FaigniteProvider()
+        from skillweave.council.faigate_adapter import FaigateProvider
+        p = FaigateProvider()
         assert p.provider_name() == "faigate"
 
     def test_credits_check_failure(self):
-        from skillweave.council.faigate_adapter import FaigniteProvider
-        p = FaigniteProvider(base_url="https://nonexistent.example.com")
+        from skillweave.council.faigate_adapter import FaigateProvider
+        p = FaigateProvider(base_url="https://nonexistent.example.com")
         result = asyncio.run(p.check_credits("sonnet"))
         assert result == -1.0  # fail gracefully
 
