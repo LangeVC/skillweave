@@ -85,11 +85,12 @@ class CapaciumManifestSync:
         for path in self.skill_manifest_paths():
             manifest = self.load_manifest(path)
             name = manifest.get("name") or path.parent.name
+            own_version = manifest.get("version", version)
             capabilities.append(
                 {
                     "name": name,
                     "source": f"./skills/{path.parent.name}",
-                    "version": version,
+                    "version": own_version,
                 }
             )
         return capabilities
@@ -135,7 +136,7 @@ class CapaciumManifestSync:
             normalized = {
                 "kind": "skill",
                 "name": current.get("name", path.parent.name),
-                "version": version,
+                "version": current.get("version", version),
                 "description": current.get("description", ""),
                 "author": DEFAULT_AUTHOR,
                 "license": DEFAULT_LICENSE,
