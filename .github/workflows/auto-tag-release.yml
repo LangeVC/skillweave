@@ -154,3 +154,13 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-capacium:
+    name: Publish to Capacium Exchange
+    needs: create-release
+    if: always() && needs.create-release.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Capacium/capacium-action-publish@v1
+        with:
+          github_url: ${{ github.event.repository.html_url }}
