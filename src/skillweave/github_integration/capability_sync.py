@@ -17,7 +17,6 @@ import yaml
 
 DEFAULT_FRAMEWORKS = [
     "opencode",
-    "opencode-command",
     "claude-code",
     "gemini-cli",
 ]
