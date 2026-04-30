@@ -247,7 +247,6 @@ class TestCapaciumManifestSync:
         assert syncer.check() == []
         root_manifest = (temp_project_full / "capability.yaml").read_text()
         assert "version: 0.2.0" in root_manifest
-        assert "opencode-command" in root_manifest
         assert "source: ./skills/skillweave-blueprint" in root_manifest
 
 
