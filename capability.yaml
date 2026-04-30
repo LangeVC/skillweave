@@ -9,7 +9,7 @@ repository: https://github.com/typelicious/SkillWeave
 homepage: https://github.com/typelicious/SkillWeave
 frameworks:
 - opencode
-- opencode-command
+
 - claude-code
 - gemini-cli
 keywords:
