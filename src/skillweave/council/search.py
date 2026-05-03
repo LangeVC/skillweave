@@ -152,33 +152,34 @@ class WebSearch:
     def _parse_duckduckgo_lite(self, html: str) -> list[SearchResult]:
         """Parse DuckDuckGo Lite HTML results."""
         results = []
-        # DDG Lite format: rows with <a rel="nofollow" class="result-link"> + <td class="result-snippet">
-        # Extract result blocks: each block is a <tr class="result">
-        blocks = re.findall(r'<tr[^>]*class="[^"]*result[^"]*"[^>]*>(.*?)</tr>', html, re.DOTALL)
-        
-        for block in blocks:
-            link_match = re.search(r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>', block, re.DOTALL)
-            snippet_match = re.search(r'<td[^>]*class="[^"]*result-snippet[^"]*"[^>]*>(.*?)</td>', block, re.DOTALL)
-            if link_match:
-                url = link_match.group(1)
-                # DDG Lite URLs are redirect paths like "//duckduckgo.com/l/?uddg=..."
-                # Extract actual URL from uddg parameter
-                if "uddg=" in url:
-                    real_url_match = re.search(r'uddg=([^&]+)', url)
-                    if real_url_match:
-                        from urllib.parse import unquote
-                        url = unquote(real_url_match.group(1))
-                title = re.sub(r'<[^>]+>', '', link_match.group(2)).strip()
-                snippet = ""
-                if snippet_match:
-                    snippet = re.sub(r'<[^>]+>', '', snippet_match.group(1)).strip()
-                if title:
-                    results.append(SearchResult(
-                        title=title,
-                        url=url,
-                        snippet=snippet[:500],
-                        source="web",
-                    ))
+        # DDG Lite: result blocks are <a class="result-link"> with sibling <td class="result-snippet">
+        # Pattern: <a[^>]*class="[^"]*result-link[^"]*"[^>]*href="([^"]*)"[^>]*>(.*?)</a>
+        links = re.findall(
+            r'<a[^>]*class="[^"]*result-link[^"]*"[^>]*href="([^"]*)"[^>]*>(.*?)</a>',
+            html, re.DOTALL
+        )
+        snippets = re.findall(
+            r'<td[^>]*class="[^"]*result-snippet[^"]*"[^>]*>(.*?)</td>',
+            html, re.DOTALL
+        )
+        for i, (href, title_html) in enumerate(links):
+            url = href
+            if "uddg=" in url:
+                from urllib.parse import unquote
+                real_match = re.search(r'uddg=([^&]+)', url)
+                if real_match:
+                    url = unquote(real_match.group(1))
+            title = re.sub(r'<[^>]+>', '', title_html).strip()
+            snippet = ""
+            if i < len(snippets):
+                snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip()
+            if title:
+                results.append(SearchResult(
+                    title=title,
+                    url=url,
+                    snippet=snippet[:500],
+                    source="web",
+                ))
         return results
 
     # ── Serper ────────────────────────────────────────────────────────
