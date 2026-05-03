@@ -86,7 +86,7 @@ def detect_providers() -> dict[str, CouncilProvider]:
     """Auto-detect all available router providers.
     
     Checks environment variables and default endpoints for:
-    - Faigate (FAGIATE_API_KEY or ~/.faigate)
+    -     Faigate (FAGIATE_API_KEY or ~/.faigate or ~/.config/faigate/tokens.json)
     - OpenRouter (OPENROUTER_API_KEY)
     - KiloRouter (KILO_API_KEY or KILO_BASE_URL)
     - ClawRouter (CLAWROUTER_API_KEY)
@@ -96,8 +96,13 @@ def detect_providers() -> dict[str, CouncilProvider]:
     """
     providers = {}
     
-    # Faigate
-    if os.environ.get("FAGIATE_API_KEY") or os.path.exists(os.path.expanduser("~/.faigate")):
+    # Faigate — check multiple config sources
+    faigate_available = (
+        os.environ.get("FAGIATE_API_KEY") or
+        os.path.exists(os.path.expanduser("~/.faigate")) or
+        os.path.exists(os.path.expanduser("~/.config/faigate/tokens.json"))
+    )
+    if faigate_available:
         providers["faigate"] = FaigateProvider()
     
     # OpenRouter
@@ -143,6 +148,19 @@ class FaigateProvider(CouncilProvider):
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
         self.base_url = (base_url or os.environ.get("FAGIATE_BASE_URL", "https://faigate.ai/api/v1")).rstrip("/")
         self.api_key = api_key or os.environ.get("FAGIATE_API_KEY")
+        # If no explicit key, try reading from ~/.config/faigate/tokens.json
+        if not self.api_key:
+            token_file = os.path.expanduser("~/.config/faigate/tokens.json")
+            if os.path.exists(token_file):
+                try:
+                    tokens = json.loads(open(token_file).read())
+                    # Use the first available access token
+                    for provider, config in tokens.items():
+                        if "access_token" in config:
+                            self.api_key = config["access_token"]
+                            break
+                except Exception:
+                    pass
 
     def _req(self, path: str, method: str = "GET", body: dict | None = None) -> dict:
         url = f"{self.base_url}{path}"
