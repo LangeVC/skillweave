@@ -178,12 +178,23 @@ class FaigateProvider(CouncilProvider):
             return {"error": str(e)}
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
-        results = {}
-        async def check_one(m):
-            info = self._req(f"/models/{m.replace('faigate:', '')}")
-            results[m] = not info.get("error") and info.get("status") == "available"
-        await asyncio.gather(*[check_one(m) for m in models])
-        return results
+        """Check model availability via Faigate GET /models (single call, not per-model)."""
+        info = self._req("/models")
+        if info.get("error"):
+            # Fallback: assume all available
+            return {m: True for m in models}
+        # Response format: {"models": [{"id": "...", "status": "available"}, ...]} or list
+        available_ids = set()
+        model_list = info if isinstance(info, list) else info.get("models", info.get("data", []))
+        for entry in model_list:
+            if isinstance(entry, dict):
+                mid = entry.get("id", "") or entry.get("model", "")
+                status = entry.get("status", "available")
+                if mid and status == "available":
+                    available_ids.add(mid)
+            elif isinstance(entry, str):
+                available_ids.add(entry)
+        return {m: (m.replace('faigate:', '') in available_ids or m in available_ids) for m in models}
 
     async def check_credits(self, model: str) -> float:
         info = self._req(f"/credits/{model.replace('faigate:', '')}")
