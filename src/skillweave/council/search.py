@@ -278,13 +278,104 @@ class WebSearch:
             results.append(SearchResult(title="Brave Error", url="", snippet=str(e), source="error"))
         return results
 
-    # ── Perplexity ────────────────────────────────────────────────────
+    # ── Perplexity (via MCP Server — no API key, uses PERPLEXITY_COOKIES) ───
 
     async def _search_perplexity(self, query: str, config: SearchConfig) -> list[SearchResult]:
-        """Perplexity AI — search-enabled chat completions. Requires PERPLEXITY_API_KEY."""
-        if not config.api_key:
-            return [SearchResult(title="Perplexity Error", url="", snippet="PERPLEXITY_API_KEY not set.", source="error")]
+        """Perplexity via MCP server (helallao/perplexity-ai). Requires PERPLEXITY_COOKIES env var.
 
+        Uses the `perplexity_search` MCP tool via subprocess.
+        Falls back to direct API call if PERPLEXITY_API_KEY is set.
+        """
+        # Prefer MCP-based search (cookie auth, no API key)
+        if os.environ.get("PERPLEXITY_COOKIES") and not config.api_key:
+            return await self._search_perplexity_mcp(query, config)
+
+        # Fallback to direct API key
+        if not config.api_key:
+            return [SearchResult(title="Perplexity Error", url="", snippet="PERPLEXITY_COOKIES or PERPLEXITY_API_KEY not set.", source="error")]
+
+        return await self._search_perplexity_api(query, config)
+
+    async def _search_perplexity_mcp(self, query: str, config: SearchConfig) -> list[SearchResult]:
+        """Call Perplexity MCP server via subprocess (uvx)."""
+        results = []
+        try:
+            mcp_result = await self._call_perplexity_mcp("perplexity_search", {"query": query})
+            if mcp_result.get("error"):
+                return [SearchResult(title="Perplexity MCP Error", url="", snippet=mcp_result["error"], source="error")]
+
+            # MCP returns structured search results
+            content = mcp_result.get("content", "")
+            citations = mcp_result.get("citations", [])
+
+            for i, citation in enumerate(citations[:config.max_results]):
+                results.append(SearchResult(
+                    title=citation.get("title", f"Source {i+1}"),
+                    url=citation.get("url", ""),
+                    snippet=citation.get("snippet", "")[:500],
+                    source="web",
+                ))
+
+            # Add synthesized answer
+            if content:
+                results.insert(0, SearchResult(
+                    title=f"Perplexity: {query[:80]}",
+                    url="",
+                    snippet=content[:1000],
+                    source="web",
+                ))
+
+        except Exception as e:
+            results.append(SearchResult(title="Perplexity MCP Error", url="", snippet=str(e), source="error"))
+        return results
+
+    async def _call_perplexity_mcp(self, tool_name: str, arguments: dict) -> dict:
+        """Call a Perplexity MCP tool via subprocess (uvx)."""
+        import subprocess
+        loop = asyncio.get_event_loop()
+
+        mcp_request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": arguments,
+            },
+        }
+
+        env = os.environ.copy()
+        cmd = ["uvx", "--from", "perplexity-api[mcp] @ git+https://github.com/helallao/perplexity-ai", "perplexity-mcp"]
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(json.dumps(mcp_request).encode() + b"\n"),
+                timeout=30.0,
+            )
+            if proc.returncode != 0:
+                return {"error": f"MCP process exited with {proc.returncode}: {stderr.decode()[:200]}"}
+
+            response = json.loads(stdout.decode())
+            if "error" in response:
+                return {"error": response["error"].get("message", str(response["error"]))}
+
+            return response.get("result", response)
+        except asyncio.TimeoutError:
+            return {"error": "Perplexity MCP call timed out (30s)"}
+        except FileNotFoundError:
+            return {"error": "uvx not found — install with 'brew install uv'"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def _search_perplexity_api(self, query: str, config: SearchConfig) -> list[SearchResult]:
+        """Perplexity via direct API call (PERPLEXITY_API_KEY)."""
         results = []
         try:
             body = {
@@ -298,7 +389,6 @@ class WebSearch:
                 "temperature": 0.2,
                 "return_related_questions": False,
             }
-            # Remove None values
             body = {k: v for k, v in body.items() if v is not None}
 
             data = json.dumps(body).encode()
@@ -317,16 +407,14 @@ class WebSearch:
             content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
             citations = result.get("citations", [])
 
-            # Parse citations into SearchResults
             for i, citation in enumerate(citations[:config.max_results]):
                 results.append(SearchResult(
                     title=f"Source {i+1}",
                     url=citation,
-                    snippet=f"Referenced in Perplexity search results",
+                    snippet="Referenced in Perplexity search results",
                     source="web",
                 ))
 
-            # Add the synthesized answer as a primary result
             if content:
                 results.insert(0, SearchResult(
                     title=f"Perplexity: {query[:80]}",
