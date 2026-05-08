@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-design
-version: 0.7.0
+version: 0.8.4
 description: 'Design-Thinking-Lens: Briefanalyse, UX-Prinzipien, Token-Extraktion, Evaluation'
 author: SkillWeave Team
 license: Apache-2.0

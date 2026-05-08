@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-launch
-version: 0.7.0
+version: 0.8.4
 description: Pre-Launch-Check, Deployment, Announce, Verify, Metrics
 author: SkillWeave Team
 license: Apache-2.0

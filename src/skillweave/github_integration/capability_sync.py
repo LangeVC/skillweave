@@ -135,7 +135,7 @@ class CapaciumManifestSync:
             normalized = {
                 "kind": "skill",
                 "name": current.get("name", path.parent.name),
-                "version": current.get("version", version),
+                "version": version,
                 "description": current.get("description", ""),
                 "author": DEFAULT_AUTHOR,
                 "license": DEFAULT_LICENSE,
