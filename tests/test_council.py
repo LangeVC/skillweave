@@ -444,7 +444,7 @@ class TestProviderDetection:
     def test_get_best_provider_fallback(self, monkeypatch):
         from skillweave.council.faigate_adapter import get_best_provider, SingleModelProvider
         # Ensure no router env vars are set
-        monkeypatch.delenv("FAGIATE_API_KEY", raising=False)
+        monkeypatch.delenv("FAIGATE_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         monkeypatch.delenv("KILO_API_KEY", raising=False)
         monkeypatch.delenv("CLAWROUTER_API_KEY", raising=False)

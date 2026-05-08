@@ -89,7 +89,7 @@ def detect_providers() -> dict[str, CouncilProvider]:
     """Auto-detect all available router providers.
 
     Checks environment variables, local config files, and default endpoints:
-    - Faigate (FAGIATE_API_KEY or ~/.faigate or ~/.config/faigate/tokens.json)
+    - Faigate (FAIGATE_API_KEY or ~/.faigate or ~/.config/faigate/tokens.json)
     - OpenRouter (OPENROUTER_API_KEY)
     - ClawRouter (CLAWROUTER_API_KEY)
     - KiloRouter (KILO_API_KEY or KILO_BASE_URL)
@@ -100,11 +100,13 @@ def detect_providers() -> dict[str, CouncilProvider]:
     """
     providers = {}
 
-    # Faigate — check multiple config sources
+    # Faigate — check port + config files
+    faigate_port = int(os.environ.get("FAIGATE_PORT", FAIGATE_DEFAULT_PORT))
     faigate_available = (
-        os.environ.get("FAGIATE_API_KEY") or
+        os.environ.get("FAIGATE_API_KEY") or
         os.path.exists(os.path.expanduser("~/.faigate")) or
-        os.path.exists(os.path.expanduser("~/.config/faigate/tokens.json"))
+        os.path.exists(os.path.expanduser("~/.config/faigate/tokens.json")) or
+        _check_port_open("localhost", faigate_port)
     )
     if faigate_available:
         providers["faigate"] = FaigateProvider()
@@ -158,7 +160,7 @@ def get_best_provider() -> CouncilProvider:
 
 
 def _check_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
-    """Check if a TCP port is open (for local providers like OmniRoute/Faignite)."""
+    """Check if a TCP port is open (for local providers like OmniRoute/faigate)."""
     import socket
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -169,16 +171,16 @@ def _check_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 
 # ── FaigateProvider ────────────────────────────────────────────────
 
-FAIGATE_DEFAULT_PORT = "8000"  # default for brew-installed faigate
+FAIGATE_DEFAULT_PORT = "8092"  # default for brew-installed faigate
 
 
 class FaigateProvider(CouncilProvider):
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
         self.base_url = (base_url or os.environ.get(
-            "FAGIATE_BASE_URL",
-            f"http://localhost:{os.environ.get('FAGIATE_PORT', FAIGATE_DEFAULT_PORT)}/v1"
+            "FAIGATE_BASE_URL",
+            f"http://localhost:{os.environ.get('FAIGATE_PORT', FAIGATE_DEFAULT_PORT)}/v1"
         )).rstrip("/")
-        self.api_key = api_key or os.environ.get("FAGIATE_API_KEY")
+        self.api_key = api_key or os.environ.get("FAIGATE_API_KEY")
         # If no explicit key, try reading from ~/.config/faigate/tokens.json
         if not self.api_key:
             token_file = os.path.expanduser("~/.config/faigate/tokens.json")
@@ -238,8 +240,7 @@ class FaigateProvider(CouncilProvider):
         return result
 
     async def check_credits(self, model: str) -> float:
-        info = self._req(f"/credits/{model.replace('faigate:', '')}")
-        return float(info.get("credits_remaining", -1.0)) if not info.get("error") else -1.0
+        return -1.0  # Faigate doesn't expose credit checking — defer to availability
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
         clean_model = model.replace("faigate:", "")

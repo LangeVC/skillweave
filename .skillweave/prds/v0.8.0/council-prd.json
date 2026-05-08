@@ -38,7 +38,7 @@
   },
   "objectives": [
     "LLM Council Engine mit 3-Stage-Deliberation (Opinions → Peer Review → Synthesis)",
-    "Faignite als Model-Router (Verfügbarkeit + Guthaben-Check vor Query)",
+    "faigate als Model-Router (Verfügbarkeit + Guthaben-Check vor Query)",
     "Web-Search Integration (DuckDuckGo default, 4 Provider, 5 Zeiträume)",
     "Structured JSON Output mit Schema-Validierung",
     "Council Profiles (default/quick/deep/expert) mit vordefinierten Modell-Sets",
@@ -46,7 +46,7 @@
   ],
   "out_of_scope": [
     "Keine Web-UI (React frontend)",
-    "Kein API-Key-Management (Faignite macht das)",
+    "Kein API-Key-Management (faigate macht das)",
     "Keine Conversation History",
     "Keine Ollama/Local-Model-Unterstützung (nur via Faigate)"
   ],
@@ -72,7 +72,7 @@
     {
       "id": "CNL-002",
       "title": "src/skillweave/council/faigate_adapter.py",
-      "description": "FaigniteProvider: check_availability, check_credits, query, get_available_models, best_fit (nach Council-Profil)",
+      "description": "faigateProvider: check_availability, check_credits, query, get_available_models, best_fit (nach Council-Profil)",
       "acceptanceCriteria": [
         "check_availability(models) prüft alle Modelle via Faigate API",
         "check_credits(model) liefert Guthaben-Stand",
@@ -217,14 +217,14 @@
     {
       "id": "CNL-010",
       "title": "Council Tests (15+)",
-      "description": "Unit + Integration Tests für Engine, Faignite Adapter, Search, Synthesis, Profiles",
+      "description": "Unit + Integration Tests für Engine, faigate Adapter, Search, Synthesis, Profiles",
       "acceptanceCriteria": [
         "Test: Stage 1 parallel execution (4 models, all succeed)",
         "Test: Stage 1 graceful failure (1 model fails, 3 succeed)",
         "Test: Stage 2 anonymization + ranking parse",
         "Test: Stage 3 markdown synthesis",
         "Test: Stage 3 JSON output + schema validation",
-        "Test: Faignite availability check (mock)",
+        "Test: faigate availability check (mock)",
         "Test: Web Search DuckDuckGo (real call, no key)",
         "Test: Zeitraum-Filter (30d/quarter/6mo/1yr)",
         "Test: Council Profile default/quick/deep/expert",
@@ -240,7 +240,7 @@
     }
   ],
   "assumptions": [
-    "Faignite REST API ist erreichbar mit Endpunkten: /models (availability), /credits/{model}, /query",
+    "faigate REST API ist erreichbar mit Endpunkten: /models (availability), /credits/{model}, /query",
     "DuckDuckGo Python Library (duckduckgo_search) ist installierbar",
     "Serper/Tavily/Brave API Keys via .skillweave/config.yaml oder ENV",
     "Keine Web-UI nötig — reiner CLI-Skill für Agenten",
@@ -248,7 +248,7 @@
   ],
   "risks": [
     {
-      "risk": "Faignite API nicht verfügbar oder ändert sich",
+      "risk": "faigate API nicht verfügbar oder ändert sich",
       "severity": "high",
       "mitigation": "Mock-fähiger Adapter — Engine läuft auch mit Mock-Provider für Tests"
     },

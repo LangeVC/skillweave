@@ -125,7 +125,7 @@ Ersetzt `last30days` in der Discovery-Phase und erweitert SkillWeave um collecti
 
 - **Performance**: Stage 1 parallel (asyncio.gather), max 30s pro Modell, 120s Gesamt-Timeout
 - **Failability**: Failed models gracefully skipped, nicht blockierend
-- **Security**: Keine API-Key-Speicherung (Faignite managed Auth)
+- **Security**: Keine API-Key-Speicherung (faigate managed Auth)
 - **Output**: Markdown + Structured JSON (JSON Schema-validiert)
 - **Agent-Agnostic**: Capability-based (works with any AI coding agent)
 
@@ -138,7 +138,7 @@ src/skillweave/council/
 ├── __init__.py
 ├── engine.py          # CouncilEngine: orchestriert 3 Stages
 ├── providers.py        # ModelProvider, SearchProvider abstractions
-├── faigate_adapter.py  # Faignite model routing + availability check
+├── faigate_adapter.py  # faigate model routing + availability check
 ├── search.py           # WebSearch: DuckDuckGo, Serper, Tavily, Brave
 ├── prompts.py          # Stage 1/2/3 Prompt-Templates
 ├── synthesis.py        # Chairman synthesis + JSON output
@@ -168,7 +168,7 @@ class CouncilEngine:
 ### Faigate Adapter
 
 ```python
-class FaigniteProvider:
+class faigateProvider:
     async def check_availability(models: list[str]) -> dict[str, bool]
     async def check_credits(model: str) -> float
     async def query(model: str, messages: list, temperature: float) -> str
@@ -192,7 +192,7 @@ skills/skillweave-council/
 
 ### In Scope
 - Core Council Engine (3 stages, parallel execution)
-- Faignite Adapter (model routing, availability, credits)
+- faigate Adapter (model routing, availability, credits)
 - Web Search (DuckDuckGo default + 3 optional)
 - Zeitraum-Suche (alle 5 ranges)
 - Structured JSON Output (schema-validated)
@@ -203,10 +203,10 @@ skills/skillweave-council/
 
 ### Out of Scope
 - Web UI (React frontend)
-- API Key Management (Faignite macht das)
-- Ollama/Local Models (nur via Faignite)
+- API Key Management (faigate macht das)
+- Ollama/Local Models (nur via faigate)
 - Conversation History (kein Chat-Interface)
-- Rate Limiting UI (Faignite managed Raten)
+- Rate Limiting UI (faigate managed Raten)
 
 ## 9. Timeline & Milestones
 
@@ -221,7 +221,7 @@ skills/skillweave-council/
 
 ## 10. Assumptions
 
-- Faignite hat einen REST-Endpunkt für Model-Abfragen (availability, credits, query)
+- faigate hat einen REST-Endpunkt für Model-Abfragen (availability, credits, query)
 - DuckDuckGo `ddgs` Python-Library ist installierbar
 - Serper/Tavily/Brave API-Keys können via .skillweave/config.yaml konfiguriert werden
 - 3 Council-Modelle + 1 Chairman sind über Faigate verfügbar

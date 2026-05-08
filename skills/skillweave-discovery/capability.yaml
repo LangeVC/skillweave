@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-discovery
-version: 0.8.4
+version: 0.8.5
 description: Problemdefinition, User Research, Empathy Mapping, Opportunity Validation
 author: SkillWeave Team
 license: Apache-2.0

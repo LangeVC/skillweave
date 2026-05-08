@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-lifecycle
-version: 0.8.4
+version: 0.8.5
 description: Bundle-Navigator, Phasen-Status und Workflow-Empfehlung
 author: SkillWeave Team
 license: Apache-2.0

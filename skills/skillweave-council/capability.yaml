@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-council
-version: 0.8.4
+version: 0.8.5
 description: Multi-Model LLM Council — Deliberation, Peer Review, and Chairman Synthesis with Web Search and Faigate Routing
 author: SkillWeave Team
 license: Apache-2.0
