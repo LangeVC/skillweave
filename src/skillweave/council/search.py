@@ -1,11 +1,13 @@
 """Web Search integration for SkillWeave Council.
 
-5 search providers:
+7 search providers:
 - DuckDuckGo Lite (free, no key, requests-based HTML parsing)
 - Serper (Google results via API key)
+- SerpApi (Google/Bing/Yahoo via API key)
+- Google CSE (Custom Search Engine via API key + CX)
 - Tavily (LLM-optimized search via API key)
 - Brave (privacy-focused via API key)
-- Perplexity (AI-powered search with recency filter via API key)
+- Perplexity (AI-powered search via MCP cookies or API key)
 
 Includes: relevance reranking, full content fetching via Jina Reader.
 """
@@ -35,12 +37,13 @@ class SearchResult:
 
 @dataclass
 class SearchConfig:
-    provider: str = "duckduckgo"      # "duckduckgo" | "serper" | "tavily" | "brave" | "perplexity"
+    provider: str = "duckduckgo"      # "duckduckgo" | "serper" | "serpapi" | "google_cse" | "tavily" | "brave" | "perplexity"
     time_range: str = "any"           # "30d" | "quarter" | "6mo" | "1yr" | "any"
     max_results: int = 10
-    full_content_results: int = 3     # how many results to fetch full content for
-    hybrid_search: bool = True        # web + news for DuckDuckGo
+    full_content_results: int = 3
+    hybrid_search: bool = True
     api_key: str | None = None
+    api_key_extra: str | None = None  # secondary key (e.g. Google CSE CX ID)
 
 
 class WebSearch:
@@ -99,6 +102,10 @@ class WebSearch:
             return await self._search_duckduckgo(query, config)
         elif provider == "serper":
             return await self._search_serper(query, config)
+        elif provider == "serpapi":
+            return await self._search_serpapi(query, config)
+        elif provider == "google_cse":
+            return await self._search_google_cse(query, config)
         elif provider == "tavily":
             return await self._search_tavily(query, config)
         elif provider == "brave":
@@ -211,6 +218,80 @@ class WebSearch:
                 ))
         except Exception as e:
             results.append(SearchResult(title="Serper Error", url="", snippet=str(e), source="error"))
+        return results
+
+    # ── SerpApi ──────────────────────────────────────────────────────
+
+    async def _search_serpapi(self, query: str, config: SearchConfig) -> list[SearchResult]:
+        """SerpApi — Google/Bing/Yahoo results. Requires SERPAPI_API_KEY."""
+        if not config.api_key:
+            return [SearchResult(title="SerpApi Error", url="", snippet="SERPAPI_API_KEY not set.", source="error")]
+
+        results = []
+        try:
+            params = {
+                "q": query,
+                "api_key": config.api_key,
+                "num": config.max_results,
+                "engine": "google",
+            }
+            qs = "&".join(f"{k}={quote_plus(str(v))}" for k, v in params.items())
+            url = f"https://serpapi.com/search?{qs}"
+            req = urllib.request.Request(url)
+            loop = asyncio.get_event_loop()
+            resp = await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=15))
+            data = json.loads(resp.read())
+
+            for r in data.get("organic_results", []):
+                results.append(SearchResult(
+                    title=r.get("title", ""),
+                    url=r.get("link", ""),
+                    snippet=r.get("snippet", ""),
+                    source="web",
+                    date=r.get("date", ""),
+                ))
+        except Exception as e:
+            results.append(SearchResult(title="SerpApi Error", url="", snippet=str(e), source="error"))
+        return results
+
+    # ── Google CSE ───────────────────────────────────────────────────
+
+    async def _search_google_cse(self, query: str, config: SearchConfig) -> list[SearchResult]:
+        """Google Custom Search Engine. Requires GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX."""
+        if not config.api_key:
+            return [SearchResult(title="Google CSE Error", url="", snippet="GOOGLE_CSE_API_KEY not set.", source="error")]
+        if not config.api_key_extra:
+            return [SearchResult(title="Google CSE Error", url="", snippet="GOOGLE_CSE_CX not set.", source="error")]
+
+        results = []
+        try:
+            url = f"https://www.googleapis.com/customsearch/v1?key={quote_plus(config.api_key)}&cx={quote_plus(config.api_key_extra)}&q={quote_plus(query)}&num={min(config.max_results, 10)}"
+            req = urllib.request.Request(url)
+            loop = asyncio.get_event_loop()
+            resp = await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=15))
+            data = json.loads(resp.read())
+
+            for r in data.get("items", []):
+                results.append(SearchResult(
+                    title=r.get("title", ""),
+                    url=r.get("link", ""),
+                    snippet=r.get("snippet", ""),
+                    source="web",
+                ))
+        except urllib.error.HTTPError as e:
+            error_body = ""
+            try:
+                error_body = e.read().decode("utf-8", errors="replace")[:200]
+            except Exception:
+                pass
+            results.append(SearchResult(
+                title=f"Google CSE Error: HTTP {e.code}",
+                url="",
+                snippet=error_body,
+                source="error",
+            ))
+        except Exception as e:
+            results.append(SearchResult(title="Google CSE Error", url="", snippet=str(e), source="error"))
         return results
 
     # ── Tavily ────────────────────────────────────────────────────────
@@ -533,10 +614,14 @@ class WebSearch:
         """Apply defaults from environment if not set."""
         env_map = {
             "serper": "SERPER_API_KEY",
+            "serpapi": "SERPAPI_API_KEY",
+            "google_cse": "GOOGLE_CSE_API_KEY",
             "tavily": "TAVILY_API_KEY",
             "brave": "BRAVE_API_KEY",
             "perplexity": "PERPLEXITY_API_KEY",
         }
         if not config.api_key and config.provider in env_map:
             config.api_key = os.environ.get(env_map[config.provider])
+        if not config.api_key_extra and config.provider == "google_cse":
+            config.api_key_extra = os.environ.get("GOOGLE_CSE_CX")
         return config
