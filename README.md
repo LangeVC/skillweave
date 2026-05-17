@@ -218,7 +218,7 @@ Both formats use the same Python core (`src/skillweave/`). SKILL.md is the unive
 
 SkillWeave is **Forever Free** — all 13 skills, all 7 phases, no limits.
 
-**SkillWeave Studio** (coming soon) adds team features:
+**SkillWeave Studio** (coming soon) adds advanced and team features:
 
 | Free | Studio |
 |------|--------|
