@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1
+
+- **FEATURE**: Git Flow Convention — skills enforce minimum branching discipline (feature/fix/chore branches, dev → main merge path, preflight detection)
+- **FEATURE**: Forgejo → GitHub mirror workflow (`.forgejo/workflows/mirror.yml`) — auto-push to GitHub on main push
+- **IMPROVEMENT**: promptchain-execute Preflight Phase 1 now includes git flow state evaluation (Step 7)
+- **IMPROVEMENT**: releasechain Pipeline Stage 5 expanded with branch model, merge flow enforcement, and config schema
+- **IMPROVEMENT**: launch Pre-Launch-Checklist includes git flow check (dev → main merge path verified)
+- **IMPROVEMENT**: Skill SKILL.md files synced between user-level and repo-level copies
+
 ## 1.0.0 — Forever Free
 - **RELEASE**: SkillWeave v1.0.0 "Forever Free" — production-stable AI skill orchestration
 - **FEATURE**: 5-level test pyramid (Lint → Unit → E2E Smoke → Acceptance → Evidence/Groundedness) with 3-state gate (PROMOTE/HOLD/ROLLBACK)

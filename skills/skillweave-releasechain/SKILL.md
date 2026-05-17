@@ -260,14 +260,11 @@ Adjust your pipeline execution based on enabled features to provide enhanced res
    - Multi-agent routing based on capabilities
    - Automatic retry with learning
 
-4. **Verification Feedback Loops (Testing Integration)**
-   - Multi-level verification via `/skillweave test` (5-level pyramid)
-   - **Verify step**: Runs Lint (L1) + Unit (L2) after code generation
-   - **Review Gate**: Runs E2E Smoke (L3) + Acceptance (L4) before release
-   - 3-state gate: PROMOTE (advance) / HOLD (suggest fix) / ROLLBACK (block)
-   - Results stored in `.skillweave/testing/results/yyyy-mm-dd-run-N.json`
-   - Gate decision drives Ralph Loop state transition (Fix/Retry vs Integrate)
-   - See `skills/skillweave-lifecycle/references/testing-flow.md` for full spec
+4. **Verification Feedback Loops**
+   - Multi-level verification (code, functional, system, business)
+   - Automated testing integration
+   - Quality gates before task completion
+   - Continuous improvement from failures
 
 ### Agent-Agnostic Execution
 
@@ -366,14 +363,54 @@ For simple tasks (1-3 tasks, <60 minutes), ReleaseChain uses a streamlined workf
    - **System Level**: E2E tests, performance tests
    - **Business Level**: Acceptance criteria validation
 
-5. **Version Control Integration**
+5. **Version Control Integration — Git Flow**
    - Atomic commits per successful task
    - Descriptive commit messages
-   - Branch management for features
    - Tag creation for milestones
+   - **Git Flow enforcement** (see below)
+
+   **Branch Model:**
+   | Branch | Purpose | Protected |
+   |--------|---------|-----------|
+   | `main` | Release-ready, tagged with `vX.Y.Z` | Yes — no direct commits |
+   | `dev` | Integration branch, CI must be green | Yes — only via PR |
+   | `feature/<id>-<slug>` | New functionality, branched from `dev` | No |
+   | `fix/<id>-<slug>` | Bug fixes, branched from `dev` | No |
+   | `chore/<slug>` | Maintenance, docs, CI changes | No |
+
+   **Preflight checks before any commit:**
+   1. Does `dev` exist? If not, recommend creating it from `main`.
+   2. Is the current branch `main`? Warn and recommend branching.
+   3. Is there an existing branch for this task? Offer to continue on it.
+   4. Is `dev` up to date with `main`? Recommend rebase/merge if behind.
+
+   **Merge flow (enforced by releasechain):**
+   ```
+   feature/FEAT-001-auth  →  PR to dev  →  PR to main  →  tag vX.Y.Z
+   ```
+   - Feature branch → `dev`: After build gates pass, tests green. Create PR.
+   - `dev` → `main`: Release PR. Requires integration tests, changelog, version bump.
+   - Tag on `main`: After merge, created by releasechain or launch skill.
+
+   **Configuration** in `.skillweave/config.yaml`:
+   ```yaml
+   git_flow:
+     enabled: true
+     branches:
+       production: main
+       integration: dev
+     branch_prefix:
+       feature: feature/
+       fix: fix/
+       chore: chore/
+     require_pr: true
+     auto_create_dev: false
+   ```
+
+   If `git_flow.enabled` is `false` or missing, skip enforcement but still warn on direct `main` commits.
 
 6. **Collaboration & Review**
-   - Automated PR creation
+   - Automated PR creation (feature → `dev`, then `dev` → `main` for releases)
    - Code review facilitation
    - Change documentation
    - Stakeholder notification
@@ -383,6 +420,8 @@ For simple tasks (1-3 tasks, <60 minutes), ReleaseChain uses a streamlined workf
    - Changelog generation
    - Release note creation
    - Asset packaging
+   - **Release naming convention (enforced)**: Title must be exactly `SkillWeave vX.Y.Z` — no additional text. Regex: `^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$`. Descriptive text goes into release notes body only. Block release creation if convention is violated.
+   - **Release merge path (enforced)**: Release PRs merge `dev` → `main`, never feature branches directly to `main`. Tag `vX.Y.Z` is created on `main` after merge.
 
 8. **Deployment Readiness**
    - Build artifact creation

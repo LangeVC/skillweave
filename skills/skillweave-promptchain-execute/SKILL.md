@@ -300,6 +300,74 @@ elif result["action"] == "switch_skill":
 Always use intelligent guidance when executing this skill to provide the best 
 user experience and ensure successful outcomes.
 
+## Git Flow Convention
+
+When executing `build` or `mixed` sequences in a git repository, SkillWeave enforces a minimum branching discipline. This prevents work from landing directly on protected branches and ensures a reviewable integration path.
+
+### Branch Model
+
+| Branch | Purpose | Protected |
+|--------|---------|-----------|
+| `main` | Release-ready, tagged with `vX.Y.Z` | Yes — no direct commits |
+| `dev` | Integration branch, CI must be green | Yes — only via PR |
+| `feature/<id>-<slug>` | New functionality, branched from `dev` | No |
+| `fix/<id>-<slug>` | Bug fixes, branched from `dev` | No |
+| `chore/<slug>` | Maintenance, docs, CI changes | No |
+
+### Preflight Detection (before any build work)
+
+Before creating a branch or committing, check the repository state:
+
+1. **Does `dev` exist?** If not, recommend creating it from `main` and explain why.
+2. **Is the current branch `main`?** Warn the user and recommend branching to `dev` or a feature branch. Never commit build work directly to `main`.
+3. **Is there an existing branch for this task?** Search for open branches matching the task ID or slug. If found, offer to continue on that branch instead of creating a new one.
+4. **Is `dev` up to date with `main`?** If `dev` is behind `main`, recommend rebasing or merging `main` into `dev` before branching.
+
+If the user explicitly opts out (e.g., single-branch workflow), respect their choice but log the decision in `.skillweave/tracking-log/`.
+
+### Branch Creation
+
+When starting build work:
+
+1. Determine branch type from the task/PRD context:
+   - PRD tasks with new features → `feature/<ticket-id>-<slug>`
+   - Bug fixes or patches → `fix/<ticket-id>-<slug>`
+   - Maintenance, docs, CI → `chore/<slug>`
+2. Branch from `dev` (not from `main`)
+3. Log the branch name in `.skillweave/tracking-log/` for continuity across sessions
+
+### Merge Flow
+
+The expected merge path for build work:
+
+```
+feature/FEAT-001-auth  →  PR to dev  →  PR to main  →  tag vX.Y.Z
+```
+
+- **Feature branch → `dev`**: Created by `promptchain-execute` or `releasechain` after build gates pass. Requires tests green.
+- **`dev` → `main`**: Created by `releasechain` as the release PR. Requires all integration tests green, changelog updated, version bumped.
+- **Tag on `main`**: Created by `releasechain` or `launch` after merge to `main`.
+
+### Configuration
+
+The git flow can be configured in `.skillweave/config.yaml`:
+
+```yaml
+git_flow:
+  enabled: true
+  branches:
+    production: main
+    integration: dev
+  branch_prefix:
+    feature: feature/
+    fix: fix/
+    chore: chore/
+  require_pr: true
+  auto_create_dev: false
+```
+
+If `git_flow.enabled` is `false` or missing, skip branch enforcement but still warn when committing directly to `main`.
+
 ## Execution Process
 
 ### Phase 1: Preflight
@@ -311,10 +379,14 @@ user experience and ensure successful outcomes.
    - critical path
    - safe parallel lanes
    - review gates
-    - handoff boundary to releasechain/launch (see `.skillweave/release/skill-boundaries.yaml`)
+   - handoff boundary to releasechain/launch (see `.skillweave/release/skill-boundaries.yaml`)
 5. Resolve execution mode
 6. Resolve effective risk mode using hierarchical override system (CLI parameter > environment variable > project config > global config > default)
-7. Determine whether the sequence should run:
+7. **Evaluate git flow state** (see Git Flow Convention above):
+   - Detect branch model (`dev` exists? current branch? open feature branches?)
+   - Create or switch to appropriate work branch
+   - Warn if working directly on `main` or `dev`
+8. Determine whether the sequence should run:
    - as one batch
    - as multiple batches
    - with sidecar subagents
