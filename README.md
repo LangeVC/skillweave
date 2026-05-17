@@ -63,14 +63,16 @@ The wizard asks 5 simple questions and starts the right tool for you.
 
 ## Install
 
-### Via Capacium (Claude Desktop)
+### Via Capacium (recommended)
+
+Works with Claude Desktop, Claude Code, Codex, Gemini CLI, Cursor, Windsurf, OpenCode, and more.
 
 ```bash
 brew install capacium/tap/capacium
 cap install skillweave
 ```
 
-### Via Python installer (Claude Code, Codex, Gemini CLI, others)
+### Via Python installer
 
 ```bash
 git clone https://github.com/typelicious/SkillWeave.git
