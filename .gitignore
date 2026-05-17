@@ -10,8 +10,8 @@ build/
 install.log
 strategy.md
 
-# SkillWeave tracking logs (auto-generated)
-.skillweave/tracking-log/*
+# SkillWeave runtime data (auto-generated, per-project)
+.skillweave/
 
 # Debug/exploration scripts and generated artifacts
 *.debug*
