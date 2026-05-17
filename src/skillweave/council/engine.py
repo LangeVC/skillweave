@@ -55,8 +55,14 @@ class CouncilConfig:
     mode: str = "full"         # "quick" | "standard" | "full"
     temperature: float = 0.5
     output_format: str = "markdown"  # "markdown" | "json"
-    timeout_per_model: float = 30.0
-    total_timeout: float = 120.0
+    timeout_per_model: float = 60.0
+    total_timeout: float = 180.0
+    min_models_required: int = 2
+
+
+class CouncilDegradedError(Exception):
+    """Raised when too few models respond for meaningful deliberation."""
+    pass
 
 
 class CouncilEngine:
@@ -72,10 +78,34 @@ class CouncilEngine:
         self.searcher = searcher
 
     async def deliberate(self, query: str, config: CouncilConfig) -> CouncilResult:
-        """Run full council deliberation. Mode controls which stages execute."""
+        """Run full council deliberation. Mode controls which stages execute.
+
+        Enforces total_timeout across all stages. Returns partial results on timeout.
+        Raises CouncilDegradedError if fewer than min_models_required respond in Stage 1.
+        """
         start = time.monotonic()
         result = CouncilResult(query=query)
 
+        try:
+            result = await asyncio.wait_for(
+                self._deliberate_inner(query, config, result),
+                timeout=config.total_timeout
+            )
+        except asyncio.TimeoutError:
+            result.total_elapsed_ms = (time.monotonic() - start) * 1000
+            if not result.stage3:
+                result.stage3 = SynthesisResult(
+                    chairman_model=config.chairman,
+                    content="[Council timed out — returning partial results from completed stages]",
+                    format="markdown",
+                    elapsed_ms=0
+                )
+
+        result.total_elapsed_ms = (time.monotonic() - start) * 1000
+        return result
+
+    async def _deliberate_inner(self, query: str, config: CouncilConfig, result: CouncilResult) -> CouncilResult:
+        """Inner deliberation logic, wrapped by total timeout."""
         # Stage 0: Web Search (optional)
         if self.searcher:
             try:
@@ -91,7 +121,7 @@ class CouncilEngine:
             result.stage1 = await self._stage1_opinions(query, config, result.search_context)
             result.label_to_model = self._build_label_map(config.models)
 
-        # Stage 2: Peer Review (anonymized)
+        # Stage 2: Peer Review (anonymized, structured JSON)
         if config.mode in ("standard", "full") and len(result.stage1) >= 2:
             result.stage2 = await self._stage2_review(query, result.stage1, config, result.search_context)
             result.aggregate_rankings = self._compute_aggregate_rankings(result.stage2)
@@ -102,7 +132,6 @@ class CouncilEngine:
                 query, result.stage1, result.stage2, result.search_context, config
             )
 
-        result.total_elapsed_ms = (time.monotonic() - start) * 1000
         return result
 
     async def _stage1_opinions(self, query: str, config: CouncilConfig, search_ctx: str = "") -> list[ModelResponse]:
@@ -134,7 +163,14 @@ class CouncilEngine:
 
         tasks = [query_one(m) for m in config.models]
         responses = await asyncio.gather(*tasks, return_exceptions=False)
-        return [r for r in responses if not r.error or r.response]  # keep partial successes
+        successful = [r for r in responses if r.response and not r.error]
+        if len(successful) < config.min_models_required:
+            failed_models = [r.model_id for r in responses if r.error]
+            raise CouncilDegradedError(
+                f"Only {len(successful)} models responded (minimum: {config.min_models_required}). "
+                f"Failed: {failed_models}"
+            )
+        return successful
 
     async def _stage2_review(self, query: str, responses: list[ModelResponse], config: CouncilConfig, search_ctx: str = "") -> list[Ranking]:
         """Each model reviews all responses (anonymized)."""
@@ -257,8 +293,11 @@ Rank these responses from best (1) to worst ({len(labels)}) based on:
 2. Insight — depth, originality, useful perspectives
 3. Completeness — addresses all aspects of the question
 
-Output EXACTLY in this format (nothing else):
+Output ONLY valid JSON (no markdown, no surrounding text):
 
+{{"rankings": [{{"label": "X", "rank": 1, "score": 0.0-1.0, "reason": "one sentence"}}], "best": "X", "consensus_note": "one sentence on agreement level"}}
+
+FALLBACK: If you cannot produce JSON, use this format:
 FINAL RANKING:
 1. Response [LETTER] — [one sentence why]
 2. Response [LETTER] — [one sentence why]
@@ -298,8 +337,26 @@ Be balanced, fair, and cite which models made which points.{format_instr}"""
 
 
 def _parse_rankings(raw_text: str, labels: list[str]) -> dict[str, int]:
-    """Parse FINAL RANKING: blocks into {label: rank} dict."""
+    """Parse rankings from JSON (preferred) or FINAL RANKING fallback format."""
     rankings = {}
+
+    # Try JSON first (structured format)
+    try:
+        text = raw_text.strip()
+        if text.startswith("{"):
+            data = json.loads(text)
+            if "rankings" in data:
+                for entry in data["rankings"]:
+                    label = entry.get("label", "")
+                    rank = entry.get("rank", 0)
+                    if label in labels and isinstance(rank, int):
+                        rankings[label] = rank
+                if rankings:
+                    return rankings
+    except (json.JSONDecodeError, KeyError, TypeError):
+        pass
+
+    # Fallback: parse FINAL RANKING text format
     pattern = r'(\d+)\.\s*Response\s*([A-H])'
     matches = re.findall(pattern, raw_text, re.IGNORECASE)
     for rank_str, label in matches:

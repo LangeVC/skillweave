@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skillweave"
-version = "0.8.5"
+version = "1.0.0"
 description = "Multi-agent AI skill orchestration with Next Level features"
 readme = "README.md"
 authors = [
-    {name = "SkillWeave Team"},
+    {name = "LangeVC.com"},
 ]
 license = {text = "Apache-2.0"}
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "License :: OSI Approved :: Apache Software License",

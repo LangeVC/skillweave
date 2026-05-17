@@ -171,7 +171,7 @@ def _check_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 
 # ── FaigateProvider ────────────────────────────────────────────────
 
-FAIGATE_DEFAULT_PORT = "8092"  # default for brew-installed faigate
+FAIGATE_DEFAULT_PORT = "8090"
 
 
 class FaigateProvider(CouncilProvider):

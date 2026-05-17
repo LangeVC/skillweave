@@ -260,11 +260,14 @@ Adjust your pipeline execution based on enabled features to provide enhanced res
    - Multi-agent routing based on capabilities
    - Automatic retry with learning
 
-4. **Verification Feedback Loops**
-   - Multi-level verification (code, functional, system, business)
-   - Automated testing integration
-   - Quality gates before task completion
-   - Continuous improvement from failures
+4. **Verification Feedback Loops (Testing Integration)**
+   - Multi-level verification via `/skillweave test` (5-level pyramid)
+   - **Verify step**: Runs Lint (L1) + Unit (L2) after code generation
+   - **Review Gate**: Runs E2E Smoke (L3) + Acceptance (L4) before release
+   - 3-state gate: PROMOTE (advance) / HOLD (suggest fix) / ROLLBACK (block)
+   - Results stored in `.skillweave/testing/results/yyyy-mm-dd-run-N.json`
+   - Gate decision drives Ralph Loop state transition (Fix/Retry vs Integrate)
+   - See `skills/skillweave-lifecycle/references/testing-flow.md` for full spec
 
 ### Agent-Agnostic Execution
 

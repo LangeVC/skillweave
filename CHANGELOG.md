@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0 — Forever Free
+- **RELEASE**: SkillWeave v1.0.0 "Forever Free" — production-stable AI skill orchestration
+- **FEATURE**: 5-level test pyramid (Lint → Unit → E2E Smoke → Acceptance → Evidence/Groundedness) with 3-state gate (PROMOTE/HOLD/ROLLBACK)
+- **FEATURE**: File-based planning system (beans-pattern) — directory-as-state Kanban with YAML frontmatter tickets in `.skillweave/planning/{backlog,doing,done}/`
+- **FEATURE**: Lifecycle Navigator with automatic phase detection from `.skillweave/` artifacts and intelligent next-step recommendations
+- **FEATURE**: Progressive Disclosure architecture — Layer 0 (Wizard, 5 questions), Layer 1 (7 Meta-Commands), Layer 2 (13 Direct Skills)
+- **FEATURE**: Handover signal validation with JSON schemas for skill-to-skill phase transitions
+- **FEATURE**: Release report generation with date-stamped markdown templates
+- **FEATURE**: Free/Studio tier boundary enforcement via `.skillweave/config.yaml`
+- **IMPROVEMENT**: Council stability — structured JSON peer review, CouncilDegradedError, 60s/180s timeouts, graceful degradation with partial results
+- **FIX**: Council Faigate port mismatch (8092 → 8090) causing OpenCode instability
+- **FIX**: `normalize_manifest` always uses `pyproject.toml` version for skill manifests
+- **IMPROVEMENT**: SerpApi and Perplexity MCP search provider support
+- **IMPROVEMENT**: Google CSE provider removed (API deprecated by Google)
+- **DOCS**: Unified getting-started guide for 3 personas (Power User, Indie Hacker, Non-Technical)
+- **DOCS**: Complete reference docs for plan commands, testing flow, navigator detection, meta-commands, wizard flow
+- **LICENSE**: Copyright updated to LangeVC.com, Apache 2.0 confirmed
+
 ## 0.7.0
 - **FEATURE**: 6 new agent-facing skills after promptchain pattern (SKILL.md + capability.yaml + sequence_type)
   - `skillweave-lifecycle` (plan): Bundle-Navigator, Phasen-Status, Entry-Point-Detection
