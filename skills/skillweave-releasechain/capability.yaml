@@ -4,9 +4,9 @@ version: 0.8.5
 description: Ralph Loop-powered development pipeline — handles review, testing, iteration with completion promises, memory systems, and multi-agent execution
 author: SkillWeave Team
 license: Apache-2.0
-owner: typelicious
-repository: https://github.com/typelicious/SkillWeave
-homepage: https://github.com/typelicious/SkillWeave
+owner: LangeVC
+repository: https://github.com/LangeVC/skillweave
+homepage: https://github.com/LangeVC/skillweave
 frameworks:
 - opencode
 - claude-code
