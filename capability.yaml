@@ -4,9 +4,9 @@ version: 0.8.5
 description: A complete 7-phase AI-assisted development lifecycle ecosystem.
 author: SkillWeave Team
 license: Apache-2.0
-owner: typelicious
-repository: https://github.com/typelicious/SkillWeave
-homepage: https://github.com/typelicious/SkillWeave
+owner: LangeVC
+repository: https://github.com/LangeVC/skillweave
+homepage: https://github.com/LangeVC/skillweave
 frameworks:
 - opencode
 - claude-code

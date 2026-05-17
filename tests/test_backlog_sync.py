@@ -67,14 +67,14 @@ def test_get_repo_owner_and_name_https():
     """Test get_repo_owner_and_name with HTTPS URL."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(
-            stdout="https://github.com/typelicious/SkillWeave.git\n",
+            stdout="https://github.com/LangeVC/skillweave.git\n",
             stderr="",
             returncode=0
         )
         
         owner, repo = get_repo_owner_and_name()
         
-        assert owner == "typelicious"
+        assert owner == "LangeVC"
         assert repo == "SkillWeave"
 
 
@@ -82,14 +82,14 @@ def test_get_repo_owner_and_name_ssh():
     """Test get_repo_owner_and_name with SSH URL."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(
-            stdout="git@github.com:typelicious/SkillWeave.git\n",
+            stdout="git@github.com:LangeVC/skillweave.git\n",
             stderr="",
             returncode=0
         )
         
         owner, repo = get_repo_owner_and_name()
         
-        assert owner == "typelicious"
+        assert owner == "LangeVC"
         assert repo == "SkillWeave"
 
 

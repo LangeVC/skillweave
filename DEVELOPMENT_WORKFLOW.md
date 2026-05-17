@@ -150,7 +150,7 @@ Brief description of release highlights.
 
 ## 📦 Installation
 ```bash
-git clone https://github.com/typelicious/skillweave.git
+git clone https://github.com/LangeVC/skillweave.git
 cd skillweave
 cap install skillweave --source .
 # or use the compatibility wrapper
@@ -158,9 +158,9 @@ cap install skillweave --source .
 ```
 
 ## 🔗 Links
-- [Full Documentation](https://github.com/typelicious/skillweave/blob/main/README.md)
-- [Examples](https://github.com/typelicious/skillweave/tree/main/examples)
-- [Changelog](https://github.com/typelicious/skillweave/blob/main/CHANGELOG.md)
+- [Full Documentation](https://github.com/LangeVC/skillweave/blob/main/README.md)
+- [Examples](https://github.com/LangeVC/skillweave/tree/main/examples)
+- [Changelog](https://github.com/LangeVC/skillweave/blob/main/CHANGELOG.md)
 EOF
 )"
 ```
