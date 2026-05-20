@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-observe
-version: 0.8.5
+version: 1.0.2
 description: Execution Reports, Timing, Events, Memory, Summary, Health — Read-Only Observability
 author: SkillWeave Team
 license: Apache-2.0

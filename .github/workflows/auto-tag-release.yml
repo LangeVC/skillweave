@@ -47,6 +47,35 @@ jobs:
       - name: Check Capacium manifests are synced
         run: python3 scripts/sync-capacium-manifests.py --check
 
+      - name: Hard gate release version matches capability manifests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+          import yaml
+
+          pyproject = open("pyproject.toml", encoding="utf-8").read()
+          match = re.search(r'^version\s*=\s*["\']([^"\']+)["\']', pyproject, re.MULTILINE)
+          release_version = match.group(1) if match else ""
+          manifests = [Path("capability.yaml"), *sorted(Path("skills").glob("skillweave-*/capability.yaml"))]
+          mismatches = []
+          for path in manifests:
+              capability = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+              capability_version = str(capability.get("version", ""))
+              if capability_version != release_version:
+                  mismatches.append((str(path), capability_version or "missing"))
+
+          if mismatches:
+              print("HARD GATE REJECTED: pyproject.toml and capability manifest versions differ.")
+              print(f"pyproject.toml: {release_version or 'missing'}")
+              for path, version in mismatches:
+                  print(f"{path}: {version}")
+              sys.exit(1)
+
+          print(f"Release version matches {len(manifests)} capability manifest(s): {release_version}")
+          PY
+
       - name: Analyze version
         id: analyze
         run: |
@@ -143,6 +172,34 @@ jobs:
             exit 1
           fi
           echo "Release name follows convention: $RELEASE_NAME"
+
+      - name: Hard gate tag version matches capability manifests
+        run: |
+          TAG="${{ needs.create-tag.outputs.tag }}"
+          TAG_VERSION="${TAG#v}"
+          python3 - <<PY
+          from pathlib import Path
+          import sys
+          import yaml
+
+          tag_version = "$TAG_VERSION"
+          manifests = [Path("capability.yaml"), *sorted(Path("skills").glob("skillweave-*/capability.yaml"))]
+          mismatches = []
+          for path in manifests:
+              capability = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+              capability_version = str(capability.get("version", ""))
+              if capability_version != tag_version:
+                  mismatches.append((str(path), capability_version or "missing"))
+
+          print(f"Tag version: {tag_version}")
+          if mismatches:
+              print("HARD GATE REJECTED — tag version differs from capability manifest(s).")
+              for path, version in mismatches:
+                  print(f"{path}: {version}")
+              sys.exit(1)
+
+          print(f"Tag version matches {len(manifests)} capability manifest(s).")
+          PY
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

@@ -53,6 +53,44 @@ jobs:
 
           echo "Release naming convention check PASSED."
 
+      - name: HARD GATE — Release version must match capability manifests
+        run: |
+          RELEASE_NAME="${{ github.event.release.name }}"
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          RELEASE_VERSION="${RELEASE_NAME#SkillWeave v}"
+          TAG_VERSION="${TAG_NAME#v}"
+          python3 - <<PY
+          from pathlib import Path
+          import re
+          import sys
+
+          release_version = "$RELEASE_VERSION"
+          tag_version = "$TAG_VERSION"
+          manifests = [Path("capability.yaml"), *sorted(Path("skills").glob("skillweave-*/capability.yaml"))]
+          mismatches = []
+          for path in manifests:
+              match = re.search(r'^version:\s*["\\']?([^"\\'\\n]+)["\\']?\s*$', path.read_text(encoding="utf-8"), re.MULTILINE)
+              capability_version = match.group(1).strip() if match else ""
+              if capability_version != release_version or capability_version != tag_version:
+                  mismatches.append((str(path), capability_version or "missing"))
+
+          print(f"Release version: {release_version}")
+          print(f"Tag version:     {tag_version}")
+          if mismatches:
+              print("")
+              print("============================================================")
+              print("  HARD GATE REJECTED — capability manifest mismatch")
+              print("============================================================")
+              print("")
+              print("Release and tag versions must match every capability manifest exactly.")
+              for path, version in mismatches:
+                  print(f"{path}: {version}")
+              print("")
+              sys.exit(1)
+
+          print(f"Release version matches {len(manifests)} capability manifest(s).")
+          PY
+
   publish-pypi:
     name: Publish to PyPI
     needs: [validate-naming]
@@ -99,3 +137,13 @@ jobs:
             }
             const version = releaseName.replace('SkillWeave v', '');
             core.notice(`Ready for Homebrew update: ${repo} v${version}`);
+
+  publish-capacium:
+    name: Publish to Capacium Exchange
+    needs: [validate-naming]
+    if: github.event.action == 'published'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Capacium/capacium-action-publish@v1
+        with:
+          github_url: ${{ github.event.repository.html_url }}

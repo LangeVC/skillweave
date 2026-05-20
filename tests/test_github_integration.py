@@ -593,6 +593,20 @@ class TestReleaseReadinessGate:
         assert check.passed is False
         assert "out of sync" in check.detail
 
+    def test_check_release_version_matches_all_capability_manifests(self, temp_project_full):
+        gate = ReleaseReadinessGate(repo_root=str(temp_project_full))
+        check = gate.check_release_version_matches_capabilities("0.2.0")
+        assert check.passed is True
+        assert "2 capability manifest" in check.detail
+
+    def test_check_release_version_blocks_skill_manifest_mismatch(self, temp_project_full):
+        drifted = temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml"
+        drifted.write_text(drifted.read_text().replace("version: 0.2.0", "version: 0.1.0"))
+        gate = ReleaseReadinessGate(repo_root=str(temp_project_full))
+        check = gate.check_release_version_matches_capabilities("0.2.0")
+        assert check.passed is False
+        assert "skillweave-blueprint/capability.yaml" in check.detail
+
     def test_evaluate_passes(self, temp_project_full):
         gate = ReleaseReadinessGate(repo_root=str(temp_project_full))
         result = gate.evaluate(current_version="0.2.0", latest_tag="v0.1.0")

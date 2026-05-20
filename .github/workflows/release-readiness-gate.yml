@@ -60,7 +60,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.versions.outputs.version }}
           RELEASE_LATEST_TAG: ${{ steps.versions.outputs.latest_tag }}
         run: |
-          cd src && python3 -c "from skillweave.github_integration.release_gate import run_cli; run_cli()"
+          PYTHONPATH=src python3 -c "from skillweave.github_integration.release_gate import run_cli; run_cli()"
 
       - name: Upload gate report
         uses: actions/upload-artifact@v4

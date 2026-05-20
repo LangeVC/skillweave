@@ -23,8 +23,8 @@ DEFAULT_FRAMEWORKS = [
 
 DEFAULT_LICENSE = "Apache-2.0"
 DEFAULT_AUTHOR = "SkillWeave Team"
-DEFAULT_OWNER = "typelicious"
-DEFAULT_REPOSITORY = "https://github.com/typelicious/SkillWeave"
+DEFAULT_OWNER = "LangeVC"
+DEFAULT_REPOSITORY = "https://github.com/LangeVC/skillweave"
 DEFAULT_HOMEPAGE = DEFAULT_REPOSITORY
 DEFAULT_BUNDLE_DESCRIPTION = "A complete 7-phase AI-assisted development lifecycle ecosystem."
 DEFAULT_BUNDLE_KEYWORDS = [
@@ -84,12 +84,11 @@ class CapaciumManifestSync:
         for path in self.skill_manifest_paths():
             manifest = self.load_manifest(path)
             name = manifest.get("name") or path.parent.name
-            own_version = manifest.get("version", version)
             capabilities.append(
                 {
                     "name": name,
                     "source": f"./skills/{path.parent.name}",
-                    "version": own_version,
+                    "version": version,
                 }
             )
         return capabilities

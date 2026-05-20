@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-promptchain-generate
-version: 0.8.5
+version: 1.0.2
 description: Generate standardized SkillWeave prompt sequences from PRD or topic — creates execution plans optimized for REX or Ralph Loop workflows
 author: SkillWeave Team
 license: Apache-2.0

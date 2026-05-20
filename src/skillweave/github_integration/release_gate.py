@@ -7,6 +7,7 @@ changelog, tests, required files, and WIP markers.
 
 import re
 import json
+import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -246,6 +247,59 @@ class ReleaseReadinessGate:
             required=True,
         )
 
+    def check_release_version_matches_capabilities(self, current_version: str) -> GateCheck:
+        manifest_paths = [
+            self.repo_root / "capability.yaml",
+            *sorted((self.repo_root / "skills").glob("skillweave-*/capability.yaml")),
+        ]
+        missing = [path for path in manifest_paths if not path.exists()]
+        if missing:
+            preview = ", ".join(str(path.relative_to(self.repo_root)) for path in missing[:5])
+            return GateCheck(
+                id="release-version-capabilities-match",
+                name="Release version matches capability manifests",
+                passed=False,
+                detail=f"Missing capability manifest(s): {preview}",
+                required=True,
+            )
+
+        release_version = current_version.lstrip("v")
+        mismatches = []
+        try:
+            for path in manifest_paths:
+                manifest = yaml.safe_load(path.read_text()) or {}
+                manifest_version = str(manifest.get("version", "")).lstrip("v")
+                if manifest_version != release_version:
+                    rel_path = path.relative_to(self.repo_root)
+                    mismatches.append(f"{rel_path}={manifest_version or 'missing'}")
+        except Exception as exc:
+            return GateCheck(
+                id="release-version-capabilities-match",
+                name="Release version matches capability manifests",
+                passed=False,
+                detail=f"Could not read capability manifest: {exc}",
+                required=True,
+            )
+
+        if mismatches:
+            preview = ", ".join(mismatches[:5])
+            remainder = "" if len(mismatches) <= 5 else f" (+{len(mismatches) - 5} more)"
+            return GateCheck(
+                id="release-version-capabilities-match",
+                name="Release version matches capability manifests",
+                passed=False,
+                detail=f"Release version {release_version} differs from: {preview}{remainder}",
+                required=True,
+            )
+
+        return GateCheck(
+            id="release-version-capabilities-match",
+            name="Release version matches capability manifests",
+            passed=True,
+            detail=f"{len(manifest_paths)} capability manifest(s) match release version {release_version}",
+            required=True,
+        )
+
     def check_capacium_manifests(self) -> GateCheck:
         try:
             syncer = CapaciumManifestSync(repo_root=str(self.repo_root))
@@ -294,6 +348,7 @@ class ReleaseReadinessGate:
         result.checks.append(self.check_changelog(current_version))
         result.checks.append(self.check_tests())
         result.checks.append(self.check_pyproject_toml())
+        result.checks.append(self.check_release_version_matches_capabilities(current_version))
         result.checks.append(self.check_capacium_manifests())
         result.checks.extend(self.check_required_files(required_files))
         result.checks.append(self.check_wip_markers(wip_scan_paths))

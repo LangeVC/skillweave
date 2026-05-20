@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+- **FIX**: Capacium manifests now stay synchronized across the root bundle and all individual SkillWeave skill manifests.
+- **FEATURE**: Release gates now block releases when the requested release/tag version differs from any `capability.yaml` version.
+- **FEATURE**: Published GitHub releases trigger the Capacium Exchange publish workflow.
+
 ## 1.0.1
 
 - **FEATURE**: Git Flow Convention — skills enforce minimum branching discipline (feature/fix/chore branches, dev → main merge path, preflight detection)
