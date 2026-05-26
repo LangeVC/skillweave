@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0 — Studio Hook Binding Engine
+
+- **FEATURE**: Hook binding engine with 4 execution types (Python HookAdapter, shell, SKILL.md injection, Capacium capability)
+- **FEATURE**: YAML binding config with 3-source resolution (project > user > auto-discovered), dedup by capability+phase+position, priority sorting
+- **FEATURE**: Execution chain with 4 failure modes (block, warn, ignore, retry), safe condition evaluator, timeout enforcement
+- **FEATURE**: Auto-discovery of hook bindings from Capacium capability triggers (CloudEvents mapping)
+- **FEATURE**: JWT license validation — HMAC-SHA256, offline-first, 7-day grace period, 14-day trial support
+- **FEATURE**: Tier gate enforcement — Free tier bypass for `pre_discovery` (mentoring hooks), Studio required for all other hook points
+- **FEATURE**: CLI with 6 commands: `hooks list`, `bind`, `unbind`, `test`, `discover`, `help`
+- **FEATURE**: 2 reference capabilities — `ci-gate` (post_test HookAdapter) + `lean-startup` SKILL.md (pre_discovery)
+- **TESTS**: 195 tests across hooks, binding, engine, discovery, licensing, CLI, and reference modules
+
 ## 1.0.2
 
 - **FIX**: Capacium manifests now stay synchronized across the root bundle and all individual SkillWeave skill manifests.
