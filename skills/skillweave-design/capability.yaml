@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-design
-version: 1.0.2
+version: 1.1.0
 description: 'Design-Thinking-Lens: Briefanalyse, UX-Prinzipien, Token-Extraktion, Evaluation'
 author: SkillWeave Team
 license: Apache-2.0
@@ -10,7 +10,12 @@ homepage: https://github.com/LangeVC/skillweave
 frameworks:
 - opencode
 - claude-code
+- claude-desktop
+- antigravity
+- qwen
 - gemini-cli
+- cursor
+- codex
 keywords:
 - design
 - design-thinking
