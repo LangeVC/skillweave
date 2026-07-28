@@ -1,7 +1,7 @@
 kind: skill
 name: skillweave-discovery
 version: 1.0.2
-description: Problemdefinition, User Research, Empathy Mapping, Opportunity Validation
+description: Define and validate problems through stakeholder research, empathy mapping, evidence, and opportunity assessment.
 author: SkillWeave Team
 license: Apache-2.0
 owner: LangeVC

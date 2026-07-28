@@ -1,7 +1,7 @@
 kind: skill
 name: skillweave-promptchain-execute
 version: 1.0.2
-description: Execute SkillWeave prompt sequences with dependency-aware batching, Ralph Loop execution, binary gates, and safe parallel subagent orchestration
+description: Execute SkillWeave sequences with dependency-aware batches, controlled parallelism, retries, evidence, and binary gates.
 author: SkillWeave Team
 license: Apache-2.0
 owner: LangeVC

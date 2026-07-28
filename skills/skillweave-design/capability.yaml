@@ -1,7 +1,7 @@
 kind: skill
 name: skillweave-design
 version: 1.0.2
-description: 'Design-Thinking-Lens: Briefanalyse, UX-Prinzipien, Token-Extraktion, Evaluation'
+description: 'Analyze design briefs, derive UX principles and design tokens, and evaluate implementation quality.'
 author: SkillWeave Team
 license: Apache-2.0
 owner: LangeVC

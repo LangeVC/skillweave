@@ -1,13 +1,24 @@
 ---
 name: skillweave-lifecycle
-description: Bundle-Navigator, Phasen-Status, Entry-Point-Detection, Bundle-Empfehlung, Planning-Board, Testing
+description: "Navigate SkillWeave lifecycles, profiles, planning state, testing gates, and next-action recommendations."
 argument-hint: command="[status|recommend|switch|phases|plan|test]" bundle="[id]"
 ---
 
 # /skillweave-lifecycle
 
-**Bundle-Navigator, Phasen-Status und Workflow-Empfehlung.**  
-Ermittelt die aktuelle Projektphase, navigiert zwischen Phasen/Bundles und empfiehlt den optimalen nächsten Workflow basierend auf Entry Conditions und Confidence-Scoring.
+> Canonical metadata is English. User-facing artifacts follow the output language setting.
+
+**Facade and router for the SkillWeave lifecycle.**  
+This skill navigates phases, recommends bundles, manages the planning board, and routes work to specialized subskills. It does NOT own execution engine behavior.
+
+## Delegation Model
+
+| Concern | Delegated To |
+|---------|-------------|
+| Execution (Ralph Loop, lanes, batches) | `skillweave-promptchain-execute` |
+| Observation (reports, timing, events) | `skillweave-observe` |
+| Release (version, package, sign, publish) | `skillweave-releasechain` |
+| Launch (deploy, communicate, go-live) | `skillweave-launch`
 
 ## Mandatory Pre-Flight: SkillWeave Sandboxing
 

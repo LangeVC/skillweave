@@ -40,7 +40,7 @@ skills:
     responsibilities:
       - "Run release readiness assessment against prerequisite model"
       - "Detect premature invocation and redirect to correct upstream workflow"
-      - "Execute release workflow: verify tests → package → generate release notes → deploy → validate rollout"
+      - "Execute release workflow: verify tests → package → generate release notes → sign → publish"
       - "Generate release readiness checklists"
       - "Manage version bumping and git tagging"
       - "Generate changelog entries"
@@ -50,6 +50,7 @@ skills:
       - "Design-phase activities"
       - "Launch coordination and deployment to production"
       - "User-facing communication"
+      - "Environment rollout validation"
     integration_points:
       - name: "promptchain-execute handoff (inbound)"
         description: "Receives build completion summary from promptchain-execute"
@@ -80,6 +81,11 @@ role_summary:
   promptchain_execute: "The 'what' — executes the sequence of tasks to build the thing"
   releasechain: "The 'ship' — validates readiness, versions, packages, and publishes"
   launch: "The 'go-live' — deploys to production, communicates, and monitors"
+
+canonical_definitions:
+  Release: "produce, version, sign, and publish an immutable artifact"
+  Launch: "deploy that artifact into an environment, communicate, and observe go-live"
+  Execute: "schedule lanes, run Ralph Loops, execute batches, hand off to Release"
 
 contract:
   promptchain_execute_to_releasechain:

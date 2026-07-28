@@ -1,7 +1,7 @@
 kind: skill
 name: skillweave-repo-health
 version: 1.0.2
-description: 'Repo Assessment & Cleanup: Inventory-Scan, Klassifikation, Archive, Duplikate, Report'
+description: Assess repository health, classify files, detect duplicates, and produce safe cleanup plans.
 author: SkillWeave Team
 license: Apache-2.0
 owner: LangeVC

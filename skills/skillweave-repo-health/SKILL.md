@@ -1,10 +1,12 @@
 ---
 name: skillweave-repo-health
-description: "Repo Assessment & Cleanup: Inventory-Scan, Klassifikation, Archive, Duplikate, Report"
+description: "Assess repository health, classify files, detect duplicates, and produce safe cleanup plans."
 argument-hint: 'command="[scan|report|classify|archive|duplicates|cleanup|manifest]" path="[path]"'
 ---
 
-# skillweave-repo-health
+# /skillweave-repo-health
+
+> Canonical metadata is English. User-facing artifacts follow the output language setting.
 
 Repo Assessment & Cleanup — Inventory-Scan, 5-Class-Klassifikation, Duplikatserkennung, Archivierung, Hygiene-Report.
 
