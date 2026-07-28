@@ -86,20 +86,6 @@ class ReleaseWorkflow:
                 description="Generate changelog entry for the release",
                 skippable=True,
             ),
-            # REMOVED per SW-G0B: deployment belongs to Launch
-            # WorkflowStep(
-            #     id="deploy",
-            #     name="Deploy Artifacts",
-            #     description="Publish artifacts to package registry",
-            #     skippable=True,
-            # ),
-            # REMOVED per SW-G0B: deployment belongs to Launch
-            # WorkflowStep(
-            #     id="validate-rollout",
-            #     name="Validate Rollout",
-            #     description="Verify the published package is installable and functional",
-            #     skippable=True,
-            # ),
         ]
 
     def run(
@@ -149,9 +135,6 @@ class ReleaseWorkflow:
             "verify-tests": self._step_verify_tests,
             "package": self._step_package,
             "generate-release-notes": self._step_release_notes,
-            # REMOVED per SW-G0B: deployment belongs to Launch
-            # "deploy": self._step_deploy,
-            # "validate-rollout": self._step_validate_rollout,
         }
         method = methods.get(step.id)
         if method:
@@ -238,48 +221,13 @@ class ReleaseWorkflow:
         if changelog.exists():
             return WorkflowStepResult(
                 step=step, passed=True,
-                detail="CHANGELOG.md exists — review entries before deployment",
+                detail="CHANGELOG.md exists — review entries before release",
             )
         return WorkflowStepResult(
             step=step, passed=False,
             detail="CHANGELOG.md not found",
             error_guidance="Create CHANGELOG.md with release entries",
         )
-
-    # REMOVED per SW-G0B: deployment belongs to Launch (skillweave-launch)
-    # def _step_deploy(self, step: WorkflowStep) -> WorkflowStepResult:
-    #     dist = self.project_root / "dist"
-    #     if dist.exists() and list(dist.glob("*.whl")):
-    #         return WorkflowStepResult(
-    #             step=step, passed=True,
-    #             detail=f"Artifacts ready in dist/: {[f.name for f in dist.glob('*.whl')]}",
-    #         )
-    #     return WorkflowStepResult(
-    #         step=step, passed=False,
-    #         detail="No wheel artifacts found in dist/",
-    #         error_guidance="Run packaging step first or build artifacts manually",
-    #     )
-
-    # REMOVED per SW-G0B: deployment belongs to Launch (skillweave-launch)
-    # def _step_validate_rollout(self, step: WorkflowStep) -> WorkflowStepResult:
-    #     dist = self.project_root / "dist"
-    #     wheels = list(dist.glob("*.whl"))
-    #     if wheels:
-    #         return WorkflowStepResult(
-    #             step=step, passed=True,
-    #             detail=f"Rollout artifacts validated: {len(wheels)} wheel(s) available",
-    #         )
-    #     dist_exists = dist.exists() and list(dist.glob("*"))
-    #     if dist_exists:
-    #         return WorkflowStepResult(
-    #             step=step, passed=True,
-    #             detail="Distribution artifacts exist — manual validation required",
-    #         )
-    #     return WorkflowStepResult(
-    #         step=step, passed=False,
-    #         detail="No distribution artifacts found",
-    #         error_guidance="Run packaging step before validation",
-    #     )
 
     def _save_progress(self, result: WorkflowResult) -> None:
         tracking_dir = self.project_root / ".skillweave" / "tracking-log"
