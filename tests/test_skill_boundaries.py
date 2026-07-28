@@ -4,6 +4,7 @@ Covers: EN-first metadata, canonical H1 headings, boundary assertions
 in release code, and boundaries YAML.
 """
 
+import ast
 import os
 import re
 import yaml
@@ -228,4 +229,163 @@ def test_post_release_consumes_observe():
     )
     assert "does not implement" in body, (
         "Post-Release must state it does NOT implement a second health/monitoring subsystem"
+    )
+
+
+# ─── SW-G0C: Release/Launch architectural boundary ───────────────────────
+
+
+def test_release_workflow_does_not_import_deployment():
+    """Release workflow.py must NOT import from launch.deployment.
+
+    Per SW-G0C: deployment modules belong to Launch, not Release.
+    Release produces immutable artifacts; Launch deploys them.
+
+    Uses AST-based import verification as the primary check,
+    with string-based checks as a secondary safety net.
+    """
+    wf_path = PROJECT_ROOT / "src" / "skillweave" / "release" / "workflow.py"
+    source = wf_path.read_text()
+
+    tree = ast.parse(source)
+
+    forbidden_modules = {"launch.deployment", "skillweave.launch.deployment"}
+    forbidden_first_party = {"launch"}
+
+    import_violations = []
+    call_violations = []
+    attr_violations = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in forbidden_modules:
+                    import_violations.append(
+                        f"import {alias.name} at line {node.lineno}"
+                    )
+                if alias.name in forbidden_first_party:
+                    import_violations.append(
+                        f"import {alias.name} at line {node.lineno}"
+                    )
+
+        if isinstance(node, ast.ImportFrom):
+            if node.module in forbidden_modules:
+                import_violations.append(
+                    f"from {node.module} import ... at line {node.lineno}"
+                )
+            if node.module in forbidden_first_party:
+                import_violations.append(
+                    f"from {node.module} import ... at line {node.lineno}"
+                )
+
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                if node.func.id in ("trigger_deployment", "deploy_artifacts"):
+                    call_violations.append(
+                        f"call to {node.func.id}() at line {node.lineno}"
+                    )
+
+        if isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name):
+                key = f"{node.value.id}.{node.attr}"
+                if key in ("launch.deployment",):
+                    attr_violations.append(
+                        f"attribute access {key} at line {node.lineno}"
+                    )
+
+    assert not import_violations, (
+        "Release workflow.py imports forbidden deployment module:\n"
+        + "\n".join(import_violations)
+    )
+    assert not call_violations, (
+        "Release workflow.py calls forbidden deployment functions:\n"
+        + "\n".join(call_violations)
+    )
+    assert not attr_violations, (
+        "Release workflow.py accesses forbidden deployment attributes:\n"
+        + "\n".join(attr_violations)
+    )
+
+    forbidden_strings = ["launch.deployment", "from launch import"]
+    for term in forbidden_strings:
+        assert term not in source, (
+            f"Release workflow.py contains forbidden import string: '{term}'"
+        )
+
+
+def test_launch_owns_deployment_module():
+    """Launch deployment.py must exist and own deployment logic.
+
+    Validates per .skillweave/release/skill-boundaries.yaml:
+    Launch handles deployment, health checks, and rollout validation.
+    Release does not.
+
+    Uses AST-based verification to confirm the module defines
+    the required deployment functions.
+    """
+    deploy_path = PROJECT_ROOT / "src" / "skillweave" / "launch" / "deployment.py"
+    assert deploy_path.exists(), (
+        "Launch deployment.py must exist — deployment belongs to Launch"
+    )
+
+    source = deploy_path.read_text()
+    tree = ast.parse(source)
+
+    defined_functions = {
+        node.name for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+
+    required_funcs = {"trigger_deployment", "health_check"}
+    missing = required_funcs - defined_functions
+    assert not missing, (
+        f"Launch deployment.py missing required functions: {sorted(missing)}"
+    )
+
+    deploy_imports = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                deploy_imports.append(alias.name)
+        if isinstance(node, ast.ImportFrom):
+            if node.module:
+                deploy_imports.append(node.module)
+
+    assert "launch.deployment" not in deploy_imports and "skillweave.launch.deployment" not in deploy_imports, (
+        "Launch deployment.py self-imports forbidden — deployment.py must not import itself"
+    )
+
+
+def test_launch_skill_boundary_yaml_owns_deployment():
+    """Boundaries YAML must assign deployment to Launch, exclude from Release."""
+    boundaries_path = PROJECT_ROOT / ".skillweave" / "release" / "skill-boundaries.yaml"
+    with open(boundaries_path) as f:
+        data = yaml.safe_load(f)
+
+    launch = None
+    releasechain = None
+    for skill in data["skills"]:
+        if skill["id"] == "skillweave-launch":
+            launch = skill
+        if skill["id"] == "skillweave-releasechain":
+            releasechain = skill
+
+    assert launch is not None, "Launch skill entry missing in boundaries YAML"
+    assert releasechain is not None, "ReleaseChain skill entry missing in boundaries YAML"
+
+    launch_resp = [r.lower() for r in launch["responsibilities"]]
+    assert any("deploy" in r for r in launch_resp), (
+        "Launch responsibilities must include deployment"
+    )
+
+    release_does_not = [r.lower() for r in releasechain["does_not_handle"]]
+    assert any("deployment" in r for r in release_does_not), (
+        "ReleaseChain does_not_handle must include 'deployment'"
+    )
+
+    canonical = data.get("canonical_definitions", {})
+    assert "Release" in canonical
+    assert "Launch" in canonical
+    assert "deploy" in canonical["Launch"].lower(), (
+        "Canonical Launch definition must mention deployment"
     )

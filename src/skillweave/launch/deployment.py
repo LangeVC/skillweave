@@ -157,10 +157,17 @@ def _detect_repo() -> str:
 
 
 def _resolve_health_endpoint(environment: str) -> str:
-    return (
-        "https://staging.skillweave.dev/health"
-        if environment == "staging"
-        else "https://skillweave.dev/health"
+    if environment == "staging":
+        staging_url = os.environ.get("SKILLWEAVE_STAGING_HEALTH_URL")
+        if not staging_url:
+            raise RuntimeError(
+                "Staging health endpoint not configured. "
+                "Set SKILLWEAVE_STAGING_HEALTH_URL."
+            )
+        return staging_url
+    return os.environ.get(
+        "SKILLWEAVE_HEALTH_URL",
+        "https://skillweave.xyz/health",
     )
 
 
