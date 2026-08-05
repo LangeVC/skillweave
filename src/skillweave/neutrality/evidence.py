@@ -97,8 +97,6 @@ class EvidenceVerificationResult:
             status = EvidenceVerificationStatus(raw_status)
         except ValueError:
             raise ParserError(f"Unknown EvidenceVerificationStatus: {raw_status}")
-        if status == EvidenceVerificationStatus.MALFORMED:
-            raise ParserError("EVR status is MALFORMED — fail-closed")
         if detail and not isinstance(detail, str):
             raise ParserError(f"Detail must be string, got {type(detail)}")
         return cls(status, detail)

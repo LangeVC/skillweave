@@ -125,11 +125,11 @@ class TestEVRFromDict(unittest.TestCase):
             EvidenceVerificationResult.from_dict({"status": "INVALID_SIGNATURE"})
         self.assertIn("INVALID_SIGNATURE", str(ctx.exception))
 
-    def test_from_dict_malformed_raises_not_returns(self):
-        with self.assertRaises(ParserError) as ctx:
-            EvidenceVerificationResult.from_dict({"status": "MALFORMED"})
-        self.assertIn("MALFORMED", str(ctx.exception))
-        self.assertIn("fail-closed", str(ctx.exception))
+    def test_from_dict_malformed_is_valid_wire_status(self):
+        evr = EvidenceVerificationResult.from_dict({"status": "MALFORMED"})
+        self.assertEqual(EvidenceVerificationStatus.MALFORMED, evr.status)
+        self.assertFalse(evr.is_verified())
+        self.assertEqual("FAIL", evr.status.to_skillweave_status())
 
     def test_from_dict_non_string_status(self):
         with self.assertRaises(ParserError):
@@ -137,14 +137,33 @@ class TestEVRFromDict(unittest.TestCase):
 
 
 class TestEVRRoundtrip(unittest.TestCase):
-    def test_roundtrip_all_statuses(self):
+    def test_roundtrip_all_nine_canonical_statuses(self):
         for status in EvidenceVerificationStatus:
-            if status == EvidenceVerificationStatus.MALFORMED:
-                continue
             evr = EvidenceVerificationResult(status, detail=f"test_{status.value}")
             d = evr.to_dict()
             evr2 = EvidenceVerificationResult.from_dict(d)
             self.assertEqual(evr, evr2)
+
+    def test_malformed_roundtrips_as_wire_status(self):
+        evr = EvidenceVerificationResult(EvidenceVerificationStatus.MALFORMED, "malformed wire evidence")
+        d = evr.to_dict()
+        self.assertEqual("MALFORMED", d["status"])
+        evr2 = EvidenceVerificationResult.from_dict(d)
+        self.assertEqual(evr, evr2)
+        self.assertFalse(evr2.is_verified())
+        self.assertEqual("FAIL", evr2.status.to_skillweave_status())
+
+    def test_five_fictional_statuses_are_parser_errors(self):
+        fictional = [
+            "INVALID_SIGNATURE",
+            "UNKNOWN_SCHEMA_VERSION",
+            "MALFORMED_DIGEST",
+            "MISSING_FIELD",
+            "ALGORITHM_NONE",
+        ]
+        for fictional_status in fictional:
+            with self.assertRaises(ParserError, msg=f"'{fictional_status}' must raise ParserError"):
+                EvidenceVerificationResult.from_dict({"status": fictional_status})
 
     def test_to_dict_structure(self):
         evr = EvidenceVerificationResult(EvidenceVerificationStatus.VALID, "ok")
@@ -356,7 +375,7 @@ class TestR4Adapter(unittest.TestCase):
         adapter = R4CompatibilityAdapter()
         request = VerificationRequest(evidence_digest=FROZEN_R4_EVIDENCE_DIGEST)
         result = adapter.verify(request)
-        self.assertIn("LEGACY_REFERRENCE_PROFILE_V1ALPHA1", result.detail)
+        self.assertIn("LEGACY_REFERENCE_PROFILE_V1ALPHA1", result.detail)
         self.assertIn("NOT promoted to VALID", result.detail)
 
     def test_non_frozen_r4_unknown_key(self):

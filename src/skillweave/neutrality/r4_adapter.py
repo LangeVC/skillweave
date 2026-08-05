@@ -10,7 +10,7 @@ from .evidence import (
 
 FROZEN_R4_BYTES = (
     b'{"r4_version":"4.0.0","signature":"placeholder-sig-legacy","'
-    b'"claims":{"trust_anchor":"legacy-r4-anchor","profile":"LEGACY_REFERRENCE_PROFILE_V1ALPHA1"},'
+    b'"claims":{"trust_anchor":"legacy-r4-anchor","profile":"LEGACY_REFERENCE_PROFILE_V1ALPHA1"},'
     b'"policy_reference":"r4-legacy-policy-v1"}'
 )
 
@@ -37,7 +37,7 @@ class R4CompatibilityAdapter:
             return EvidenceVerificationResult(
                 EvidenceVerificationStatus.INVALID,
                 detail=(
-                    "LEGACY_REFERRENCE_PROFILE_V1ALPHA1: frozen R4 evidence "
+                    "LEGACY_REFERENCE_PROFILE_V1ALPHA1: frozen R4 evidence "
                     "with placeholder signature — legacy provenance preserved, "
                     "NOT promoted to VALID"
                 ),
