@@ -21,6 +21,7 @@ generated/
 
 # External tool configurations (not part of SkillWeave)
 .codenomad/
+.cursor/
 
 # Coverage
 .coverage
