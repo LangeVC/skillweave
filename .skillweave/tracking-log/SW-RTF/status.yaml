@@ -1,46 +1,49 @@
 sequence_id: SW-RTF-I00
+state: STOPPED_BEFORE_B06
+current_batch: B05_GOLDEN_NEGATIVE_FIXTURES
+next_batch: B06_FINAL_INTEGRATION
+
+prd_sha256: d7c917896a1cc2827ee042a540b61a1ac162063e72d293b74aa2d9952d7b293a
+chain_sha256: c1014a7bf1a92a701199853c1955215bab9a997b6234a4e955b34914418ac8d1
+candidate_sha: b442739de6f35d346db182b019b73cc51d85385e
+base_sha: 3330883
+branch: feature/SW-RTF-runtime-foundation
+
 self_approved: false
-stopped_at: 2026-08-11T00:00:00Z
-ready_for_review: true
-required_approver: REVIEWER or RELEASE_AUTHORITY
+execution_mode: ralph_attended
+audience_mode: mixed
+risk_mode: conservative
 
-batches:
-  B00_FOUNDATION:
-    gate: PASS
-    tasks: [RTF-001]
-    self_approved: false
-  B01_VOCABULARY_AND_JOURNAL:
-    gate: PASS
-    tasks: [RTF-002, RTF-003]
-    self_approved: false
-  B02_AUTHORITY_AND_EVIDENCE:
-    gate: PASS
-    tasks: [RTF-004, RTF-006]
-    self_approved: false
-  B03_PARALLEL:
-    gate: PASS
-    tasks: [RTF-005, RTF-007, RTF-009, RTF-011, RTF-014]
-    self_approved: false
-  B04_CHECKPOINT_AND_RECONCILIATION:
-    gate: PASS
-    tasks: [RTF-008, RTF-010]
-    self_approved: false
-  B05_GOLDEN_NEGATIVE_FIXTURES:
-    gate: PASS
-    tasks: [RTF-012]
-    self_approved: false
-  B06_FINAL_INTEGRATION:
-    gate: PENDING_REVIEW
-    tasks: [RTF-013]
-    self_approved: false
-    note: "Ops agent stopped here. Reviewer must independently validate."
+last_update: 2026-08-11T17:30:00Z
 
-counts:
-  total_tests: 160
-  gnf_cases: 12
-  runtime_modules: 11
-  schemas: 2
-  test_files: 3
+completed_batches:
+  - B00_FOUNDATION
+  - B01_VOCABULARY_AND_JOURNAL
+  - B02_AUTHORITY_AND_EVIDENCE
+  - B03_PARALLEL
+  - B04_CHECKPOINT_AND_RECONCILIATION
+  - B05_GOLDEN_NEGATIVE_FIXTURES
+
+test_counts:
+  B00: 81
+  B01: 101
+  B02: 120
+  B03: 138
+  B04: 138
+  B05: 160
+  total: 160
+
+gnf_cases:
+  total: 12
+  layers:
+    authority: [GNF-01, GNF-12]
+    evidence: [GNF-02, GNF-05, GNF-09]
+    state_machine: [GNF-03]
+    observer: [GNF-04, GNF-06]
+    handoff: [GNF-07]
+    preflight: [GNF-08]
+    wireframe: [GNF-10]
+    journal: [GNF-11]
 
 forbidden_transitions:
   self_approval: blocked
@@ -48,31 +51,44 @@ forbidden_transitions:
   release: blocked
   tag: blocked
 
-allowed_write_scopes:
-  - src/skillweave/**
-  - schemas/**
-  - tests/**
-  - docs/**
-  - CHANGELOG.md
-
 deliverables:
-  - src/skillweave/runtime/__init__.py
-  - src/skillweave/runtime/store.py
-  - src/skillweave/runtime/errors.py
-  - src/skillweave/runtime/journal.py
-  - src/skillweave/runtime/authority.py
-  - src/skillweave/runtime/preflight.py
-  - src/skillweave/runtime/handoff.py
-  - src/skillweave/runtime/wireframe.py
-  - src/skillweave/runtime/gate_reconciliation.py
-  - src/skillweave/runtime/schema/__init__.py
-  - src/skillweave/runtime/schema/vocabulary.py
-  - src/skillweave/runtime/registry/__init__.py
-  - src/skillweave/runtime/observer/__init__.py
-  - src/skillweave/execution/state_machine.py (extended)
-  - src/skillweave/execution/gate_policy.py (extended)
-  - src/skillweave/observation/event_logger.py (rewritten)
-  - schemas/run-state.schema.json
-  - schemas/evidence.schema.json
-  - tests/test_rtf_foundation.py
-  - tests/test_gnf_remaining.py
+  runtime_modules:
+    - src/skillweave/runtime/__init__.py
+    - src/skillweave/runtime/store.py
+    - src/skillweave/runtime/errors.py
+    - src/skillweave/runtime/journal.py
+    - src/skillweave/runtime/authority.py
+    - src/skillweave/runtime/preflight.py
+    - src/skillweave/runtime/handoff.py
+    - src/skillweave/runtime/wireframe.py
+    - src/skillweave/runtime/gate_reconciliation.py
+    - src/skillweave/runtime/schema/__init__.py
+    - src/skillweave/runtime/schema/vocabulary.py
+    - src/skillweave/runtime/registry/__init__.py
+    - src/skillweave/runtime/observer/__init__.py
+  modified:
+    - src/skillweave/execution/state_machine.py
+    - src/skillweave/execution/gate_policy.py
+    - src/skillweave/observation/event_logger.py
+  schemas:
+    - schemas/run-state.schema.json
+    - schemas/evidence.schema.json
+  tests:
+    - tests/test_rtf_foundation.py
+    - tests/test_gnf_remaining.py
+    - tests/conftest.py
+
+discovery_baseline:
+  dev_3330883:
+    passed: 22
+    failed: 2
+    failed_tests:
+      - test_prompt_inventory_registered
+      - test_iteration_log_exists
+  feature_branch:
+    passed: 22
+    failed: 2
+    failed_tests:
+      - test_prompt_inventory_registered
+      - test_iteration_log_exists
+  classification: ENVIRONMENTAL (both environments fail identically)
