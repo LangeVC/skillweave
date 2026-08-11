@@ -5,7 +5,7 @@ on:
 
 jobs:
   mirror:
-    runs-on: docker
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -15,4 +15,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
         run: |
           git remote add github-mirror https://x-access-token:${GH_TOKEN}@github.com/LangeVC/skillweave.git
-          git push github-mirror main --tags
+          git push github-mirror main
+          # Tags are mirrored best-effort: a tag that already exists on the mirror with a
+          # different object must not fail the branch mirror (that is the job here).
+          git push github-mirror --tags || echo "WARNING: some tags diverge from the GitHub mirror and were left unchanged"

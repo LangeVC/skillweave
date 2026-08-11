@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-council
-version: 1.0.2
+version: 1.2.0
 description: Multi-Model LLM Council — Deliberation, Peer Review, and Chairman Synthesis with Web Search and Faigate Routing
 author: SkillWeave Team
 license: Apache-2.0
@@ -10,7 +10,12 @@ homepage: https://github.com/LangeVC/skillweave
 frameworks:
 - opencode
 - claude-code
+- claude-desktop
+- antigravity
+- qwen
 - gemini-cli
+- cursor
+- codex
 keywords:
 - council
 - deliberation

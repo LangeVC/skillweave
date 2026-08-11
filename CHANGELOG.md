@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.2.0 — Branch Topology Consolidation
+
+Consolidates three previously unintegrated development lines onto a single baseline.
+Wave `CP-OPT-2026-08-05-W1`, session S02, iteration I00. Independently reviewed and
+reproduced by the cross-product review authority (`SKILLWEAVE_TOPOLOGY: AUTHORIZED`,
+`S02_RELEASECHAIN_AUTHORIZED: true`).
+
+Merge order: `EN-FIRST 50c3012` → `G0C bc1bd41` → `G2A 3c24cb1`, zero pairwise conflicts.
+
+- **FEATURE**: SW-N-G2A neutrality adapters — ProcessDefinition, EventGrammar, EVR and compiler contracts, executable and test-covered, with no Capacium or Elementeer imports.
+- **CHANGED**: Canonical skill catalog is now EN-first. All 13 skill descriptions rewritten in English; boundary declarations corrected.
+- **CHANGED**: Skill count 14 → 13. The legacy `skills/launch/SKILL.md` relic is removed; `skills/skillweave-launch/` remains the canonical launch skill.
+- **CHANGED**: Domain corrected from `skillweave.dev` to `skillweave.xyz` across licensing and endpoint configuration.
+- **FIXED**: SW-G0C release dead code removed from `launch/deployment.py`.
+- **FIXED**: SW-N-G2A R2 process-pack handoff — both schema entries carried an empty `""` key instead of `"$id"`. Repaired to canonical URIs, digests recomputed, non-recursive manifest and receipt reissued, independently verified (`4ef1cf67`).
+- **ADDED**: `tests/test_skill_catalog.py` and `tests/test_skill_boundaries.py`.
+
+### Known issues
+
+`BACKLOG-ENV-001` — pre-existing environmental test failures in `test_backlog_sync`,
+`test_council` and `test_integration`. Fail-set is identical before and after this
+consolidation; no regressions were introduced. Not addressed in this release.
+
+### Not in this release
+
+The runtime remains a planning and contract surface. `executor.py` is still a
+simulation; the state machine is in-memory and the event logger writes local files
+best-effort. Runtime integrity (authoritative run state, event journal, role
+authority, typed handoffs, checkpoints, evidence registry, observer cursor) is the
+subject of the next PRD, not of this consolidation.
+
 ## 1.1.0 — Studio Hook Binding Engine
 
 - **FEATURE**: Hook binding engine with 4 execution types (Python HookAdapter, shell, SKILL.md injection, Capacium capability)
