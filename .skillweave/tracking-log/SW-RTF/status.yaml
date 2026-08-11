@@ -6,7 +6,7 @@ status_detail: STOPPED_BEFORE_B06
 
 prd_sha256: d7c917896a1cc2827ee042a540b61a1ac162063e72d293b74aa2d9952d7b293a
 chain_sha256: c1014a7bf1a92a701199853c1955215bab9a997b6234a4e955b34914418ac8d1
-candidate_sha: f944691
+candidate_sha: 4fb69df
 base_sha: 3330883
 branch: feature/SW-RTF-runtime-foundation
 
@@ -120,9 +120,13 @@ gate_b06_evidence:
     result: "OVERALL: PASS (19/19 checks)"
     details: "12 runtime modules + 2 schema modules imported from outside repo, no .skillweave/phases.yaml/bundles.yaml/skills, functional smoke test passed"
   degraded_signalling:
-    proof: "src/skillweave/runtime/degraded.py + /tmp/whitelabel-consumer/degraded_proof.py"
-    result: "OVERALL: PASS (5/5 checks)"
-    details: "detect_degraded() returns DegradedSignal(active=False) when runtime present, DegradedSignal(active=True, reason='...', fallback_version='v1.2.0') when absent"
+    module: "src/skillweave_degraded.py"
+    proof: "venv (three-state probe: runtime present, runtime absent, runtime broken)"
+    status:
+      Z1: "active=False (runtime present)"
+      Z2: "active=True, reason='skillweave.runtime not present' (runtime absent)"
+      Z3: "ModuleNotFoundError propagated (runtime broken/corrupt)"
+    design_note: "find_spec('skillweave') inspects parent package only (not runtime) to avoid ImportError cascade — see GLE-020"
   dod_reproduced:
     proof: "/tmp/whitelabel-consumer/dod_proof.py"
     result: "OVERALL: PASS (15/15 checks, all 10 DoD points)"
