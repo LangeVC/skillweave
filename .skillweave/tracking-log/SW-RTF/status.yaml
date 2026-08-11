@@ -1,0 +1,78 @@
+sequence_id: SW-RTF-I00
+self_approved: false
+stopped_at: 2026-08-11T00:00:00Z
+ready_for_review: true
+required_approver: REVIEWER or RELEASE_AUTHORITY
+
+batches:
+  B00_FOUNDATION:
+    gate: PASS
+    tasks: [RTF-001]
+    self_approved: false
+  B01_VOCABULARY_AND_JOURNAL:
+    gate: PASS
+    tasks: [RTF-002, RTF-003]
+    self_approved: false
+  B02_AUTHORITY_AND_EVIDENCE:
+    gate: PASS
+    tasks: [RTF-004, RTF-006]
+    self_approved: false
+  B03_PARALLEL:
+    gate: PASS
+    tasks: [RTF-005, RTF-007, RTF-009, RTF-011, RTF-014]
+    self_approved: false
+  B04_CHECKPOINT_AND_RECONCILIATION:
+    gate: PASS
+    tasks: [RTF-008, RTF-010]
+    self_approved: false
+  B05_GOLDEN_NEGATIVE_FIXTURES:
+    gate: PASS
+    tasks: [RTF-012]
+    self_approved: false
+  B06_FINAL_INTEGRATION:
+    gate: PENDING_REVIEW
+    tasks: [RTF-013]
+    self_approved: false
+    note: "Ops agent stopped here. Reviewer must independently validate."
+
+counts:
+  total_tests: 160
+  gnf_cases: 12
+  runtime_modules: 11
+  schemas: 2
+  test_files: 3
+
+forbidden_transitions:
+  self_approval: blocked
+  merge: blocked
+  release: blocked
+  tag: blocked
+
+allowed_write_scopes:
+  - src/skillweave/**
+  - schemas/**
+  - tests/**
+  - docs/**
+  - CHANGELOG.md
+
+deliverables:
+  - src/skillweave/runtime/__init__.py
+  - src/skillweave/runtime/store.py
+  - src/skillweave/runtime/errors.py
+  - src/skillweave/runtime/journal.py
+  - src/skillweave/runtime/authority.py
+  - src/skillweave/runtime/preflight.py
+  - src/skillweave/runtime/handoff.py
+  - src/skillweave/runtime/wireframe.py
+  - src/skillweave/runtime/gate_reconciliation.py
+  - src/skillweave/runtime/schema/__init__.py
+  - src/skillweave/runtime/schema/vocabulary.py
+  - src/skillweave/runtime/registry/__init__.py
+  - src/skillweave/runtime/observer/__init__.py
+  - src/skillweave/execution/state_machine.py (extended)
+  - src/skillweave/execution/gate_policy.py (extended)
+  - src/skillweave/observation/event_logger.py (rewritten)
+  - schemas/run-state.schema.json
+  - schemas/evidence.schema.json
+  - tests/test_rtf_foundation.py
+  - tests/test_gnf_remaining.py
