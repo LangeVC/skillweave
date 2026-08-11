@@ -107,3 +107,49 @@ def run_preflight(
         return PreflightResult(passed=False, mismatches=mismatches, warnings=warnings)
 
     return PreflightResult(passed=True, warnings=warnings)
+
+
+InterceptedCallable = Any
+
+
+class PreflightInterceptor:
+    """
+    Fail-closed interceptor. Wraps a mutating callable with a preflight
+    gate. If preflight fails, the callable is never invoked and
+    PreflightError is raised.
+    """
+
+    def __init__(self, envelope: SessionEnvelope, repo: str, branch: str, product: Optional[str] = None):
+        self._envelope = envelope
+        self._repo = repo
+        self._branch = branch
+        self._product = product
+        self._passed = False
+        self._result: Optional[PreflightResult] = None
+
+    @property
+    def passed(self) -> bool:
+        if self._result is None:
+            self._result = run_preflight(
+                self._envelope,
+                actual_repo=self._repo,
+                actual_branch=self._branch,
+                actual_product=self._product,
+            )
+            self._passed = self._result.passed
+        return self._passed
+
+    @property
+    def result(self) -> PreflightResult:
+        if self._result is None:
+            _ = self.passed
+        return self._result
+
+    def guard(self, callable_fn: InterceptedCallable, *args: Any, **kwargs: Any) -> Any:
+        if not self.passed:
+            raise PreflightError(
+                reason=f"Preflight failed: {len(self.result.mismatches)} mismatches",
+                mismatches=self.result.mismatches,
+                code="INTERCEPTOR_BLOCKED",
+            )
+        return callable_fn(*args, **kwargs)
