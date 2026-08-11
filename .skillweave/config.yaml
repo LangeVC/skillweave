@@ -33,3 +33,14 @@ release:
   skill_boundaries: ".skillweave/release/skill-boundaries.yaml"
   detection_fast_path: true
   override_allowed: true
+git_flow:
+  enabled: true
+  branches:
+    production: main
+    integration: dev
+  branch_prefix:
+    feature: feature/
+    fix: fix/
+    chore: chore/
+  require_pr: true
+  auto_create_dev: false
