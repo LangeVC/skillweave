@@ -26,18 +26,20 @@ completed_batches:
   - B05_GOLDEN_NEGATIVE_FIXTURES
 
 reproducible_test_count:
-  command: "python3 -m pytest tests/test_rtf_foundation.py tests/test_gnf_remaining.py tests/test_execution_system.py tests/test_review_fixes.py --collect-only -q"
-  collected: 180
-  files:
-    - tests/test_rtf_foundation.py
-    - tests/test_gnf_remaining.py
-    - tests/test_execution_system.py
-    - tests/test_review_fixes.py
+  producer: "rtk pytest"
+  test_rtf_foundation: {passed: 89, failed: 0}
+  test_gnf_remaining: {passed: 9, failed: 0}
+  test_review_fixes: {passed: 20, failed: 0}
+  test_execution_system: {passed: 62, failed: 0}
+  test_discovery: {passed: 22, failed: 2}
+  rtf_sum: 118
+  rtf_passing_only: 118
 
 gnf_counter_proof:
-  v1_2_0_no_shield: "9 skipped, 0 failed, 0 passed — all pass through"
-  candidate_9_passed: "9 passed, 0 failed — all recognized"
-  evidence: "mv src/skillweave/runtime src/skillweave/runtime_hidden && rtk pytest tests/test_gnf_remaining.py -q -v"
+  v1_2_0_no_modules: "9 passed — each asserts NO_SHIELD: the defect passes undetected"
+  candidate: "9 passed — each asserts the negative (protection module present)"
+  v1_2_0_evidence: "mv src/skillweave/runtime src/skillweave/runtime_hidden && rtk pytest tests/test_gnf_remaining.py -q -v # 9 passed"
+  candidate_evidence: "rtk pytest tests/test_gnf_remaining.py -q -v # 9 passed"
 
 gnf_cases:
   total: 9
