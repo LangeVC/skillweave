@@ -28,8 +28,6 @@ from .checkpoint import (
 )
 from .preflight import PreflightInterceptor, PreflightError as PreflightGateError
 
-from .degraded import DegradedSignal, detect_degraded
-
 __all__ = [
     "RunStore",
     "SQLiteRunStore",
@@ -81,15 +79,4 @@ __all__ = [
     "assert_no_foreign_repos",
     "validate_summary",
     "WireframeError",
-    "DegradedSignal",
-    "detect_degraded",
-    "EnvironmentFingerprint",
-    "Checkpoint",
-    "ResumeRevalidationRequired",
-    "capture_environment",
-    "create_checkpoint",
-    "validate_resume",
-    "ContextBlock",
-    "VerifiedContext",
-    "ContextRejectedError",
 ]

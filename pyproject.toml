@@ -48,5 +48,8 @@ skillweave-interactive-mode = "skillweave.scripts.interactive_mode:main"
 where = ["src"]
 include = ["skillweave*"]
 
+[tool.setuptools]
+py-modules = ["skillweave_degraded"]
+
 [tool.setuptools.package-data]
 skillweave = ["py.typed"]
