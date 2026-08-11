@@ -5,6 +5,16 @@ from typing import Any, Optional
 from skillweave.runtime.store import RunStateModel
 
 
+RUN_STATE_COVERAGE_STATUSES = {
+    "externally_satisfied",
+    "not_applicable",
+    "implemented",
+    "amendment_required",
+    "deferred",
+    "blocked",
+}
+
+
 class StatusRejectedError(ValueError):
     def __init__(self, value, schema_version, valid_values):
         self.value = value

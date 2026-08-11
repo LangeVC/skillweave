@@ -25,6 +25,7 @@ class RunStateModel(str, Enum):
     BLOCKED_WAITING_FOR_GATE = "BLOCKED_WAITING_FOR_GATE"
     REVIEW_REQUIRED = "REVIEW_REQUIRED"
     FAILED = "FAILED"
+    STOPPED_BEFORE_B06 = "STOPPED_BEFORE_B06"
 
     @classmethod
     def legal_transitions(cls, from_state):
@@ -44,6 +45,7 @@ class RunStateModel(str, Enum):
             cls.BLOCKED_WAITING_FOR_GATE: [cls.IN_PROGRESS, cls.REVIEW_REQUIRED, cls.FAILED],
             cls.REVIEW_REQUIRED: [cls.IN_PROGRESS, cls.FAILED],
             cls.FAILED: [cls.SANDBOX_PREFLIGHT],
+            cls.STOPPED_BEFORE_B06: [cls.IN_PROGRESS],
         }
         from_state = cls(from_state) if isinstance(from_state, str) else from_state
         return transition_map.get(from_state, [])
@@ -173,6 +175,9 @@ class SQLiteRunStore(RunStore):
         self._conn.commit()
         return record
 
+    def set_authority_guard(self, guard) -> None:
+        self._authority_guard = guard
+
     def transition(
         self,
         run_id: str,
@@ -201,6 +206,12 @@ class SQLiteRunStore(RunStore):
 
         if expected_version is not None and existing.version != expected_version:
             raise VersionConflictError(run_id, expected_version, existing.version)
+
+        if role and hasattr(self, '_authority_guard') and self._authority_guard is not None:
+            from skillweave.runtime.authority import can_mutate_run_state
+            if not can_mutate_run_state(role):
+                from skillweave.runtime.authority import AuthorityError
+                raise AuthorityError(role, "transition", f"Role '{role}' lacks mutate_run_state")
 
         allowed = RunStateModel.legal_transitions(existing.state)
         allowed_values = [s.value if isinstance(s, RunStateModel) else s for s in allowed]
