@@ -6,7 +6,7 @@ status_detail: STOPPED_BEFORE_B06
 
 prd_sha256: d7c917896a1cc2827ee042a540b61a1ac162063e72d293b74aa2d9952d7b293a
 chain_sha256: c1014a7bf1a92a701199853c1955215bab9a997b6234a4e955b34914418ac8d1
-candidate_sha: 3330883
+candidate_sha: f944691
 base_sha: 3330883
 branch: feature/SW-RTF-runtime-foundation
 
@@ -113,3 +113,27 @@ discovery_baseline:
       - test_prompt_inventory_registered
       - test_iteration_log_exists
   classification: ENVIRONMENTAL
+
+gate_b06_evidence:
+  whitelabel_embedding:
+    proof: "/tmp/whitelabel-consumer/whitelabel_proof.py"
+    result: "OVERALL: PASS (19/19 checks)"
+    details: "12 runtime modules + 2 schema modules imported from outside repo, no .skillweave/phases.yaml/bundles.yaml/skills, functional smoke test passed"
+  degraded_signalling:
+    proof: "src/skillweave/runtime/degraded.py + /tmp/whitelabel-consumer/degraded_proof.py"
+    result: "OVERALL: PASS (5/5 checks)"
+    details: "detect_degraded() returns DegradedSignal(active=False) when runtime present, DegradedSignal(active=True, reason='...', fallback_version='v1.2.0') when absent"
+  dod_reproduced:
+    proof: "/tmp/whitelabel-consumer/dod_proof.py"
+    result: "OVERALL: PASS (15/15 checks, all 10 DoD points)"
+    points:
+      DOD-1: "command-gateway: PASS"
+      DOD-2: "schema-enforce: PASS"
+      DOD-3: "replay-deterministic: PASS"
+      DOD-4: "self-approval-blocked: PASS"
+      DOD-5: "resume-no-chat + validate-resume-same-env + resume-changed-env-detected: PASS"
+      DOD-6: "GNF-without-shield (9 passed) + GNF-with-shield (9 passed): PASS"
+      DOD-7: "observer-handoff-no-loss: PASS"
+      DOD-8: "core-without-externals: PASS"
+      DOD-9: "schema-vocabulary-loads + profiles-not-required: PASS"
+      DOD-10: "changelog-exists: PASS"
