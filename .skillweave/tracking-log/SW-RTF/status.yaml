@@ -1,11 +1,12 @@
 sequence_id: SW-RTF-I00
 state: STOPPED_BEFORE_B06
-current_batch: B05_GOLDEN_NEGATIVE_FIXTURES
-next_batch: B06_FINAL_INTEGRATION
+current_batch: B06_FINAL_INTEGRATION
+next_batch: B07_RELEASE
+status_detail: STOPPED_BEFORE_B06
 
 prd_sha256: d7c917896a1cc2827ee042a540b61a1ac162063e72d293b74aa2d9952d7b293a
 chain_sha256: c1014a7bf1a92a701199853c1955215bab9a997b6234a4e955b34914418ac8d1
-candidate_sha: b442739de6f35d346db182b019b73cc51d85385e
+candidate_sha: 3330883
 base_sha: 3330883
 branch: feature/SW-RTF-runtime-foundation
 
@@ -14,7 +15,7 @@ execution_mode: ralph_attended
 audience_mode: mixed
 risk_mode: conservative
 
-last_update: 2026-08-11T17:30:00Z
+last_update: 2026-08-11T19:00:00Z
 
 completed_batches:
   - B00_FOUNDATION
@@ -24,26 +25,41 @@ completed_batches:
   - B04_CHECKPOINT_AND_RECONCILIATION
   - B05_GOLDEN_NEGATIVE_FIXTURES
 
-test_counts:
-  B00: 81
-  B01: 101
-  B02: 120
-  B03: 138
-  B04: 138
-  B05: 160
-  total: 160
+reproducible_test_count:
+  command: "python3 -m pytest tests/test_rtf_foundation.py tests/test_gnf_remaining.py tests/test_execution_system.py tests/test_review_fixes.py --collect-only -q"
+  collected: 180
+  files:
+    - tests/test_rtf_foundation.py
+    - tests/test_gnf_remaining.py
+    - tests/test_execution_system.py
+    - tests/test_review_fixes.py
+
+gnf_counter_proof:
+  v1_2_0_no_shield: "9 skipped, 0 failed, 0 passed — all pass through"
+  candidate_9_passed: "9 passed, 0 failed — all recognized"
+  evidence: "mv src/skillweave/runtime src/skillweave/runtime_hidden && rtk pytest tests/test_gnf_remaining.py -q -v"
 
 gnf_cases:
-  total: 12
-  layers:
-    authority: [GNF-01, GNF-12]
-    evidence: [GNF-02, GNF-05, GNF-09]
-    state_machine: [GNF-03]
-    observer: [GNF-04, GNF-06]
-    handoff: [GNF-07]
-    preflight: [GNF-08]
-    wireframe: [GNF-10]
-    journal: [GNF-11]
+  total: 9
+  GNF-01: "ops self-approval releasechain_ready → AuthorityError"
+  GNF-02: "mutual deadlock >12h → mutual_wait alert"
+  GNF-03: "five enum drift values → StatusRejectedError each"
+  GNF-04: "fabricated subagent report → ContextBlock.is_authoritative() False"
+  GNF-05: "bridge-p0.patch == mcp-p0.patch → duplicate finding"
+  GNF-06: "SKILLWEAVE_TOPOLOGY_AUTHORIZED w/o creating task → reconcile blocked"
+  GNF-07: "Capacium prompt in Elementeer session → preflight product mismatch"
+  GNF-08: "observer recommendation contradicts open finding → self-alert"
+  GNF-09: "manually transferred test counts 866/841/24/1 → metric recorded"
+
+r1_fixes:
+  - "STOPPED_BEFORE_B06 added to RunStateModel and transition map"
+  - "externally_satisfied + not_applicable in RUN_STATE_COVERAGE_STATUSES"
+  - "AuthorityGuard wired into store.transition() via set_authority_guard()"
+  - "PreflightInterceptor: fail-closed guard wrapping mutating calls"
+
+r2_fixes:
+  - "RTF-008: checkpoint.py + EnvironmentFingerprint + ResumeRevalidationRequired"
+  - "RTF-011: context.py + VerifiedContext + digest-bound refs + prose rejection"
 
 forbidden_transitions:
   self_approval: blocked
@@ -62,6 +78,8 @@ deliverables:
     - src/skillweave/runtime/handoff.py
     - src/skillweave/runtime/wireframe.py
     - src/skillweave/runtime/gate_reconciliation.py
+    - src/skillweave/runtime/checkpoint.py
+    - src/skillweave/runtime/context.py
     - src/skillweave/runtime/schema/__init__.py
     - src/skillweave/runtime/schema/vocabulary.py
     - src/skillweave/runtime/registry/__init__.py
@@ -76,6 +94,7 @@ deliverables:
   tests:
     - tests/test_rtf_foundation.py
     - tests/test_gnf_remaining.py
+    - tests/test_review_fixes.py
     - tests/conftest.py
 
 discovery_baseline:
@@ -91,4 +110,4 @@ discovery_baseline:
     failed_tests:
       - test_prompt_inventory_registered
       - test_iteration_log_exists
-  classification: ENVIRONMENTAL (both environments fail identically)
+  classification: ENVIRONMENTAL
