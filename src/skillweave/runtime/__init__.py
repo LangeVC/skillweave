@@ -21,6 +21,12 @@ from .wireframe import (
     assert_gate_discipline, assert_write_scope, assert_non_polling,
     assert_no_foreign_repos, validate_summary, WireframeError,
 )
+from . import context
+from .checkpoint import (
+    EnvironmentFingerprint, Checkpoint, ResumeRevalidationRequired,
+    capture_environment, create_checkpoint, validate_resume,
+)
+from .preflight import PreflightInterceptor, PreflightError as PreflightGateError
 
 __all__ = [
     "RunStore",
