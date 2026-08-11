@@ -4,7 +4,7 @@ description: "Multi-Model LLM Council — Deliberation, Peer Review, and Chairma
 argument-hint: topic="[topic]" time_range="[30d|quarter|6mo|1yr|any]" mode="[quick|standard|full]" profile="[default|quick|deep|expert]" output="[markdown|json]" phase="[discovery|design|code_review|post_release]"
 ---
 
-# skillweave-council
+# /skillweave-council
 
 **Collective AI Intelligence** — Instead of asking one LLM, convene a council of AI models that deliberate, peer-review, and synthesize the best answer.
 

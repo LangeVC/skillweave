@@ -1,10 +1,36 @@
 ---
 name: skillweave-launch
-description: Pre-Launch-Check, Deployment, Announce, Verify, Metrics
-argument-hint: 'release_summary="[JSON]" command="[deploy|announce|verify|metrics]" environment="[production|staging]"'
+description: "Coordinate pre-launch checks, environment deployment, communication, verification, and launch metrics."
+argument-hint: 'release_summary="[JSON]" command="[deploy|announce|verify|metrics]" environment="[production|staging]" mode="[guided|assisted]"'
 ---
 
-# skillweave-launch
+# /skillweave-launch
+
+> Canonical metadata is English. User-facing artifacts follow the output language setting.
+
+Launch coordination — take a published release live.
+
+This skill handles the Launch phase of the SkillWeave lifecycle (phase order: 6).
+It runs after Release is complete and the artifact is published.
+
+## Phase Context
+
+- **Order**: 6 (follows Release at order 5)
+- **Type**: optional
+- **Entry condition**: Release is published and available
+- **Exit conditions**:
+  - Deployment complete and verified
+  - User-facing communication sent
+  - Launch metrics baseline captured
+
+## Responsibilities
+
+| Activity | Description |
+|----------|-------------|
+| Production deployment | Coordinate deployment to production environment(s) |
+| User communication | Prepare and distribute release notes, changelogs, announcements |
+| Go-live coordination | Manage rollout timing, verify deployment health |
+| Metrics baseline | Capture pre/post launch metrics for comparison |
 
 ## Pre-Launch-Checkliste (erzwungener Gate)
 
@@ -49,6 +75,19 @@ Der Rollback wird NIE automatisch ausgeführt — nur als dokumentierter Plan.
 | Ausführung | Ralph Loop (iterativ) | Linear, gate-basiert |
 | Rollback | Code-Revert im Loop | Deployment-Rollback (geplant) |
 | Outcome | Fertiges Release-Artifact | Live-System + Announcement |
+
+## Usage
+
+```
+/skillweave-launch release_summary='{"version":"0.6.0","artifact_locations":["dist/"],"changelog":"..."}'
+```
+
+## Parameters
+
+- `release_summary` (required): JSON from releasechain containing version, artifact locations, changelog
+- `command` (optional): Select sub-command — `deploy`, `announce`, `verify`, or `metrics`
+- `environment` (optional): Target environment (default: `production`)
+- `mode` (optional): `guided` (step-by-step) or `assisted` (automatic with human confirmation at gates)
 
 ## Commands
 

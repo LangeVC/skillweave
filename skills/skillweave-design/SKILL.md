@@ -1,10 +1,12 @@
 ---
 name: skillweave-design
-description: Design-Thinking-Lens: Briefanalyse, UX-Prinzipien, Token-Extraktion, Evaluation
+description: "Analyze design briefs, derive UX principles and design tokens, and evaluate implementation quality."
 argument-hint: command="[brief|lens|tokens|evaluate]" input="[design-brief-or-path]"
 ---
 
 # /skillweave-design
+
+> Canonical metadata is English. User-facing artifacts follow the output language setting.
 
 **Design-Thinking-Lens für Frontend-Projekte.** Analysiert Design-Briefs, wendet UX-Prinzipien an, extrahiert Design-Tokens und evaluiert Designs. Mixed-Type Skill — Analyse und Generierung.
 

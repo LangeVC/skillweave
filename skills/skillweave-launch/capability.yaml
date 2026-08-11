@@ -1,7 +1,7 @@
 kind: skill
 name: skillweave-launch
 version: 1.0.2
-description: Pre-Launch-Check, Deployment, Announce, Verify, Metrics
+description: Coordinate pre-launch checks, environment deployment, communication, verification, and launch metrics.
 author: SkillWeave Team
 license: Apache-2.0
 owner: LangeVC

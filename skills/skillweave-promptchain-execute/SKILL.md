@@ -1,7 +1,7 @@
 ---
 name: skillweave-promptchain-execute
 type: orchestration
-description: Execute SkillWeave prompt sequences with dependency-aware batching, Ralph Loop execution, binary gates, and safe parallel subagent orchestration. Orchestration substrate — does NOT handle release-specific logic (see skillweave-releasechain for release).
+description: Execute SkillWeave sequences with dependency-aware batches, controlled parallelism, retries, evidence, and binary gates.
 argument-hint: sequence="[prompt sequence]" inputs="[JSON]" execution_mode="[auto/rex/ralph_attended/ralph_overnight]" audience_mode="[auto/humanize/machinize/mixed]" risk_mode="[conservative/medium/unicorn]" (or attach .md/.txt file)
 ---
 
@@ -9,7 +9,13 @@ argument-hint: sequence="[prompt sequence]" inputs="[JSON]" execution_mode="[aut
 
 **Execute structured prompt sequences with real delivery discipline.**
 
-This skill is the execution engine for SkillWeave prompt sequences. It does not just "run steps"; it resolves execution mode, plans batches, identifies safe parallel lanes, applies Ralph Loop when the work is substantial, and advances only through binary gates.
+This skill is the execution engine for SkillWeave. It owns:
+- **Lane scheduling and Ralph Loop** — iterative build/verify/advance cycles with binary gates
+- **Retry and state management** — automatic retry, state tracking, failure recovery
+- **Batch planning** — dependency-aware batch decomposition with safe parallel lanes
+- **Build completion handoff to Release** — completed, verified outputs hand off to `/skillweave-releasechain`
+
+ReleaseChain receives completed build outputs; it does NOT execute build tasks. Deployment and go-live belong to `/skillweave-launch`.
 
 ## Mandatory Pre-Flight: SkillWeave Sandboxing
 
@@ -346,7 +352,7 @@ feature/FEAT-001-auth  →  PR to dev  →  PR to main  →  tag vX.Y.Z
 
 - **Feature branch → `dev`**: Created by `promptchain-execute` or `releasechain` after build gates pass. Requires tests green.
 - **`dev` → `main`**: Created by `releasechain` as the release PR. Requires all integration tests green, changelog updated, version bumped.
-- **Tag on `main`**: Created by `releasechain` or `launch` after merge to `main`.
+- **Tag on `main`**: Created by `releasechain` or `skillweave-launch` after merge to `main`.
 
 ### Configuration
 
@@ -379,7 +385,7 @@ If `git_flow.enabled` is `false` or missing, skip branch enforcement but still w
    - critical path
    - safe parallel lanes
    - review gates
-   - handoff boundary to releasechain/launch (see `.skillweave/release/skill-boundaries.yaml`)
+   - handoff boundary to releasechain/skillweave-launch (see `.skillweave/release/skill-boundaries.yaml`)
 5. Resolve execution mode
 6. Resolve effective risk mode using hierarchical override system (CLI parameter > environment variable > project config > global config > default)
 7. **Evaluate git flow state** (see Git Flow Convention above):
@@ -590,7 +596,7 @@ Do not automatically transfer partial or inconclusive build batches.
 For complete role definitions, see:
 - `.skillweave/release/skill-boundaries.yaml` — formal boundary specs
 - `skills/skillweave-releasechain/SKILL.md` — releasechain skill doc
-- `skills/launch/SKILL.md` — launch skill placeholder
+- `skills/skillweave-launch/SKILL.md` — launch skill
 
 ## Agent-Agnostic Execution
 

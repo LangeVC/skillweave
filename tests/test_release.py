@@ -216,10 +216,10 @@ class TestChecklistGeneration:
 
 
 class TestReleaseWorkflow:
-    def test_has_five_steps(self):
+    def test_has_three_steps(self):
         wf = ReleaseWorkflow()
         steps = wf.get_steps()
-        assert len(steps) == 5
+        assert len(steps) == 3
 
     def test_steps_have_gates(self):
         wf = ReleaseWorkflow()
@@ -241,7 +241,7 @@ class TestReleaseWorkflow:
 
     def test_progress_tracked(self, temp_project):
         wf = ReleaseWorkflow(str(temp_project))
-        result = wf.run(skip_steps=["verify-tests", "package", "deploy", "validate-rollout"], override=True)
+        result = wf.run(skip_steps=["verify-tests", "package", "generate-release-notes"], override=True)
         tracking_dir = Path(str(temp_project)) / ".skillweave" / "tracking-log"
         log_files = list(tracking_dir.glob("release-workflow-*.json"))
         assert len(log_files) > 0

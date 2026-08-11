@@ -1,10 +1,12 @@
 ---
 name: skillweave-discovery
-description: Problemdefinition, User Research, Empathy Mapping, Opportunity Validation
+description: "Define and validate problems through stakeholder research, empathy mapping, evidence, and opportunity assessment."
 argument-hint: topic="[topic]" domain="[domain]" mode="[quick|deep]"
 ---
 
 # /skillweave-discovery
+
+> Canonical metadata is English. User-facing artifacts follow the output language setting.
 
 **Define the right problem before building the wrong solution.** Empathy-driven research, problem framing, and opportunity validation for multi-agent AI development.
 

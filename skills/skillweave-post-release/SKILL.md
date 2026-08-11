@@ -1,13 +1,22 @@
 ---
 name: skillweave-post-release
-description: Retrospektive, Feedback, Monitoring, Iterationsplanung
+description: "Run retrospectives, synthesize feedback and monitoring evidence, and plan the next iteration."
 argument-hint: command="[retrospective|feedback|monitor|plan|health]" version="[version]"
 ---
 
-# skillweave-post-release
+# /skillweave-post-release
 
-Post-release lifecycle: retrospective, feedback collection, metric monitoring,
-iteration planning, and system health checks. Mixed plan/build skill.
+> Canonical metadata is English. User-facing artifacts follow the output language setting.
+
+**Post-release lifecycle: retrospective interpretation, feedback synthesis, iteration planning.**
+
+This skill handles what comes after a release goes live. It:
+- **Consumes evidence from `skillweave-observe`** for reports, metrics, and health data
+- **Owns retrospective interpretation** — synthesizing what went well, what to improve
+- **Owns feedback synthesis** — categorizing and prioritizing community and system feedback
+- **Owns iteration planning** — producing prioritized backlogs from retro + feedback
+
+This skill does NOT implement a second health or monitoring subsystem. All observability data comes from `/skillweave-observe`.
 
 ## Retro-Vorlage
 

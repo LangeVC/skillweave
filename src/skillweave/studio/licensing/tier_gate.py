@@ -47,7 +47,7 @@ class TierGate:
         if payload is None or payload.tier != "studio":
             raise LicenseError(
                 f"Studio license required for {injection_point}. "
-                "Get a license at https://skillweave.dev/studio"
+                "Get a license at https://skillweave.xyz/studio"
             )
 
         return Tier.STUDIO
@@ -95,7 +95,7 @@ def require_studio(func: Optional[Callable] = None, *, gate: Optional[TierGate] 
             if not _gate.is_studio():
                 raise LicenseError(
                     f"Studio license required to run {fn.__name__}. "
-                    "Get a license at https://skillweave.dev/studio"
+                    "Get a license at https://skillweave.xyz/studio"
                 )
             return await fn(*args, **kwargs)
 
