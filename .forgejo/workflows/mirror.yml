@@ -1,21 +1,33 @@
 name: Mirror to GitHub
+
+# Forgejo ist kanonisch; GitHub (LangeVC/skillweave) ist der oeffentliche
+# read-only Mirror. Force-Push genau der Ref, die den Lauf ausgeloest hat,
+# damit GitHub Forgejo folgt.
+#
+# Muster: exact-ref, festgelegt am 2026-07-28 unter LVC-MIR-G0 fuer die
+# langevc-Org. Dieses Repo lief bis heute auf dem alten main-plus-Bulk-Tags-
+# Muster, das dort ausdruecklich ersetzt wurde.
 on:
   push:
-    branches: [main]
+    branches: ["**"]
+    tags: ["v*"]
 
 jobs:
   mirror:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: https://github.com/actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Push to GitHub (public mirror)
+      - name: Push to GitHub mirror
         env:
-          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+          GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
         run: |
-          git remote add github-mirror https://x-access-token:${GH_TOKEN}@github.com/LangeVC/skillweave.git
-          git push github-mirror main
-          # Tags are mirrored best-effort: a tag that already exists on the mirror with a
-          # different object must not fail the branch mirror (that is the job here).
-          git push github-mirror --tags || echo "WARNING: some tags diverge from the GitHub mirror and were left unchanged"
+          remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave.git"
+          # Nur die ausloesende Ref spiegeln. Kein --prune, kein
+          # 'refs/heads/*'-Wildcard: Der CI-Checkout hat lokal nur diese eine
+          # Ref, ein prunender Wildcard-Push wuerde jeden ANDEREN Branch auf
+          # dem Mirror loeschen wollen — einschliesslich GitHubs Default-Branch
+          # (was GitHub ablehnt und den Job scheitern laesst) und jeden von
+          # GitHub verwalteten Branch wie gh-pages.
+          git push --force "$remote" "+${GITHUB_REF}:${GITHUB_REF}"
