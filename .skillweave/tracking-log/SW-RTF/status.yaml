@@ -36,10 +36,13 @@ reproducible_test_count:
   rtf_passing_only: 118
 
 gnf_counter_proof:
-  v1_2_0_no_modules: "9 passed — each asserts NO_SHIELD: the defect passes undetected"
+  v1_2_0: "9 passed — each asserts NO_SHIELD (the defect passes undetected)"
   candidate: "9 passed — each asserts the negative (protection module present)"
-  v1_2_0_evidence: "mv src/skillweave/runtime src/skillweave/runtime_hidden && rtk pytest tests/test_gnf_remaining.py -q -v # 9 passed"
-  candidate_evidence: "rtk pytest tests/test_gnf_remaining.py -q -v # 9 passed"
+  limitation: >
+    NO_SHIELD documents the absence of protection. It does not demonstrate
+    that the fixtures capture the defect. The handoff criterion required the
+    SAME fixture to behave differently on both sides; what exists are two
+    different assertions, both green. Tracked as SW-SCOPE-003.
 
 gnf_cases:
   total: 9
@@ -97,7 +100,12 @@ deliverables:
     - tests/test_rtf_foundation.py
     - tests/test_gnf_remaining.py
     - tests/test_review_fixes.py
+    - tests/gate_b06/whitelabel_proof.py
+    - tests/gate_b06/dod_proof.py
+    - tests/gate_b06/degraded_proof.py
     - tests/conftest.py
+  top_level_modules:
+    - src/skillweave_degraded.py
 
 discovery_baseline:
   dev_3330883:
@@ -116,19 +124,19 @@ discovery_baseline:
 
 gate_b06_evidence:
   whitelabel_embedding:
-    proof: "/tmp/whitelabel-consumer/whitelabel_proof.py"
+    proof: "tests/gate_b06/whitelabel_proof.py (run from outside repo)"
     result: "OVERALL: PASS (19/19 checks)"
     details: "12 runtime modules + 2 schema modules imported from outside repo, no .skillweave/phases.yaml/bundles.yaml/skills, functional smoke test passed"
   degraded_signalling:
     module: "src/skillweave_degraded.py"
-    proof: "venv (three-state probe: runtime present, runtime absent, runtime broken)"
+    proof: "tests/gate_b06/degraded_proof.py (wheel-in-venv, 3-state physical)"
     status:
       Z1: "active=False (runtime present)"
       Z2: "active=True, reason='skillweave.runtime not present' (runtime absent)"
       Z3: "ModuleNotFoundError propagated (runtime broken/corrupt)"
     design_note: "find_spec('skillweave') inspects parent package only (not runtime) to avoid ImportError cascade — see GLE-020"
   dod_reproduced:
-    proof: "/tmp/whitelabel-consumer/dod_proof.py"
+    proof: "tests/gate_b06/dod_proof.py"
     result: "OVERALL: PASS (15/15 checks, all 10 DoD points)"
     points:
       DOD-1: "command-gateway: PASS"
