@@ -34,24 +34,13 @@ OPTIONAL_SUBPACKAGES = ("runtime",)
 _PKG_PREFIX = "skillweave."
 
 # Core names that must remain reachable even when the optional subpackage is
-# absent.  The lazy names that legitimately require runtime are exercised
-# separately (see test_import_lazy_names_require_runtime_not_import).
-_FROZEN_CORE = (
-    "SkillWeaveConfig", "SkillWeavePersistence", "RiskMode",
-    "ensure_skillweave_folder", "get_config", "get_persistence",
-    "get_mode_only", "is_feature_enabled", "get_mode_specific_setting",
-    "Checklist", "ChecklistItem", "ChecklistItemStatus",
-    "ChecklistParser", "ChecklistManager",
-    "DesignThinkingLens", "DesignRule", "DesignRuleDefinition",
-    "DesignThinkingConfig",
-    "ModeManager", "ModeBehavior", "SkillWeaveNextLevel",
-    "Template", "TemplateManager", "get_template_manager",
-    "PatternExtractor", "RepoCleanupRecommender",
-    "Capability", "AgentType", "CapabilityRegistry", "CapabilityRouter",
-    "get_capability_router", "route_task",
-    "ChecklistLoopEngine", "ExecutionMemory",
-    "SidecarManager", "SidecarSpec",
-)
+# absent.  Single source: tests/gate_b06/gle020_api.py (also used by the
+# wheel-installed proof).  The lazy names that legitimately require runtime
+# are exercised separately (see test_import_lazy_names_require_runtime_not_import).
+sys.path.insert(0, os.path.join(REPO_ROOT, "tests", "gate_b06"))
+from gle020_api import FROZEN_API, FROZEN_CORE  # noqa: E402
+
+_FROZEN_CORE = FROZEN_CORE
 
 
 def _optional_submodule_roots():
@@ -269,6 +258,7 @@ def _build_and_probe_wheel(tmp):
     shutil.rmtree(runtime_dir)
 
     probe = (
+        "import sys\n"
         "import skillweave\n"
         "assert 'skillweave.runtime' not in sys.modules, 'runtime eagerly loaded'\n"
         "frozen = " + repr(_FROZEN_CORE) + "\n"

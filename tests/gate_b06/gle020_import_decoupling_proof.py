@@ -92,7 +92,9 @@ def prove_decoupling():
     whl_files = sorted(glob.glob(os.path.join(DIST, "*.whl")))
     assert whl_files, "No wheel built"
     names = zipfile.ZipFile(whl_files[-1]).namelist()
-    check("Z0: skillweave_degraded in wheel", "skillweave_degraded.py" in names)
+    present = "skillweave_degraded.py" in names
+    check("Z0: skillweave_degraded in wheel", present)
+    print(f"    Z0: wheel={os.path.basename(whl_files[-1])} detector_present={present}")
 
     # ── Frisches venv + pip install des Rades ──
     subprocess.run(
@@ -130,7 +132,7 @@ print(runtime)
 import sys
 import skillweave
 lazy = 'skillweave.runtime' not in sys.modules
-core = " + repr(FROZEN_CORE) + "
+core = """ + repr(FROZEN_CORE) + """
 for n in core:
     getattr(skillweave, n)
 print(f'lazy={lazy}')
@@ -143,7 +145,7 @@ print('Z1 OK')
     # ── Z3: eingefrorene OEFENTLICHE API voll aufloesbar (runtime present) ──
     rc, stdout, stderr = run_in_venv("""
 import skillweave
-frozen = " + repr(FROZEN_API) + "
+frozen = """ + repr(FROZEN_API) + """
 missing = [n for n in frozen if not hasattr(skillweave, n)]
 for n in frozen:
     getattr(skillweave, n)
@@ -165,7 +167,7 @@ for k in list(sys.modules):
 importlib.invalidate_caches()
 
 import skillweave
-core = " + repr(FROZEN_CORE) + "
+core = """ + repr(FROZEN_CORE) + """
 for n in core:
     getattr(skillweave, n)
 from skillweave_degraded import detect_degraded
@@ -202,7 +204,7 @@ except ModuleNotFoundError:
 import skillweave
 decl = tuple(getattr(skillweave, 'OPTIONAL_SUBPACKAGES', ()))
 print(f'decl={decl!r}')
-assert decl == " + repr(OPTIONAL_SUBPACKAGES) + ", decl
+assert decl == """ + repr(OPTIONAL_SUBPACKAGES) + """, decl
 print('Z5 OK')
 """)
     check("Z5: optional subpackages declared", "Z5 OK" in stdout)
@@ -210,6 +212,8 @@ print('Z5 OK')
 
     shutil.rmtree(TMP, ignore_errors=True)
 
+    for label, verdict in results.items():
+        print(f"    {label}: {verdict}")
     print(f"  => {passed} passed, {failed} failed\n")
     return passed, failed
 
