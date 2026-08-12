@@ -11,7 +11,6 @@ Degraded is NOT an error — it is a transparency signal. A degraded session
 still runs; it just runs without the Runtime Foundation guarantees.
 """
 import importlib.util
-import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -40,27 +39,11 @@ def detect_degraded() -> DegradedSignal:
     """
     Probe whether ``skillweave.runtime`` is available.
 
-    IMPORTANT: We do NOT use ``find_spec("skillweave.runtime")`` because
-    that triggers an import of the parent package (``skillweave``), and
-    ``skillweave/__init__.py`` eagerly imports ``.execution`` →
-    ``state_machine`` → ``skillweave.runtime.store``. Once GLE-020 (lazy
-    ``__init__``) lands, ``find_spec`` on a submodule becomes safe, but
-    until then it crashes in exactly the case this function is meant to
-    detect. Do not revert to ``find_spec`` on the submodule without also
-    resolving GLE-020.
-
-    Instead we check whether the parent package exists and, if so, whether
-    the ``runtime/`` directory lives beside it.  All three states are
-    handled:
-
-      - *Parent absent* → ``active=True`` (SkillWeave not installed at all).
-      - *Parent present, runtime/ absent* → ``active=True`` (pre‑v1.3 or
-        whitelabel embedding without runtime).
-      - *Parent present, runtime/ present* → import ``skillweave.runtime``
-        and return ``active=False``. If the import still fails (corrupt
-        installation), the ``ModuleNotFoundError`` is propagated to the
-        caller — a degrade signal for a broken install would mask a real
-        problem.
+    Since GLE-020 (lazy ``skillweave/__init__.py``) ``find_spec`` on the
+    submodule is safe: probing ``skillweave.runtime`` no longer forces the
+    runtime-dependent parts of the ``skillweave`` package to load, so it no
+    longer crashes in exactly the case this function is meant to detect.
+    ``find_spec`` is pure metadata lookup and never imports the target.
 
     Returns:
         A ``DegradedSignal``.
@@ -74,8 +57,8 @@ def detect_degraded() -> DegradedSignal:
             fallback_version="v1.2.0",
         )
 
-    runtime_dir = os.path.join(os.path.dirname(parent.origin), "runtime")
-    if not os.path.isdir(runtime_dir):
+    runtime_spec = importlib.util.find_spec("skillweave.runtime")
+    if runtime_spec is None:
         return DegradedSignal(
             active=True,
             reason="skillweave.runtime not present — pre-v1.3 or whitelabel",
