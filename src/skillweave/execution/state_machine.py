@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
+
+from skillweave.runtime.store import RunStore, SQLiteRunStore, RunRecord, RunStateModel
+from skillweave.runtime.errors import InvalidTransitionError, VersionConflictError
 
 
 class RalphLoopState(str, Enum):
@@ -22,7 +25,7 @@ class RalphLoopTransition:
     from_state: RalphLoopState
     to_state: RalphLoopState
     reason: str
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -158,3 +161,72 @@ def run_state_handler(state, context: dict[str, Any]) -> dict[str, Any]:
         if k_val == state_value:
             return handler.execute(context)
     return {"status": "error", "error": f"No handler for state {state_value}"}
+
+
+class RunStateMachine:
+    def __init__(self, store: Optional[RunStore] = None):
+        self._store = store or SQLiteRunStore()
+
+    @property
+    def store(self) -> RunStore:
+        return self._store
+
+    def create_run(
+        self,
+        run_id: str,
+        root_run_id: Optional[str] = None,
+        parent_run_id: Optional[str] = None,
+        role: str = "ops",
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> RunRecord:
+        now = datetime.now(timezone.utc).isoformat()
+        record = RunRecord(
+            run_id=run_id,
+            root_run_id=root_run_id or run_id,
+            parent_run_id=parent_run_id,
+            state=RunStateModel.SANDBOX_PREFLIGHT.value,
+            version=1,
+            created_at=now,
+            updated_at=now,
+            ended_at=None,
+            role=role,
+            metadata=metadata or {},
+        )
+        return self._store.save_run(record)
+
+    def get_run(self, run_id: str) -> Optional[RunRecord]:
+        return self._store.get_run(run_id)
+
+    def transition(
+        self,
+        run_id: str,
+        target_state: str,
+        expected_state: Optional[str] = None,
+        expected_version: Optional[int] = None,
+        reason: str = "",
+        role: Optional[str] = None,
+    ) -> RunRecord:
+        record = self._store.get_run(run_id)
+        if record is None:
+            raise InvalidTransitionError("nonexistent", target_state, run_id)
+
+        actual_expected_state = expected_state if expected_state is not None else record.state
+        actual_expected_version = expected_version if expected_version is not None else record.version
+
+        return self._store.transition(
+            run_id=run_id,
+            target_state=target_state,
+            expected_state=actual_expected_state,
+            expected_version=actual_expected_version,
+            reason=reason,
+            role=role,
+        )
+
+    def is_terminal(self, run_id: str) -> bool:
+        record = self._store.get_run(run_id)
+        if record is None:
+            return False
+        return record.state in (RunStateModel.ADVANCE_OR_STOP.value, RunStateModel.FAILED.value)
+
+    def list_runs(self, state: Optional[str] = None, limit: int = 100) -> list[RunRecord]:
+        return self._store.list_runs(state=state, limit=limit)

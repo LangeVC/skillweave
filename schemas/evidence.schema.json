@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillweave.dev/schemas/evidence/v1",
+  "title": "Evidence Record Schema",
+  "description": "SkillWeave Evidence Record — content-addressed, immutable artifact with full provenance",
+  "type": "object",
+  "required": [
+    "artifact_id", "sha256", "schema_version", "producer_command",
+    "subject_repo", "subject_commit", "created_at", "evidence_type", "purpose"
+  ],
+  "properties": {
+    "artifact_id": {
+      "type": "string",
+      "description": "Unique identifier for the artifact"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 content hash"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version of the artifact format"
+    },
+    "producer_command": {
+      "type": "string",
+      "description": "Command that produced this artifact"
+    },
+    "subject_repo": {
+      "type": "string",
+      "description": "Repository the artifact is about"
+    },
+    "subject_commit": {
+      "type": "string",
+      "description": "Commit the artifact was produced from"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "record", "artifact", "observation", "test", "interview",
+        "decision", "runtime_trace", "external_attestation", "metric", "review"
+      ]
+    },
+    "purpose": {
+      "type": "string",
+      "description": "Declared purpose or claim this evidence supports"
+    },
+    "method": {
+      "type": "string",
+      "description": "Method used to produce the evidence"
+    },
+    "system_source": {
+      "type": "string",
+      "description": "Source system or tool"
+    },
+    "sensitivity": {
+      "type": "string",
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "retention": {
+      "type": "string",
+      "enum": ["permanent", "temporary", "project_lifetime"]
+    },
+    "transformation_history": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "relevance": {"type": "string", "enum": ["low", "medium", "high"]},
+        "sufficiency": {"type": "string", "enum": ["low", "medium", "high"]},
+        "reliability": {"type": "string", "enum": ["low", "medium", "high"]},
+        "currency": {"type": "string", "enum": ["low", "medium", "high"]},
+        "integrity": {"type": "string", "enum": ["low", "medium", "high"]},
+        "independence": {"type": "string", "enum": ["low", "medium", "high"]}
+      }
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "description": "ID of the artifact this one supersedes"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

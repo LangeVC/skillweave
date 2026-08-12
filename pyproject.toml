@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skillweave"
-version = "1.2.0"
+version = "1.3.0"
 description = "Multi-agent AI skill orchestration with Next Level features"
 readme = "README.md"
 authors = [
@@ -47,6 +47,9 @@ skillweave-interactive-mode = "skillweave.scripts.interactive_mode:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["skillweave*"]
+
+[tool.setuptools]
+py-modules = ["skillweave_degraded"]
 
 [tool.setuptools.package-data]
 skillweave = ["py.typed"]
