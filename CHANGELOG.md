@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.3.0 — Runtime Foundation
+
+Der dokumentierte Lifecycle war bis hierher nicht durchsetzbar: `executor.py`
+war laut eigenem Kommentar eine Simulation, die State Machine lag im
+Arbeitsspeicher, der Event Logger verschluckte I/O-Fehler, die Gate Policy
+kannte keine Rollen. Diese Version schliesst genau diese Luecke.
+
+- Autoritative Run State Machine mit Persistenz
+- Schreibvalidierung des Statusvokabulars; ein Wert ausserhalb des Enums wird
+  abgewiesen statt geschrieben
+- Append-only Event Journal mit Persist-before-Ack
+- Rollen- und Transition-Autoritaet; Selbstfreigabe wird strukturell verhindert
+- Session Envelope und Preflight gegen produktfremde Prompts
+- Immutable Artifact und Evidence Registry
+- Typed Handoff Broker mit `cold_start_bundle`
+- Checkpoint und Resume mit Revalidierung der Umgebung
+- Observer Runtime mit Offset und Lease
+- Cross-Run Gate Reconciliation
+- Verifizierbare Kontextbeschaffung; Prosa wird als Kontextquelle abgewiesen
+- Conformance-Readiness des Kerndatenmodells
+- Neun Golden Negative Fixtures, jede aus einem real aufgetretenen Fehler der
+  Welle CP-OPT-2026-08-05-W1 abgeleitet
+
+Der Degradationsdetektor liegt als eigenstaendiges Modul `skillweave_degraded`
+neben dem Package, damit er erreichbar bleibt, wenn `skillweave.runtime` fehlt.
+Sein `fallback_version` bleibt bewusst auf `v1.2.0` — das ist die letzte
+Version ohne Runtime.
+
+Bekannte Einschraenkung: Der GNF-Gegenbeweis dokumentiert die Abwesenheit des
+Schutzes auf `v1.2.0`, demonstriert aber nicht, dass die Fixtures den Defekt
+fangen. Verfolgt als `SW-SCOPE-003`.
+
 ## 1.2.0 — Branch Topology Consolidation
 
 Consolidates three previously unintegrated development lines onto a single baseline.
