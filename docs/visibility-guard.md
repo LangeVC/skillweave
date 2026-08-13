@@ -16,9 +16,15 @@ See the shared placement rule in the planning repository:
 
 ## The gate
 
-`.forgejo/workflows/mirror.yml` contains a `visibility-gate` job that runs **before**
-the mirror job. The mirror job depends on it with `needs:`, so a failing gate prevents
-the push from reaching GitHub.
+> Status: the source `.forgejo/workflows/mirror.yml` gains a `visibility-gate` job that
+> runs **before** the mirror job. The mirror job depends on it with `needs:`, so a
+> failing gate prevents the push from reaching GitHub. This protection is only in effect
+> once the change is merged to the branch the mirror actually runs from. Until then,
+> there is no gate: do not rely on any Vorkehrung that has not yet shipped.
+
+An absent gate is externally indistinguishable from a working gate as long as all you
+observe is "nothing came through." The proof that a gate exists must be a red test
+commit, not a branch that happened not to arrive.
 
 Blocked paths on any touched file:
 
