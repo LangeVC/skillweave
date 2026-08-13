@@ -55,7 +55,9 @@ jobs:
       - name: Run contract CI (run-state)
         run: python3 scripts/contract/contract_ci.py
 
-      - name: Run schema/guard unit test (lokale Wertemenge)
-        run: |
-          pip install pytest
-          python3 -m pytest tests/unit/test_vocabulary_guard.py -q
+      # Bewusst KEIN pytest-Schritt hier: der Unit-Test (test_vocabulary_guard)
+      # nutzt den Import-Leser (from skillweave... import RunStateModel), der
+      # die vollen Core-Deps braucht. Dieser Job ist die Schlanke Cross-Repo-
+      # Ebene und laeuft importfrei (AST). Der Import-basierte Unit-Test ist
+      # das lokale Gegenleser-Merkmal und laeuft in der regulären Test-Suite
+      # mit installierten Deps. Zwei Leser, verschiedene Ebenen (§C.2).
