@@ -6,7 +6,7 @@
 # nie eine Branch-Spitze.
 
 [sdk]
-version = "1.0.0"
+version = "0.1.0"
 
 [runtime]
 # Selbstkennung dieses Repos. profiles/packs-pro tragen hier zusätzlich eine

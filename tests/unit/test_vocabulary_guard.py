@@ -15,12 +15,16 @@ Schema liegt dann im SDK, das Enum im Consumer. Der Mengenvergleich bleibt
 derselbe, nur die Quelle des Schemas wechselt von "Datei im eigenen Repo" auf
 "gepinntes SDK-Artefakt".
 
-Zwei Ebenen, dieselbe Invariante (GLE-004):
-- Dieser Unit-Test liest die lokale schemas/-Datei (bleibt im Core, bis der
-  eigentliche Dateivorzug ein separater Schnittschritt ist).
-- scripts/contract/contract_ci.py ist der Cross-Repo-Waechter: er liest die
-  gepinnte SDK-Wertemenge (sdk/contract/run-state.enum.json) via Pull und wird
-  im CI rot, wenn das SDK den Contract bricht.
+Zwei Ebenen, verschiedene Aufgaben (GLE-004):
+- Dieser Unit-Test ist der SCHNELLE LOKALE VORFILTER: er liest die lokale
+  schemas/-Datei und faengt eine Vokabular-Abweichung frueh im Arbeitsbaum,
+  ohne auf CI zu warten. Er ist NICHT der Vertragsnachweis.
+- Der VERTRAGSNACHWEIS ist scripts/contract/contract_ci.py (Cross-Repo):
+  er liest die gepinnte SDK-Wertemenge per Klon UND erzwingt Byte-Gleichheit
+  der Core-schemas/*.json gegen das SDK-Artefakt (§C.9). Der Bruch-Beweis
+  (Repository A bricht, Repository B rot) steht dort, nicht hier.
+- Die Wahrheitsquelle der Wertemenge ist das SDK-Schema; die Core-lokale
+  schemas/-Datei ist ein ABGELEITETES Artefakt der gepinnten SDK-Version.
 """
 from pathlib import Path
 import json

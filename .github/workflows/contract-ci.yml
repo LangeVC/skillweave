@@ -7,9 +7,10 @@ name: Cross-Repo Contract CI
 # die Wertemengen. Wird ein Contract im SDK gebrochen, wird DIESER Build rot —
 # das ist die Nachweispflicht von GLE-004.
 #
-# Die SDK-Quelle ist der gepinnte Subtree-Tag/sha im Haupt-Repo (das SDK lebt
-# entwicklungsseitig unter ./sdk, bis der Subtree-Push erfolgt). Der Job nutzt
-# das lokale ./sdk, wenn vorhanden, sonst klont er skillweave-sdk@<pin>.
+# Die SDK-Quelle ist AUSSCHLIESSLICH das gepinnte Artefakt (Tag v<pin>), das
+# dieser Job klont. Keine eingecheckte sdk/-Kopie im Core, keine doppelte
+# Wahrheit (§C.2). Der Klon setzt SKILLWEAVE_SDK_DIR; der Waechter verifiziert
+# den Cache gegen den Pin.
 
 on:
   push:
@@ -17,9 +18,13 @@ on:
     paths:
       - ".contract/**"
       - "scripts/contract/**"
-      - "schemas/**"
       - "src/skillweave/runtime/store.py"
   pull_request:
+  # SDK-Dispatcher (§C.8): der Consumer pollt deterministisch, weil er nicht
+  # weiss, wann das SDK sich aendert. Der Schedule garantiert den Lauf; der
+  # workflow_dispatch erlaubt den sofortigen Bruch-Beweis.
+  schedule:
+    - cron: "37 3 * * *"   # taeglich 03:37 UTC
   workflow_dispatch:
 
 permissions:
@@ -36,17 +41,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Checkout gepinntes SDK (sofern nicht lokal vorhanden)
+      - name: Checkout gepinntes SDK-Artefakt
+        env:
+          GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
         run: |
-          if [ -d sdk/contract ]; then
-            echo "Nutze lokales ./sdk (Entwicklungs-Checkout vor Subtree-Push)."
-          else
-            PIN=$(python3 -c "import tomllib,sys; print(tomllib.load(open('.contract/consumer.toml','rb'))['sdk']['version'])")
-            echo "PIN=$PIN"
-            git clone --depth 1 --branch "$PIN" "https://github.com/LangeVC/skillweave-sdk.git" /tmp/skillweave-sdk || \
-              git clone --depth 1 "https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave-sdk.git" /tmp/skillweave-sdk
-            echo "SKILLWEAVE_SDK_DIR=/tmp/skillweave-sdk" >> "$GITHUB_ENV"
-          fi
+          PIN=$(python3 -c "import tomllib; print(tomllib.load(open('.contract/consumer.toml','rb'))['sdk']['version'])")
+          TAG="v${PIN}"
+          echo "PIN=$PIN TAG=$TAG"
+          git clone --depth 1 --branch "$TAG" "https://github.com/LangeVC/skillweave-sdk.git" /tmp/skillweave-sdk || \
+            git clone --depth 1 --branch "$TAG" "https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave-sdk.git" /tmp/skillweave-sdk
+          echo "SKILLWEAVE_SDK_DIR=/tmp/skillweave-sdk" >> "$GITHUB_ENV"
 
       - name: Run contract CI (run-state)
         run: python3 scripts/contract/contract_ci.py

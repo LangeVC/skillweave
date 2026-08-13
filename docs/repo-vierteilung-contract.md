@@ -118,6 +118,26 @@ Konsequenz:
   in der CI"). Der Preis ist akzeptiert; er ist der Gegenwert für einen
   Vertrag, den einer besitzt statt ihn vorzugeben.
 
+### B.1 Erstversion 0.1.0 — Versionierung vor dem Schnitt (entschieden)
+
+Die SDK-Version ist **0.1.0, nicht 1.0.0**. Begründung, die nicht aus dem
+PRD-Text, sondern aus dem Umfang dieses Schnitts folgt (§D):
+
+Ein angelegtes, eben befülltes Repo ist **Struktur, kein vollzogener Schnitt**.
+Der Inhalt, der `1.0.0` rechtfertigen würde, fehlt noch:
+
+- Die fünf GLE-001-Schemas sind nicht enthalten.
+- `profiles` und `packs-pro` sind leer (füllen GLE-007/008).
+- Der Core trägt die Schema-Kopie noch nicht ab (Dateivorzug steht aus).
+
+`1.0.0` behauptet Stabilität, die der Vertrag nicht hat. Er kommt, wenn die
+Vierteilung **inhaltlich** vollzogen ist — dasselbe Kriterium, das das PRD
+für „Schnitt" gegenüber „angelegtem leeren Repo" anlegt.
+
+Konsequenz fürs Pinning: Consumer pinnen auf den **echten** Tag `v0.1.0`.
+Kein Pin darf eine Versionsnummer referenzieren, für die kein Tag existiert
+(das wäre ein unauflösbarer Verweis und der Wächter liefe ins Leere).
+
 ---
 
 ## C. Cross-Repo-Contract-CI-Strategie
@@ -160,15 +180,28 @@ gegen die **gepinnte** SDK-Version validiert:
 So bricht ein Contract in einem Repo **den Build des anderen**, ohne dass
 irgendein Repo Kenntnis von der Pfadlage eines anderen Rechners braucht.
 
+Nicht zulässig ist die doppelte Wahrheit, die C.1 beim Referenzmuster als
+Fehlerquelle dokumentiert: eine **eingecheckte `sdk/`-Kopie im Consumer**, die
+der Wächter der gepinnten Fassung vorzieht. Das wäre `check-contract-drift.sh`
+über Repo-Grenzen hinweg neu aufgebaut — die Kopie läge neben dem Code, der
+sie nutzt, und meldete grün, während das echte SDK auseinanderläuft. Das ist
+dieselbe Drift-Lage wie SW-SCOPE-005 (Schema und Enum doppelt), nur über
+Repo-Grenzen. Eine eingecheckte Kopie wird gegen nichts verifiziert.
+
+Erlaubt ist nur der **Cache**: ein lokales Verzeichnis, das gegen die
+Pin-Prüfsumme verifiziert und bei Abweichung neu geholt wird. Der Cache ist
+Ergonomie (lokaler Build ohne Netz), nie die Wahrheitsquelle; er ist Opt-in
+über eine Umgebungsvariable und niemals eingecheckt.
+
 ### C.3 Die Versionsmatrix (maschinenlesbar)
 
 Jedes Repo führt eine Maschinenkennung seines Vertrags als Datei:
 
 ```
-skillweave-sdk:               sdk/schema_version.toml   ->  version = "1.0.0"
-skillweave:                   .contract/consumer.toml   ->  sdk = "1.0.0"
-skillweave-profiles:          .contract/consumer.toml   ->  sdk = "1.0.0"; runtime = "..."
-skillweave-packs-pro:         .contract/consumer.toml   ->  sdk = "1.0.0"; runtime = "..."
+skillweave-sdk:               sdk/schema_version.toml   ->  version = "0.1.0"
+skillweave:                   .contract/consumer.toml   ->  sdk = "0.1.0"
+skillweave-profiles:          .contract/consumer.toml   ->  sdk = "0.1.0"; runtime = "..."
+skillweave-packs-pro:         .contract/consumer.toml   ->  sdk = "0.1.0"; runtime = "..."
 ```
 
 Der Releasegraph ist maschinenlesbar und weist das SDK als Wurzel aus
@@ -256,6 +289,57 @@ Mechanik (Pull, §C.2), konkret:
 haben keinen Inhalt, gegen den sie validieren könnten (§D). Ihre Struktur
 (schema_version/consumer.toml) wird erst beim Füllen über GLE-007 registriert.
 Ein leeres Repo kann keinen Contract brechen.
+
+### C.8 SDK-Dispatcher — wann der Consumer-Build überhaupt läuft
+
+Eine Contract-CI, die nur auf den Consumer-Push triggert, ist im Cross-Repo-
+Sinn **nicht vorhanden**: ändert sich das SDK, ändert sich der Consumer nicht,
+also läuft kein Job, also wird nichts rot. Das ist der Unterschied zwischen
+„ungeprüft" und „nicht vorhanden" (siehe C.1 und die zweite Wahrheit aus
+SW-SCOPE-005).
+
+Der Consumer kann nicht wissen, wann der SDK-Besitzer etwas ändert. Also pollt
+er **deterministisch**: der Contract-CI-Job läuft zusätzlich periodisch
+(Schedule) und bei Bedarf manuell (workflow_dispatch). Damit ist der Lauf
+garantiert, nicht von einem Ereignis abhängig, das jemand anstoßen muss.
+
+Bewusst kein `repository_dispatch`/Cross-Repo-Webhook: Forgejo ist kanonisch
+und der Consumer-Build läuft auf GitHub. Ein Forgejo→GitHub-Ereignisbrückenbau
+wäre eine eigene Fehlerquelle (Token, Secrets, unsichtbarer Ausfall) — genau
+die Klasse, die §C.1 beim Referenzmuster dokumentiert. Der Schedule ist der
+ehrliche Poll: begrenzte Erkennungsverzögerung, dafür keinen neuen Ausfallpfad.
+
+Konsequenz für den Bruch-Beweis: der Nachweis wird über `workflow_dispatch`
+sofort demonstriert (nicht auf den Cron gewartet), der automatisierte Dauer-
+Wächter ist der Schedule. Beides läuft gegen das gepinnte Artefakt, nie gegen
+eine eingecheckte Kopie.
+
+### C.9 Übergangszustand — Core-lokale `schemas/` ist abgeleitet, nicht Quelle
+
+Während GLE-004 existiert im Core noch ein `schemas/`-Verzeichnis. Ab jetzt
+ist dessen Status festgelegt: **abgeleitetes Artefakt, nicht Quelle.** Der
+Unterschied in einem Satz: eine geprüfte Kopie ist ein Spiegel, eine nur
+dokumentierte Kopie ist eine zweite Wahrheit.
+
+Die Wahrheit ist ausschließlich das SDK-Artefakt (§B, §C.2). Die Core-lokale
+`schemas/*.json` bleibt, weil die Engine sie zur Laufzeit lädt und deren Umzug
+auf das SDK-Artefakt GLE-001-Territorium ist (Scope-Grenze, PRD legt für diesen
+Schnitt nur die vier Kernschemas + Taxonomie-Wertemenge fest). Aber sie wird
+durchgesetzt:
+
+- Der Contract-Wächter prüft **Byte-Gleichheit** zwischen jeder
+  Core-`schemas/*.json` und derselben Datei im gepinnten SDK-Artefakt. Das ist
+  **blockierend**, nicht ein lokaler Vorfilter. Weicht ein Byte ab, wird der
+  Build rot.
+- Bevorzugt wäre **erzeugen statt einchecken** (beim Build aus dem gepinnten
+  SDK kopieren, wie beim `enum`-Extrakt in C.7) — dann bräuchte es gar keinen
+  Gleichheits-Wächter. Solange das nicht steht, gilt der Byte-Gleichheits-Test
+  als Durchsetzung.
+
+Der Übergang ist **befristet** und endet mit GLE-001 (Schema-Import in den
+Core). Danach lädt die Runtime aus dem SDK-Artefakt, und die lokale Kopie
+entfällt. Ein „vorläufig" ohne Frist wäre dauerhaft und ist deshalb hier
+ausgeschlossen.
 
 ---
 
