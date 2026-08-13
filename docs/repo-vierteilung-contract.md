@@ -2,8 +2,9 @@
 
 **Status:** Draft (Vertragsskizze, abgeleitet aus §2.2 des PRD)
 **PRD:** `generic-lifecycle-extension/prd.md` §2.2 (Forgejo-only, `skillweave-planning`)
-**Ratification:** SW-SCOPE-004 (Schemas UND Taxonomie gehören in `skillweave-sdk`)
-**Basis:** `feature/GLE-004-repo-vierteilung` auf `eb79726` (= GLE-020-Head, nicht dev)
+**Ratification:** SW-SCOPE-004 (Schemas UND Taxonomie gehören in `skillweave-sdk`) — `done`, in PRD §2.2 eingearbeitet
+**Basis:** `feature/GLE-004-repo-vierteilung` auf `738a1f2` (= `origin/dev`, GLE-020 gemergt)
+**Vorbedingungen:** GLE-020 (gemergt) · SW-SCOPE-005 (offen, siehe §E)
 
 Dieses Dokument legt fest, was jedes der vier Repos **besitzt** und was es
 **nur konsumiert**. Es ist die Vertragsautorität für den Schnitt. Es ist
@@ -18,6 +19,10 @@ wenn das Zurückdrehen teuer ist.
 ---
 
 ## A. Ownership-Matrix (abgeleitet aus §2.2)
+
+Die vier Repos existieren bereits auf Forgejo und GitHub (durch SW-SCOPE-004
+angelegt), sind aber inhaltlich leer. Der Schnitt füllt sie, er erzeugt sie
+nicht.
 
 | Repo | Besitzt (Autorität) | Konsumiert (nur lesend) | Lizenz | Sichtbarkeit | GH-Mirror |
 |---|---|---|---|---|---|
@@ -41,14 +46,27 @@ kann, validiert Struktur ohne Semantik — ein Pack mit erfundener Kategorie
 ginge durch. Schema und Vokabular an getrennten Orten wären zwei Wahrheiten
 mit Driftrisiko.
 
-Konsequenz für den Schnitt (bereits beobachtet, hier benannt):
+SW-SCOPE-004 ist **nicht** eine plausible Vorsichtsmaßnahme, sondern die
+Reaktion auf einen bereits eingetretenen Fall. Das Driftrisiko, das §2.2 als
+Begründung anführt, war beim Entwurf des PRD keine Prophezeiung mehr — es war
+real, innerhalb eines Repos, vor jeder Teilung. Nachgemessen (SW-SCOPE-005):
 
-> Die Taxonomie liegt heute **doppelt** — als Code in
-> `src/skillweave/runtime/schema/vocabulary.py` (`RunStateModel`-Enum als
-> Vokabular-Quelle) und als `enum`-Literal in `schemas/run-state.schema.json`.
-> Im Schnitt wandert beides ins SDK. Bis dahin bleibt die Doppelung eine
-> bewusste Bruchlinie, nicht ein Fehler; sie darf nicht heimlich an **einem**
-> Ort angeglichen werden, weil das die Drift in die andere Richtung zementiert.
+> Das Statusvokabular liegt doppelt — `store.py:12` (`RunStateModel`, 16
+> Werte) und `schemas/run-state.schema.json` (`properties.state.enum`, 15
+> Werte). Sie sind **auseinandergelaufen**: `STOPPED_BEFORE_B06` existiert nur
+> im Code, hat eine Übergangsregel (`store.py:48`) und einen Test
+> (`test_review_fixes.py:247`), fehlt aber im Schema. Die Runtime kann einen
+> Zustand schreiben, den das Schema abweist; `vocabulary.py` leitet die
+> Schreib-Validierung aus dem Enum ab, nicht aus dem Schema — die beiden sind
+> strukturell entkoppelt.
+
+Dieser Befund schützt SW-SCOPE-004 gegen spätere Relativierung: Wer die
+Taxonomie wieder in den Core ziehen will, argumentiert gegen einen belegten,
+nicht nur behaupteten, Driftfall.
+
+Der Befund selbst ist **SW-SCOPE-005** und kein Teil dieses Schnitt-Tasks.
+Welcher Wert gilt (`STOPPED_BEFORE_B06` legitim oder Überbleibsel),
+entscheidet nicht, wer schneidet — siehe §E.
 
 ---
 
@@ -145,11 +163,19 @@ oder ein Schema wird im SDK absichtlich gebrochen, und der Build in
 `skillweave-profiles` wird rot. Der Gegenbeweis (grünes Gate ohne je
 getriggert zu haben) zählt nicht.
 
-### C.5 Open-Core-Grenze: kein Pro-Pack-Inhalt in public Repos
+### C.5 Open-Core-Grenze
 
-`skillweave-packs-pro` bekommt **keinen** GitHub-Mirror — das ist die
-Open-Core-Grenze und kein Versehen. Steht ausdrücklich hier, nicht nur im
-PRD. Vorkehrung:
+Die technische Grenze steht hier: `skillweave-packs-pro` bekommt **keinen**
+GitHub-Mirror. Sie ist kein Versehen und bleibt Teil des public-Vertrags,
+weil sie der Spiegel-Mechanik eine harte Regel gibt.
+
+Die **Begründung** — welche Packs proprietär sind und warum der CMS-Ops-Pack
+kein OSS-Profil ist — gehört nicht hierher. Sie ist Planungsinhalt und liegt
+im Planning-Repo (Forgejo-only, nicht gespiegelt): PRD §2.3 „Open-Core-Grenze".
+Dieser Vertrag verweist darauf, statt die proprietäre Begründung in ein
+public Repo zu duplizieren.
+
+Vorkehrung (technisch, hier beheimatet):
 
 - Das Mirror-Workflow in `skillweave`/`sdk`/`profiles` spricht **nur** das
   jeweilige eigene Repo an und hat keine Pflicht auf ein `packs-pro`-Remote.
@@ -159,6 +185,16 @@ PRD. Vorkehrung:
   provider-gebundener Pack darf nur gegen eine gepinnte Provider-Fassung
   validieren, die es im public SDK gar nicht gibt; taucht ein solcher Pack in
   einem public Repo auf, ist das bereits strukturell ein Drift.
+
+### C.6 Veröffentlichungs-Mechanik (explizit entschieden)
+
+Ownership-Matrix und Contract-CI-Strategie sind technische Dokumentation und
+dürfen public. Sie liegen in diesem Repo, das nach GitHub gespiegelt wird. Die
+Open-Core-Begründung dagegen bleibt im Planning-Repo. Die Trennung ist
+**verweisend, nicht duplizierend**: dieser Vertrag nennt die Grenze und
+referenziert PRD §2.3 für das Warum. Ein Duplikat der Begründung im
+public-Vertrag wäre eine zweite Wahrheit mit demselben Driftrisiko, gegen das
+SW-SCOPE-004 die Taxonomie schützt.
 
 ---
 
@@ -180,15 +216,38 @@ ist public und nach GitHub gespiegelt.
 
 ---
 
-## E. Basis-Abhängigkeit (benannt, nicht verschwiegen)
+## E. Vorbedingungen (benannt, nicht verschwiegen)
 
-GLE-020 ist die ausdrückliche Vorbedingung (§3.8). Dieser Branch steht auf
-`eb79726` (= GLE-020-Head), nicht auf `dev`. Die Ownership-Matrix und die
-CI-Strategie hängen an **keiner** bestimmten Fassung der Lazy-Import-Lösung;
-sie gelten unabhängig davon, **wie** der Kern teilinstallierbar wird.
+### E.1 GLE-020 — Importgraph-Entkopplung (erfüllt, gemergt)
 
-- Fällt der GLE-020-Review als BLOCKER aus, ändert sich die Grundlage; die
-  Einbettbarkeit als solche („Consumer bettet Engine ohne Profile ein",
-  DoD 11) steht und fällt mit GLE-020.
-- Sobald GLE-020 in `dev` ist, rebased dieser Branch **sofort** auf `dev`
-  — nicht am Ende.
+GLE-020 ist in `dev` gemergt. Der Kern ist ohne `runtime/` importierbar;
+`OPTIONAL_SUBPACKAGES = ("runtime",)` steht ausdrücklich in
+`src/skillweave/__init__.py`. Die Vorbedingung des Schnitts ist echt, nicht
+mehr Kandidat. `hasattr(skillweave, "execution")` ist jetzt `False` — die
+Eager-Bindungen der Submodulnamen sind entfallen. Dieser Vertrag nimmt **keine**
+Attributketten auf Submodul-Ebene an; er bewegt sich auf Repo-/Paket- und
+Schema-/Taxonomie-Ebene und ist davon nicht betroffen.
+
+### E.2 SW-SCOPE-005 — Taxonomie-Drift (offen, VOR dem Schnitt)
+
+`SW-SCOPE-005` (Status backlog, P1, Forgejo-only) hält fest: Das
+Statusvokabular liegt doppelt und ist bereits auseinandergelaufen (§A). Es
+ist **Vorbedingung**, kein Teil von GLE-004. Handel:
+
+- Solange beides in **einem** Repo liegt, ist die Angleichung ein Commit und
+  der Wächter ein Unit-Test. Nach der Vierteilung wird daraus eine
+  Cross-Repo-CI zwischen `skillweave-sdk` und `skillweave` — dieselbe Arbeit,
+  mit erheblich mehr Aufwand.
+- **Es ist nicht mein Task.** Welcher Wert gilt (`STOPPED_BEFORE_B06` legitim
+  oder Überbleibsel), entscheidet nicht, wer schneidet. Der Befund ist
+  benannt, dokumentiert, nicht eigenmächtig angeglichen.
+- Falls ich den Wächter mit vorbereite, gilt derselbe Nachweismaßstab wie für
+  die Contract-CI: einen Wert auf einer Seite hinzufügen, der Test wird rot —
+  nicht „der Test läuft grün".
+
+### E.3 Rebase-Verpflichtung
+
+Dieser Branch ist auf `origin/dev` (`738a1f2`) rebased. Weitere Rebase-Punkte
+folgen, sobald sich `dev` gegenüber der aktuellen Basis bewegt — sofort, nicht
+am Ende. Solange SW-SCOPE-005 offen bleibt, steht dieser Vertrag, aber der
+Schnitt beginnt erst nach seiner Entscheidung.
