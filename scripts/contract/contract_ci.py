@@ -33,7 +33,13 @@ Der Nachweis (Nachweispflicht §C.4/GLE-004): ein absichtlich gebrochener
 Contract im SDK (ein Wert aus run-state.schema.json entfernt) macht DIESEN
 Lauf rot. Nicht "Pipeline grün". Der Bruch muss im Remote-Artefakt existieren,
 nicht im Arbeitsbaum; erst dann prueft der Waechter das Richtige.
+
+Zwei Leser auf dieselbe Core-Wertemenge — MERKMAL, keine Redundanz (siehe auch
+tests/unit/test_vocabulary_guard.py): dieser Waechter liest RunStateModel
+AST-basiert importfrei; der Unit-Test importiert es normal. Laufen beide
+auseinander, ist das ein Befund (das Enum wurde dynamisch).
 """
+import ast
 import json
 import os
 import subprocess
@@ -150,10 +156,38 @@ def _load_sdk_enum(sdk_dir: Path) -> set:
 
 
 def _load_core_enum() -> set:
-    sys.path.insert(0, str(_repo_root() / "src"))
-    from skillweave.runtime.store import RunStateModel
-
-    return {s.value for s in RunStateModel}
+    # Importfrei (§C.2): die Wertemenge wird statisch aus store.py gelesen,
+    # nicht per "import skillweave". Der Waechter prueft eine DEKLARATION und
+    # darf nicht an der Installierbarkeit des Cores haengen (kein pyyaml, keine
+    # GLE-020-Importkette). Scheitert LAUT, wenn ein Member nicht statisch als
+    # String-Literal aufloesbar ist — still weniger Werte zu finden waere der
+    # Drift-Fehler in neuer Form.
+    store_path = _repo_root() / "src" / "skillweave" / "runtime" / "store.py"
+    tree = ast.parse(store_path.read_text(encoding="utf-8"), filename=str(store_path))
+    values = set()
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "RunStateModel":
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign):
+                    for target in stmt.targets:
+                        if isinstance(target, ast.Name):
+                            if isinstance(stmt.value, ast.Constant) and isinstance(
+                                stmt.value.value, str
+                            ):
+                                values.add(stmt.value.value)
+                            else:
+                                raise SystemExit(
+                                    f"RunStateModel.{target.id} (Zeile {stmt.lineno}) "
+                                    "ist kein statisch aufloesbares String-Literal. "
+                                    "Contract-Waechter kann die Core-Wertemenge nicht "
+                                    "importfrei lesen."
+                                )
+            break
+    else:
+        raise SystemExit("RunStateModel nicht in store.py gefunden.")
+    if not values:
+        raise SystemExit("RunStateModel lieferte eine leere Wertemenge.")
+    return values
 
 
 def _check_schema_bytes(sdk_dir: Path) -> list:

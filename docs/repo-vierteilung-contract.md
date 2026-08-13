@@ -193,6 +193,14 @@ Pin-Prüfsumme verifiziert und bei Abweichung neu geholt wird. Der Cache ist
 Ergonomie (lokaler Build ohne Netz), nie die Wahrheitsquelle; er ist Opt-in
 über eine Umgebungsvariable und niemals eingecheckt.
 
+Der Contract-Wächter liest die Core-Wertemenge **importfrei** (statisch aus
+dem Quelltext, nicht per `import skillweave`). Begründung: er prüft eine
+**Deklaration**, kein lauffähiges System, und darf nicht an dessen
+Installierbarkeit hängen. Ein Wächter, der ausfällt, weil eine Engine-
+Abhängigkeit fehlt, meldet etwas über die Installation, nicht über den
+Vertrag — das ist nach dem Schnitt für jeden Consumer die falsche
+Fehlerklasse (und arbeitet gegen die GLE-020-Entkopplung des Kerns).
+
 ### C.3 Die Versionsmatrix (maschinenlesbar)
 
 Jedes Repo führt eine Maschinenkennung seines Vertrags als Datei:

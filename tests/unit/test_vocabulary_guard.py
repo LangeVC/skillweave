@@ -25,6 +25,13 @@ Zwei Ebenen, verschiedene Aufgaben (GLE-004):
   (Repository A bricht, Repository B rot) steht dort, nicht hier.
 - Die Wahrheitsquelle der Wertemenge ist das SDK-Schema; die Core-lokale
   schemas/-Datei ist ein ABGELEITETES Artefakt der gepinnten SDK-Version.
+
+Zwei Leser auf dieselbe Wertemenge — MERKMAL, keine Redundanz:
+- Dieser Test importiert RunStateModel (lauffaehig, braucht die Core-Deps).
+- contract_ci.py liest RunStateModel AST-basiert importfrei aus store.py.
+Laufen beide auseinander, ist das selbst ein Befund: das Enum ist dynamisch
+geworden (nicht mehr rein literalbasiert). Beide Leser sind Absicht; einen zu
+entfernen wuerde diesen Befund verdeckten.
 """
 from pathlib import Path
 import json
