@@ -14,6 +14,13 @@ Nach dem Schnitt (GLE-004) wird aus diesem Unit-Test eine Contract-CI: das
 Schema liegt dann im SDK, das Enum im Consumer. Der Mengenvergleich bleibt
 derselbe, nur die Quelle des Schemas wechselt von "Datei im eigenen Repo" auf
 "gepinntes SDK-Artefakt".
+
+Zwei Ebenen, dieselbe Invariante (GLE-004):
+- Dieser Unit-Test liest die lokale schemas/-Datei (bleibt im Core, bis der
+  eigentliche Dateivorzug ein separater Schnittschritt ist).
+- scripts/contract/contract_ci.py ist der Cross-Repo-Waechter: er liest die
+  gepinnte SDK-Wertemenge (sdk/contract/run-state.enum.json) via Pull und wird
+  im CI rot, wenn das SDK den Contract bricht.
 """
 from pathlib import Path
 import json

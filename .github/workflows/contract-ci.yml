@@ -1,0 +1,57 @@
+name: Cross-Repo Contract CI
+
+# Wächter des skillweave-Kerns gegen den gepinnten skillweave-sdk-Vertrag.
+#
+# Pull, nicht Push (§C.2 im docs/repo-vierteilung-contract.md): dieser Job liest
+# .contract/consumer.toml, lädt genau die gepinnte SDK-Version und vergleicht
+# die Wertemengen. Wird ein Contract im SDK gebrochen, wird DIESER Build rot —
+# das ist die Nachweispflicht von GLE-004.
+#
+# Die SDK-Quelle ist der gepinnte Subtree-Tag/sha im Haupt-Repo (das SDK lebt
+# entwicklungsseitig unter ./sdk, bis der Subtree-Push erfolgt). Der Job nutzt
+# das lokale ./sdk, wenn vorhanden, sonst klont er skillweave-sdk@<pin>.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - ".contract/**"
+      - "scripts/contract/**"
+      - "schemas/**"
+      - "src/skillweave/runtime/store.py"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-run-state:
+    name: Contract — run-state vocabulary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Checkout gepinntes SDK (sofern nicht lokal vorhanden)
+        run: |
+          if [ -d sdk/contract ]; then
+            echo "Nutze lokales ./sdk (Entwicklungs-Checkout vor Subtree-Push)."
+          else
+            PIN=$(python3 -c "import tomllib,sys; print(tomllib.load(open('.contract/consumer.toml','rb'))['sdk']['version'])")
+            echo "PIN=$PIN"
+            git clone --depth 1 --branch "$PIN" "https://github.com/LangeVC/skillweave-sdk.git" /tmp/skillweave-sdk || \
+              git clone --depth 1 "https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave-sdk.git" /tmp/skillweave-sdk
+            echo "SKILLWEAVE_SDK_DIR=/tmp/skillweave-sdk" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run contract CI (run-state)
+        run: python3 scripts/contract/contract_ci.py
+
+      - name: Run schema/guard unit test (lokale Wertemenge)
+        run: |
+          pip install pytest
+          python3 -m pytest tests/unit/test_vocabulary_guard.py -q

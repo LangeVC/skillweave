@@ -1,0 +1,23 @@
+{
+  "contract": "run-state",
+  "schema_version": "1.0.0",
+  "source": "schemas/run-state.schema.json#/properties/state/enum",
+  "values": [
+    "BLOCKED_WAITING_FOR_GATE",
+    "FAILED",
+    "IN_PROGRESS",
+    "PREFLIGHT_COMPLETE",
+    "REVIEW_REQUIRED",
+    "SANDBOX_PREFLIGHT",
+    "STOPPED_BEFORE_B06",
+    "advance_or_stop",
+    "batch_selection",
+    "fix_retry",
+    "implement",
+    "integrate",
+    "lane_plan",
+    "preflight",
+    "review_gate",
+    "verify"
+  ]
+}

@@ -1,0 +1,14 @@
+# Consumer-Pin des skillweave-Kerns auf das SDK.
+#
+# Diese Datei ist die maschinenlesbare Kennung des Vertrags, den dieser
+# Consumer (skillweave) gegen skillweave-sdk hält. Der Contract-CI-Job liest
+# sie, lädt genau diese SDK-Version und validiert dagegen — nie "latest",
+# nie eine Branch-Spitze.
+
+[sdk]
+version = "1.0.0"
+
+[runtime]
+# Selbstkennung dieses Repos. profiles/packs-pro tragen hier zusätzlich eine
+# Pin auf die runtime-Version; der Kern ist selbst die Runtime.
+repo = "skillweave"

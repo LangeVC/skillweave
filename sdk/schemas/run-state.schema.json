@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillweave.dev/schemas/run-state/v1",
+  "title": "Run State Schema",
+  "description": "SkillWeave Runtime Run State — versioned, persisted processing unit",
+  "type": "object",
+  "required": ["run_id", "root_run_id", "state", "version", "created_at", "role"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Unique identifier for this process instance"
+    },
+    "root_run_id": {
+      "type": "string",
+      "description": "Root run identifier for system-of-systems traceability"
+    },
+    "parent_run_id": {
+      "type": ["string", "null"],
+      "description": "Immediate parent run identifier"
+    },
+    "state": {
+      "type": "string",
+      "description": "Current state from the versioned status vocabulary",
+      "enum": [
+        "preflight",
+        "batch_selection",
+        "lane_plan",
+        "implement",
+        "verify",
+        "review_gate",
+        "fix_retry",
+        "integrate",
+        "advance_or_stop",
+        "SANDBOX_PREFLIGHT",
+        "IN_PROGRESS",
+        "PREFLIGHT_COMPLETE",
+        "BLOCKED_WAITING_FOR_GATE",
+        "REVIEW_REQUIRED",
+        "FAILED",
+        "STOPPED_BEFORE_B06"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optimistic concurrency version"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ended_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "role": {
+      "type": "string",
+      "description": "Accountable role for this process instance"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Extensible metadata"
+    }
+  },
+  "additionalProperties": false
+}

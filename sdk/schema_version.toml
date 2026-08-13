@@ -1,0 +1,24 @@
+# skillweave-sdk — Vertragsautorität
+#
+# Diese Datei ist die Wurzel des Releasegraphen (docs/repo-vierteilung-contract.md
+# §B). Alle Consumer pinnen eine Version aus dieser Datei; kein Consumer
+# referenziert "latest" oder eine Branch-Spitze.
+
+[schema]
+# Kanonische Schema-Version. Ein Breaking-Change an einem Kern-Schema erhöht
+# den Major, ein additiver den Minor.
+version = "1.0.0"
+
+[schema_files]
+# Die Kernschemas, die dieses SDK besitzt. GLE-001 ergänzt später die fünf
+# neuen Schemas (WorkProfile, DeliverableContract, EvidenceContract,
+# CategoryPack, LifecycleProfile); bis dahin sind dies die vier bestehenden.
+evidence = "schemas/evidence.schema.json"
+prompt-sequence = "schemas/prompt-sequence.schema.json"
+run-state = "schemas/run-state.schema.json"
+workflow-context = "schemas/workflow-context.schema.json"
+
+[taxonomy]
+# Die Taxonomie-Wertemenge liegt als Schema-enum. Diese Sektion dokumentiert,
+# wo. Der Validator (GLE-005) braucht nur diese Wertemenge, keinen Core-Zugriff.
+run-state-vocabulary = "schemas/run-state.schema.json#/properties/state/enum"

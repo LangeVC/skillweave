@@ -1,0 +1,34 @@
+name: Mirror to GitHub
+
+# Forgejo ist kanonisch; GitHub (LangeVC/skillweave-sdk) ist der oeffentliche
+# read-only Mirror. Force-Push genau der Ref, die den Lauf ausgeloest hat.
+#
+# exact-ref Muster (LVC-MIR-G0, 2026-07-28), identisch zum Core-Repo.
+# WICHTIG fuer die Erstbefuellung: ein leeres Repo faellt sich nur ueber einen
+# echten Ref. Der erste Push auf main muss auf GitHub einen main erzeugen; das
+# exact-ref Muster tut das, weil es die ausloesende Ref nachspiegelt.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ref zum Nachspiegeln (z.B. refs/tags/v1.0.0)'
+        required: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to GitHub mirror
+        env:
+          GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+          MIRROR_REF: ${{ inputs.ref || github.ref }}
+        run: |
+          remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave-sdk.git"
+          git push --force "$remote" "+${MIRROR_REF}:${MIRROR_REF}"

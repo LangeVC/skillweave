@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PromptSequence",
+  "type": "object",
+  "required": [
+    "metadata",
+    "objective",
+    "success_criteria",
+    "assumptions",
+    "usage_notes",
+    "inputs_required",
+    "outputs_required",
+    "sequence_steps",
+    "final_assembly",
+    "validation_rules",
+    "failure_handling",
+    "final_deliverable_format"
+  ],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["plan", "build", "mixed"]
+        },
+        "domain": {
+          "type": "string"
+        },
+        "intent": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "complexity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "objective": {
+      "type": "string"
+    },
+    "success_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "usage_notes": {
+      "type": "object"
+    },
+    "inputs_required": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outputs_required": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sequence_steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "purpose",
+          "instructions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "expected_output": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "validation": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "completion_rule": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "final_assembly": {
+      "type": "string"
+    },
+    "validation_rules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failure_handling": {
+      "type": "string"
+    },
+    "final_deliverable_format": {
+      "type": "string"
+    }
+  }
+}
