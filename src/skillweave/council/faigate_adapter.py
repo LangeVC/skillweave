@@ -1,7 +1,7 @@
 """Multi-provider model routing for SkillWeave Council.
 
 Auto-detection of available routers:
-- Faigate (local, brew-installed at localhost:$(port)/v1)
+- Faigate (local, brew-installed at 127.0.0.1:$(FAIGATE_PORT, default 8090)/v1)
 - OpenRouter (cloud, api.openrouter.ai)
 - ClawRouter (local/cloud, clawrouter.ai)
 - KiloRouter (local/cloud, kilorouter.com)
@@ -106,7 +106,7 @@ def detect_providers() -> dict[str, CouncilProvider]:
         os.environ.get("FAIGATE_API_KEY") or
         os.path.exists(os.path.expanduser("~/.faigate")) or
         os.path.exists(os.path.expanduser("~/.config/faigate/tokens.json")) or
-        _check_port_open("localhost", faigate_port)
+        _check_port_open(FAIGATE_DEFAULT_HOST, faigate_port)
     )
     if faigate_available:
         providers["faigate"] = FaigateProvider()
@@ -171,6 +171,7 @@ def _check_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 
 # ── FaigateProvider ────────────────────────────────────────────────
 
+FAIGATE_DEFAULT_HOST = "127.0.0.1"
 FAIGATE_DEFAULT_PORT = "8090"
 
 
@@ -178,7 +179,8 @@ class FaigateProvider(CouncilProvider):
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
         self.base_url = (base_url or os.environ.get(
             "FAIGATE_BASE_URL",
-            f"http://localhost:{os.environ.get('FAIGATE_PORT', FAIGATE_DEFAULT_PORT)}/v1"
+            f"http://{os.environ.get('FAIGATE_HOST', FAIGATE_DEFAULT_HOST)}:"
+            f"{os.environ.get('FAIGATE_PORT', FAIGATE_DEFAULT_PORT)}/v1"
         )).rstrip("/")
         self.api_key = api_key or os.environ.get("FAIGATE_API_KEY")
         # If no explicit key, try reading from ~/.config/faigate/tokens.json
@@ -210,11 +212,11 @@ class FaigateProvider(CouncilProvider):
                 error_body = e.read().decode("utf-8", errors="replace")[:200]
             except Exception:
                 pass
-            return {"error": f"HTTP {e.code}: {error_body}"}
+            return {"error": f"HTTP {e.code} at {url}: {error_body}"}
         except urllib.error.URLError as e:
-            return {"error": f"URL Error: {e.reason}"}
+            return {"error": f"URL Error at {url}: {e.reason}"}
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": f"{str(e)} (at {url})"}
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         """Check model availability via Faigate GET /v1/models (single call)."""
