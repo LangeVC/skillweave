@@ -40,13 +40,20 @@ on:
 # Pfade, die Planungs-/Strategieinhalt tragen und nicht in den oeffentlichen
 # Mirror duerfen. Ein Treffer macht den Push rot, es sei denn ein
 # Release-Override mit Begruendung liegt vor.
-#   - .skillweave/**    : Planungs-/Dogfooding-Zustand; Planungsinhalte
-#                         gehoeren in skillweave-planning (Forgejo-only).
-#   - **/strategy.md    : laut .gitignore nie versioniert.
-#   - **/prd*.md, json  : PRDs gehoeren ins Planning-Repo.
-#   - **/*.contract*    : Open-Core/oekonomische Vertraege (GLE-004-Fall).
+#   - .skillweave/**         : Planungs-/Dogfooding-Zustand; Planungsinhalte
+#                              gehoeren in skillweave-planning (Forgejo-only).
+#   - **/strategy.md         : laut .gitignore nie versioniert.
+#   - **/prd*.md, json       : PRDs gehoeren ins Planning-Repo.
+#   - **/*.contract*         : Open-Core/oekonomische Vertraege (GLE-004-Fall).
+#   - **/*contract*.md u.ae. : Vertraege/Proposals, die in docs/ ausweichen,
+#                              wo kein Pfad-Gate sie faengt. Der GLE-004-Vertrag
+#                              hiess docs/repo-vierteilung-contract.md — genau
+#                              diese '-contract.md'-Form war in keiner Fassung
+#                              abgedeckt. docs/ selbst bleibt frei fuer
+#                              oeffentliche Produktdoku (architecture, roadmap);
+#                              gesperrt wird die Vertrags-/Proposal-Klasse.
 env:
-  BLOCKED_PATHS: ".skillweave/**|strategy.md|**/strategy.md|prd*.md|**/prd*.md|prd*.json|**/prd*.json|*.contract*|**/*.contract*"
+  BLOCKED_PATHS: ".skillweave/**|strategy.md|**/strategy.md|prd*.md|**/prd*.md|prd*.json|**/prd*.json|*.contract*|**/*.contract*|*contract*.md|**/*contract*.md|*proposal*.md|**/*proposal*.md|*.proposal*|**/*.proposal*"
 
 jobs:
   # --- Gate: laeuft VOR dem Mirror. Der Mirror haengt per needs: daran. ---

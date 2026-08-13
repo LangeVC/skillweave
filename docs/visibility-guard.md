@@ -43,12 +43,15 @@ Blocked paths on any touched file:
 - `.skillweave/**`
 - `strategy.md`, `**/strategy.md`
 - `prd*.md`, `**/prd*.md`, `prd*.json`, `**/prd*.json`
-- `*.contract*`, `**/*.contract*`
+- `*.contract*`, `**/*.contract*`, `*contract*.md`, `**/*contract*.md`
+- `*proposal*.md`, `**/*proposal*.md`, `*.proposal*`, `**/*.proposal*`
 
-Paths NOT yet covered (known gap, tracked in the OPS-011 ticket):
-
-- `docs/**` — the GLE-004 contract case landed here. Decide explicitly whether a
-  contract/proposal convention in `docs/` belongs to the blocked set.
+The contract/proposal class above is what the GLE-004 case produced when a session
+placed `docs/repo-vierteilung-contract.md` with the open-core boundary outside any
+blocked path. Public product documentation in `docs/` (`architecture.md`,
+`roadmap.md`, `overview.md`, ...) stays allowed; only the contract/proposal content
+class is blocked. If a session starts naming non-contract planning content outside
+these patterns, the list grows again — a gate protects only the paths it knows.
 
 A deliberate case can be released via `workflow_dispatch` with `release_override=true`
 and a mandatory `release_override_reason`. Without a reason, the override is rejected:
