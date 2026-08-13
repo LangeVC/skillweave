@@ -25,8 +25,13 @@ If `.skillweave/` does not exist in the project root, create it:
 ### 2. Route All Outputs Into `.skillweave/`
 All generated planning documents, PRDs (`prd.json`), task breakdowns, and execution sequences MUST be saved exclusively within `.skillweave/` or its sub-folders. Never dump artifacts into the repository root or `/prd/` or `/docs/`.
 
-### 3. Git Isolation
-Check `.gitignore` — if `.skillweave/` is not listed, append it. AI-generated planning files are excluded from source control.
+### 3. Git Isolation (content placement)
+Follow the shared rule `skillweave-planning/SKILLWEAVE-SCOPE.md`. Do NOT blanket-append
+`.skillweave/` to `.gitignore`. The rule depends on the repository role:
+- Product/consuming repo: `.skillweave/` is regenerated runtime state; a blanket ignore is fine.
+- Planning repo: use the allowlist form and keep `.skillweave/planning/` tracked.
+Content home: PRDs, tickets, strategy, and proposals belong in the planning repository under
+`.skillweave/planning/`, never in a mirrored product tree or its `docs/`.
 
 ### 4. Default Config
 If `.skillweave/config.yaml` does not exist, create it with:

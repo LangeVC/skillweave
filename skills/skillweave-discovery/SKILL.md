@@ -16,7 +16,7 @@ Before generating output, verify and enforce:
 
 1. **Directory**: Create `.skillweave/` with `discovery/`, `prds/`, `tracking-log/` subdirs if missing.
 2. **Routing**: ALL artifacts go under `.skillweave/discovery/` — never the repo root.
-3. **Git**: Append `.skillweave/` to `.gitignore` if not present.
+3. **Git (content placement)**: Follow the shared rule `skillweave-planning/SKILLWEAVE-SCOPE.md`. Do NOT blanket-append `.skillweave/` to `.gitignore`. In a product repo `.skillweave/` is regenerated runtime state (blanket ignore ok). In a planning repo keep `.skillweave/planning/` tracked via the allowlist. Discovery findings, PRDs, and strategy belong in the planning repository under `.skillweave/planning/`, never in a mirrored product tree or its `docs/`.
 4. **Pre-Scan**: Scan `.skillweave/prds/` for existing PRDs. If found, flag and ask whether to update or skip discovery.
 
 ## Phases

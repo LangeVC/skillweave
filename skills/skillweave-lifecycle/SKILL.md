@@ -38,8 +38,8 @@ If `.skillweave/` does not exist, create it:
 ### 2. Route All Outputs Into `.skillweave/`
 All lifecycle reports, phase transitions, bundle recommendations, and navigation logs MUST be saved under `.skillweave/phases/` or `.skillweave/bundles/`.
 
-### 3. Git Isolation
-Ensure `.skillweave/` is listed in `.gitignore`.
+### 3. Git Isolation (content placement)
+Follow the shared rule `skillweave-planning/SKILLWEAVE-SCOPE.md`. Do NOT blanket-append `.skillweave/` to `.gitignore`. In a product repo `.skillweave/` is regenerated runtime state (blanket ignore ok). In a planning repo keep `.skillweave/planning/` tracked via the allowlist. Phase reports and navigation logs are runtime state; PRDs and strategy belong in the planning repository under `.skillweave/planning/`.
 
 ### 4. Default Config
 If `.skillweave/config.yaml` does not exist, create it with lifecycle defaults.
@@ -328,7 +328,7 @@ started: 2026-04-01
 
 Upon invocation, the skill MUST:
 1. Check `.skillweave/` structure exists (create if missing)
-2. Check `.gitignore` for `.skillweave/` exclusion
+2. Apply content placement per `skillweave-planning/SKILLWEAVE-SCOPE.md` (allowlist forms for `.skillweave/`; never blanket-ignore a planning repo)
 3. Check `.skillweave/config.yaml` for lifecycle defaults
 4. Check `.skillweave/phases/` and `.skillweave/bundles/` exist
 5. Load `phases/current.yaml` and `bundles/active.yaml` if present

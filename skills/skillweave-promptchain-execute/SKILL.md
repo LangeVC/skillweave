@@ -34,7 +34,7 @@ If `.skillweave/` does not exist in the project root, create it:
 All execution sequences, batch plans, gate logs, and state trackers MUST be saved exclusively within `.skillweave/` or its sub-folders. Never dump artifacts into the repository root.
 
 ### 3. Git Isolation
-Check `.gitignore` — if `.skillweave/` is not listed, append it. AI-generated execution files are excluded from source control.
+Follow the shared rule `skillweave-planning/SKILLWEAVE-SCOPE.md`. Do NOT blanket-append `.skillweave/` to `.gitignore`. In a product repo `.skillweave/` is regenerated runtime state (blanket ignore ok); in a planning repo keep `.skillweave/planning/` tracked via the allowlist. Execution state stays local; planning/strategy content belongs in the planning repository.
 
 ### 4. Default Config
 If `.skillweave/config.yaml` does not exist, create it with:

@@ -29,7 +29,7 @@ If `.skillweave/` does not exist in the project root, create it:
 All release plans, task lists, completion promises, memory snapshots, and execution logs MUST be saved exclusively within `.skillweave/` or its sub-folders. Never dump artifacts into the repository root.
 
 ### 3. Git Isolation
-Check `.gitignore` — if `.skillweave/` is not listed, append it. AI-generated pipeline files are excluded from source control.
+Follow the shared rule `skillweave-planning/SKILLWEAVE-SCOPE.md`. Do NOT blanket-append `.skillweave/` to `.gitignore`. In a product repo `.skillweave/` is regenerated runtime state (blanket ignore ok); in a planning repo keep `.skillweave/planning/` tracked via the allowlist. Release plans and strategy belong in the planning repository; execution logs stay local.
 
 ### 4. Default Config
 If `.skillweave/config.yaml` does not exist, create it with:

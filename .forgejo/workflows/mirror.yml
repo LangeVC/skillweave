@@ -7,6 +7,17 @@ name: Mirror to GitHub
 # Muster: exact-ref, festgelegt am 2026-07-28 unter LVC-MIR-G0 fuer die
 # langevc-Org. Dieses Repo lief bis heute auf dem alten main-plus-Bulk-Tags-
 # Muster, das dort ausdruecklich ersetzt wurde.
+#
+# Sichtbarkeits-Gate (OPS-011 / CAP-CI-001): Die Vorbedingung laeuft VOR dem
+# Mirror-Job, nicht daneben. Forgejo Actions kennt kein workflow-uebergreifendes
+# `needs:` — ein eigenes Workflow-File auf demselben Trigger laeufe parallel und
+# der Mirror waere laengst unterwegs, bevor das Gate fertig ist. Deshalb ist das
+# Gate ein Job IN diesem Workflow, und der Mirror haengt per `needs:` daran.
+# Nur innerhalb eines Workflows ist die Reihenfolge garantiert.
+#
+# Ein bewusster Fall laesst sich freigeben, mit Pflichtbegruendung. Ein Gate
+# ohne Ausweg wird umgangen, und dann ist es schlechter als keines.
+
 on:
   push:
     branches: ["**"]
@@ -16,9 +27,110 @@ on:
       ref:
         description: 'Ref zum Nachspiegeln, z.B. refs/tags/v2.3.0'
         required: true
+      release_override:
+        description: 'Ueber die Sichtbarkeits-Pruefung hinweg freigeben (true)'
+        type: boolean
+        default: false
+        required: false
+      release_override_reason:
+        description: 'Pflichtbegruendung, wenn release_override=true. Wird im Log festgehalten.'
+        type: string
+        required: false
+
+# Pfade, die Planungs-/Strategieinhalt tragen und nicht in den oeffentlichen
+# Mirror duerfen. Ein Treffer macht den Push rot, es sei denn ein
+# Release-Override mit Begruendung liegt vor.
+#   - .skillweave/**    : Planungs-/Dogfooding-Zustand; Planungsinhalte
+#                         gehoeren in skillweave-planning (Forgejo-only).
+#   - **/strategy.md    : laut .gitignore nie versioniert.
+#   - **/prd*.md, json  : PRDs gehoeren ins Planning-Repo.
+#   - **/*.contract*    : Open-Core/oekonomische Vertraege (GLE-004-Fall).
+env:
+  BLOCKED_PATHS: ".skillweave/**|strategy.md|**/strategy.md|prd*.md|**/prd*.md|prd*.json|**/prd*.json|*.contract*|**/*.contract*"
 
 jobs:
+  # --- Gate: laeuft VOR dem Mirror. Der Mirror haengt per needs: daran. ---
+  visibility-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      decision: ${{ steps.gate.outputs.decision }}
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gate — Sichtbarkeit gepushter Pfade pruefen
+        id: gate
+        env:
+          GH_RELEASE_OVERRIDE: ${{ inputs.release_override }}
+          GH_RELEASE_REASON: ${{ inputs.release_override_reason || '' }}
+          GH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -uo pipefail
+          echo "release_override: ${GH_RELEASE_OVERRIDE:-false}"
+          echo "release_override_reason: ${GH_RELEASE_REASON:-<none>}"
+
+          # Basis der Diff-Pruefung. Bei einem neuen Ref (before=0000...)
+          # gilt die Wurzel des aktuellen Checkouts als Basis, sodass alle
+          # getroffenen Dateien geprueft werden.
+          if [ "${GH_BEFORE}" = "0000000000000000000000000000000000000000" ] \
+             || [ -z "${GH_BEFORE}" ]; then
+            base="$(git rev-list --max-parents=0 HEAD)"
+          else
+            base="${GH_BEFORE}"
+          fi
+          echo "diff base: ${base}"
+
+          # Alle Aenderungsdateien zwischen Basis und HEAD sammeln.
+          touched="$RUNNER_TEMP/touched.txt"
+          git diff --name-only "${base}" HEAD > "${touched}"
+          if [ ! -s "${touched}" ]; then
+            git diff-tree --no-commit-id --name-only -r HEAD > "${touched}"
+          fi
+          echo "touched files: $(wc -l < "${touched}")"
+
+          # Globs auslesen.
+          IFS='|' read -ra GLOBS <<< "$BLOCKED_PATHS"
+
+          blocked=""
+          while IFS= read -r f; do
+            [ -z "${f}" ] && continue
+            for g in "${GLOBS[@]}"; do
+              # shell-Glob-Matching: der Fall am Muster.
+              case "${f}" in
+                ${g}) blocked="${blocked} ${f}" ;;
+              esac
+            done
+          done < "${touched}"
+
+          if [ -z "${blocked}" ]; then
+            echo "Gate PASS — keine Planungs-/Strategiepfade beruehrt."
+            echo "decision=PASS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "GATE FAIL — Folgende Pfade tragen Planungs-/Strategieinhalt:"
+          printf '  %s\n' ${blocked}
+
+          override="${GH_RELEASE_OVERRIDE:-false}"
+          if [ "${override}" = "true" ] && [ -n "${GH_RELEASE_REASON}" ]; then
+            echo "Release-Override AKTIVIERT. Begruendung: ${GH_RELEASE_REASON}"
+            echo "decision=OVERRIDE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${override}" = "true" ] && [ -z "${GH_RELEASE_REASON}" ]; then
+            echo "Release-Override verlangt eine Pflichtbegruendung (release_override_reason)."
+            echo "decision=FAIL" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Push an den oeffentlichen Mirror blockiert. Loesen Sie den Vorfall"
+          echo "(Planungsinhalt gehoert nach skillweave-planning, Forgejo-only), oder"
+          echo "nutzen Sie workflow_dispatch mit release_override + Begruendung."
+          echo "decision=FAIL" >> "$GITHUB_OUTPUT"
+          exit 1
+
   mirror:
+    needs: visibility-gate
     runs-on: ubuntu-latest
     steps:
       - uses: https://github.com/actions/checkout@v4
@@ -28,7 +140,9 @@ jobs:
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
           MIRROR_REF: ${{ inputs.ref || github.ref }}
+          MIRROR_DECISION: ${{ needs.visibility-gate.outputs.decision }}
         run: |
+          echo "Gate decision: ${MIRROR_DECISION} (OVERRIDE = protokollierte Freigabe)"
           remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave.git"
           # Nur die ausloesende Ref spiegeln. Kein --prune, kein
           # 'refs/heads/*'-Wildcard: Der CI-Checkout hat lokal nur diese eine
