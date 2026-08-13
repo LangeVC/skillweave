@@ -11,6 +11,11 @@ on:
   push:
     branches: ["**"]
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ref zum Nachspiegeln, z.B. refs/tags/v2.3.0'
+        required: true
 
 jobs:
   mirror:
@@ -22,6 +27,7 @@ jobs:
       - name: Push to GitHub mirror
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+          MIRROR_REF: ${{ inputs.ref || github.ref }}
         run: |
           remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave.git"
           # Nur die ausloesende Ref spiegeln. Kein --prune, kein
@@ -30,4 +36,4 @@ jobs:
           # dem Mirror loeschen wollen — einschliesslich GitHubs Default-Branch
           # (was GitHub ablehnt und den Job scheitern laesst) und jeden von
           # GitHub verwalteten Branch wie gh-pages.
-          git push --force "$remote" "+${GITHUB_REF}:${GITHUB_REF}"
+          git push --force "$remote" "+${MIRROR_REF}:${MIRROR_REF}"
