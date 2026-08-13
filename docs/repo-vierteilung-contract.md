@@ -68,6 +68,33 @@ Der Befund selbst ist **SW-SCOPE-005** und kein Teil dieses Schnitt-Tasks.
 Welcher Wert gilt (`STOPPED_BEFORE_B06` legitim oder Überbleibsel),
 entscheidet nicht, wer schneidet — siehe §E.
 
+### Was „SDK besitzt Taxonomie" präzise heißt
+
+PRD §2.2 sagt „SDK besitzt Schemas UND Taxonomie". Wer das wörtlich liest,
+liest „jede Codezeile, die das Vokabular berührt, liegt im SDK" — und stößt
+beim Schnitt auf `RunStateModel`, das zweierlei trägt:
+
+- **Wertemenge** (welche Zustände existieren) — das ist Vokabular und gehört
+  ins SDK. Das Schema (`run-state.schema.json` → `properties.state.enum`)
+  trägt sie.
+- **Ausführungssemantik** (`legal_transitions` — welcher Zustand darf auf
+  welchen folgen) — das ist Kernel-Logik und gehört zum Core, nicht zum
+  Vertrag.
+
+„SDK besitzt Taxonomie" heißt daher: das SDK besitzt die **autoritative
+Wertemenge**, nicht jede Codezeile, die sie berührt. Der Core besitzt Struktur
+(`RunStateModel` mit Member-Namen) und Semantik (`legal_transitions`). Wäre
+`RunStateModel` vollständig ins SDK gewandert, trüge das SDK entweder
+Ausführungslogik oder die Klasse müsste aufgespalten werden, sodass Member und
+Übergänge in verschiedenen Repos liegen — beides schlechter als die Trennung
+entlang der Bedeutung.
+
+**GLE-005 bleibt erfüllt:** Ein externer Pack-Autor braucht keinen
+Core-Zugriff. Der Validator muss eine Kategoriereferenz auflösen können, und
+dafür genügt die Wertemenge, die das Schema im SDK trägt. Er braucht weder
+`RunStateModel` noch `legal_transitions`. Das ist das eigentliche Argument:
+der Vertrag ist die Wertemenge, nicht ihre Implementierung.
+
 ---
 
 ## B. Consumer-Pinning
@@ -196,18 +223,75 @@ referenziert PRD §2.3 für das Warum. Ein Duplikat der Begründung im
 public-Vertrag wäre eine zweite Wahrheit mit demselben Driftrisiko, gegen das
 SW-SCOPE-004 die Taxonomie schützt.
 
+### C.7 Konkrete Implementierung — erster Contract (run-state)
+
+Der erste echte Contract, den §C mechanisch trägt, ist gemessen, nicht
+konstruiert: `run-state.schema.json` (Wertemenge, SDK) gegen `RunStateModel`
+(Core). Der SW-SCOPE-005-Wächter (`tests/unit/test_vocabulary_guard.py`)
+vergleicht die Mengen und wird in beide Richtungen rot. Beim Schnitt ändert
+sich genau eine Sache: die Quelle der Schema-Datei.
+
+- **Heute (ein Repo):** der Wächter lädt `schemas/run-state.schema.json` aus
+  dem eigenen Repo.
+- **Nach dem Schnitt:** der Wächter im Core lädt dieselbe Datei als gepinntes
+  SDK-Artefakt (§B), nicht aus dem eigenen Baum. Der Mengenvergleich bleibt
+  identisch.
+
+Mechanik (Pull, §C.2), konkret:
+
+1. `skillweave-sdk` trägt `schemas/` (4 Kernschemas) + `schema_version.toml`
+   (Wurzel des Releasegraphen, maschinenlesbar) + eine `contract/`-Darstellung
+   der `enum`-Wertemengen, gegen die ein Consumer ohne Python-Kontext
+   validieren kann.
+2. `skillweave` trägt `.contract/consumer.toml` mit `sdk = <gepinnt>`. Der
+   Contract-CI-Job im Core liest die Pin, lädt das SDK-Artefakt, und führt den
+   Wächter aus — jetzt gegen die SDK-`enum`, nicht gegen die lokale Datei.
+3. **Bruch-Beweis (§C.4):** im SDK wird `STOPPED_BEFORE_B06` aus
+   `run-state.schema.json` entfernt (vertragswidrige Verkürzung) → der
+   Contract-CI-Lauf im Core wird rot. Das ist der Nachweis „absichtlich
+   gebrochener Contract in Repo A macht Build in Repo B rot", nicht „Pipeline
+   grün".
+
+`profiles` und `packs-pro` erhalten **noch keine** Contract-CI-Logik: sie
+haben keinen Inhalt, gegen den sie validieren könnten (§D). Ihre Struktur
+(schema_version/consumer.toml) wird erst beim Füllen über GLE-007 registriert.
+Ein leeres Repo kann keinen Contract brechen.
+
 ---
 
-## D. Schnittfolge (was jetzt NICHT getan wird)
+## D. Umfang dieses Schnitts (ehrlich bemessen)
 
-Dieser Vertrag etabliert die Grenzen. Er führt den Schnitt **nicht** aus.
+Dieser Schnitt trennt nur, was heute **existiert**: die vier bestehenden
+Kernschemas und die Taxonomie-Wertemenge. Er erfindet keinen Inhalt für Dinge,
+die noch nicht gebaut sind.
 
-1. Vertrag steht (dieses Dokument) → Review gegen §2.2.
-2. SDK-Reposkelett mit Schemas + Taxonomie wandert (GLE-001 + GLE-003
-   zusammen; GLE-004 hängt ausdrücklich an beiden).
-3. Versionsmatrix CI in allen vier Repos; der **Bruch-Beweis** (C.4) wird
-   als negativer Test angelegt, bevor irgendein Inhalt migriert.
-4. Migration der Inhalte entlang der Ownership-Matrix.
+**Faktische Folge: Es entstehen zwei befüllte Repos, nicht vier.**
+
+| Repo | Zustand nach diesem Schnitt |
+|---|---|
+| `skillweave-sdk` | **befüllt** — die 4 Kernschemas + `schema_version.toml` + Contract-CI-Skelett |
+| `skillweave` | **befüllt** (bleibt Kern) — Runtime, Skills, Kernel; konsumiert SDK-Wertemenge über den Wächter |
+| `skillweave-profiles` | **leer, deklariert** — bis GLE-007 (11 Packs) und GLE-008/009 (Profil) Inhalt liefern |
+| `skillweave-packs-pro` | **leer, deklariert** — bis der CMS-Ops-Pack gebaut wird |
+
+Das ist **kein** „Vierteilung vollzogen". Es ist der Schnitt **erst auf der
+Achse, die heute Inhalt hat** (Vertrag ↔ Ausführung). Die „Meinung"- und
+„Commercial"-Repos sind angelegt und deklariert, aber leer. Ein angelegtes
+leeres Repo ist Struktur, kein Schnitt — hier ausdrücklich, damit niemand
+später zwei leere Hüllen für vollzogene Teilung hält.
+
+Die Contract-CI (Nachweispflicht) braucht echten Inhalt, um beweisbar zu sein:
+Der Nachweis „gebrochener Contract in Repo A macht Build in Repo B rot" ist
+mit leeren Repos nicht herstellbar. Der erste echte Contract ist bereits
+gemessen (nicht konstruiert): `run-state.schema.json` (SDK) gegen
+`RunStateModel` (Core), mit dem Wächter aus SW-SCOPE-005, der in beide
+Richtungen rot wird. Genau dieser Fall wird die erste Cross-Repo-CI tragen.
+
+**Reihenfolge bleibt:** Vertrag (§A–§F) → Vorbedingungen (erfüllt) →
+CI-Mechanik (§C-Implementierung, inkl. Bruch-Beweis) → **zuletzt** der erste
+SDK-Push. Der Push ist der Schlusspunkt, nicht der Anfang: Läge der erste
+SDK-Commit vor der Contract-CI, gäbe es einen Zeitraum ohne Wächter — und
+genau in dem entsteht die Drift, gegen die all das gebaut wird.
 
 **Was nie getan wird:** Merge nach `dev`/`main`, Self-Approval, direkter
 Push auf den `github`-Remote. Das Planning-Repo `skillweave-planning` ist
