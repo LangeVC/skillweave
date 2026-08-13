@@ -228,22 +228,24 @@ Eager-Bindungen der Submodulnamen sind entfallen. Dieser Vertrag nimmt **keine**
 Attributketten auf Submodul-Ebene an; er bewegt sich auf Repo-/Paket- und
 Schema-/Taxonomie-Ebene und ist davon nicht betroffen.
 
-### E.2 SW-SCOPE-005 — Taxonomie-Drift (offen, VOR dem Schnitt)
+### E.2 SW-SCOPE-005 — Taxonomie-Drift (Wert entschieden, Richtung siehe §F)
 
-`SW-SCOPE-005` (Status backlog, P1, Forgejo-only) hält fest: Das
-Statusvokabular liegt doppelt und ist bereits auseinandergelaufen (§A). Es
-ist **Vorbedingung**, kein Teil von GLE-004. Handel:
+`SW-SCOPE-005` hält fest: Das Statusvokabular liegt doppelt und ist bereits
+auseinandergelaufen (§A). Zwei Fragen trennen sich hier:
 
-- Solange beides in **einem** Repo liegt, ist die Angleichung ein Commit und
-  der Wächter ein Unit-Test. Nach der Vierteilung wird daraus eine
-  Cross-Repo-CI zwischen `skillweave-sdk` und `skillweave` — dieselbe Arbeit,
-  mit erheblich mehr Aufwand.
-- **Es ist nicht mein Task.** Welcher Wert gilt (`STOPPED_BEFORE_B06` legitim
-  oder Überbleibsel), entscheidet nicht, wer schneidet. Der Befund ist
-  benannt, dokumentiert, nicht eigenmächtig angeglichen.
-- Falls ich den Wächter mit vorbereite, gilt derselbe Nachweismaßstab wie für
-  die Contract-CI: einen Wert auf einer Seite hinzufügen, der Test wird rot —
-  nicht „der Test läuft grün".
+- **Wertfrage** (entschieden durch den Operator, nicht durch den Schneidenden):
+  `STOPPED_BEFORE_B06` ist **legitim** und kommt ins Schema. Grund: Es hat eine
+  Übergangsregel (`store.py:48`, nach `IN_PROGRESS`) und einen Test
+  (`test_review_fixes.py:247`); ein Überbleibsel hat beides nicht.
+- **Richtungsfrage** (gehört dem Schneidenden als Vertragsfrage): Welche Seite
+  ist Quelle, und wie wandert eine Quelländerung zur anderen Seite? Sie wird in
+  §F beantwortet — sie zwingt den Vertrag, seinen ersten echten Anwendungsfall
+  zu tragen.
+
+Solange beide Orte in **einem** Repo liegen, ist die Angleichung ein Commit und
+der Wächter ein Unit-Test. Nach der Vierteilung wird daraus eine Cross-Repo-CI
+zwischen `skillweave-sdk` und `skillweave`. Deshalb gehört SW-SCOPE-005 **vor**
+den Schnitt — dieselbe Arbeit, in einem Repo billig, in vieren teuer.
 
 ### E.3 Rebase-Verpflichtung
 
@@ -251,3 +253,109 @@ Dieser Branch ist auf `origin/dev` (`738a1f2`) rebased. Weitere Rebase-Punkte
 folgen, sobald sich `dev` gegenüber der aktuellen Basis bewegt — sofort, nicht
 am Ende. Solange SW-SCOPE-005 offen bleibt, steht dieser Vertrag, aber der
 Schnitt beginnt erst nach seiner Entscheidung.
+
+---
+
+## F. Richtungsentscheidung — erster Anwendungsfall des Vertrags
+
+SW-SCOPE-005 wirft eine Vertragsfrage auf, die §B (Consumer-Pinning) und §C
+(Pull statt Push) implizit beantworten, aber noch nie an einem konkreten
+Datenpunkt. Dieser Abschnitt beantwortet sie und prüft dabei, ob §C trägt.
+
+### F.1 Der Datenpunkt
+
+```
+src/skillweave/runtime/store.py                    class RunStateModel(str, Enum)   16 Werte
+src/skillweave/execution/state_machine.py          class RalphLoopState(str, Enum)  9 Werte  (Teilmenge)
+schemas/run-state.schema.json                      properties.state.enum            15 Werte
+```
+
+Drei Dinge, nicht zwei. `RalphLoopState` ist die Obermenge der neun
+softwaretypischen Zustände; `RunStateModel` erweitert sie um Runtime- und
+Sandbox-Zustände. `vocabulary.py` leitet das gültige Statusvokabular aus
+`RunStateModel` ab (`{s.value for s in RunStateModel}`); das Schema liest
+niemand.
+
+### F.2 Die Feststellung, die §B/§C allein nicht tragen
+
+§B/§C sagen: „SDK besitzt Schemas, Consumer pinnt eine Version und validiert
+dagegen." Das trägt für **Wertemengen**: ein Pack referenziert `category:build`,
+der Validator löst sie gegen die gepinnte Taxonomie auf. Trägt es auch für
+**Code-Strukturen**, deren Member eine Semantik tragen?
+
+`RunStateModel` ist ein `str, Enum`, dessen **Member-Namen** API sind:
+`legal_transitions` referenziert `cls.PREFLIGHT`, `cls.IN_PROGRESS`;
+hundert Aufrufstellen schreiben `RunStateModel.IN_PROGRESS.value`. Ein
+JSON-Schema `enum` liefert nur Strings — keine Member-Namen, keine
+Übergangsregeln. Ein Generator, der aus dem Schema ein Enum baut, verlöre die
+Member-Namen oder müsste sie erfinden.
+
+Befund am Vertrag: **§B/§C müssen präzisiert werden.** „Consumer generiert aus
+dem Schema" gilt für Wertemengen und Datenträger, nicht für typisierte
+Runtime-Strukturen mit Member-Semantik. Beide Formen existieren, und der
+Vertrag muss sie unterscheiden:
+
+- **Kanonische Vokabular-Werte** (Statusnamen, Kategorien): Das SDK besitzt die
+  Wertemenge; der Consumer validiert gegen die gepinnte Fassung und hält sie
+  durch einen Abweichungswächter deckungsgleich.
+- **Typisierte Runtime-Strukturen** (Enum mit Member-Namen, Übergangsregeln):
+  bleiben Code-Struktur im Consumer. Das SDK besitzt den **Vertrag über die
+  Wertemenge**, nicht den Syntaxbaum der Member.
+
+### F.3 Die gewählte Richtung (vor dem Schnitt, in einem Repo)
+
+**Das Schema ist die kanonische Quelle der Wertemenge (`enum`). Das Enum bleibt
+die Code-Struktur. Ein Wächter-Test erzwingt Gleichheit — und zwar in beide
+Richtungen, indem er die Mengen vergleicht, nicht eine Richtung festnagelt.**
+
+Begründung gegen „Enum aus Schema generieren zur Bauzeit":
+
+- Der Generator müsste die Member-Namen ableiten, die im Schema nicht stehen.
+  Member-Namen sind API, keine Daten; sie gehören zu `legal_transitions` und
+  den Aufrufern, nicht zur Wertemenge.
+- Ein Buildzeit-Generator verschiebt die Drift in das Generator-Skript selbst —
+  dieselbe Art vermeintlicher Vollständigkeit wie `check-contract-drift.sh`
+  (§C.1), nur lokal.
+- Ein Mengenvergleich ist der kleinste Wächter, der die eingetretene Drift
+  (16 vs. 15) fängt, ohne die Member-Semantik anzugreifen.
+
+Konkret:
+
+1. `schemas/run-state.schema.json` bekommt `STOPPED_BEFORE_B06` (Operator hat
+   entschieden: legitim). Damit sind Schema und Enum wertgleich (16 = 16).
+2. Ein Wächter-Test lädt `run-state.schema.json`, liest `properties.state.enum`,
+   vergleicht mit `{s.value for s in RunStateModel}`. Rot bei Differenz.
+3. Nachweis **hergestellt** (nicht simuliert): ein Wert wird auf einer Seite
+   hinzugefügt, der Test wird rot — der Test wird für diesen Beweis einmal
+   absichtlich gebrochen und die Rötung dokumentiert, dann zurückgedreht.
+
+### F.4 Was daraus nach dem Schnitt wird
+
+Nach §A wandert das Schema ins SDK, `RunStateModel` bleibt im Consumer
+`skillweave`. Aus dem Unit-Test wird eine Contract-CI: der Consumer pinnt die
+SDK-Schemaversion (§B) und hält sein Enum gegen die `enum`-Wertemenge der
+gepinnten Fassung deckungsgleich. Der Mengenvergleich bleibt derselbe; nur die
+Quelle des Schemas wechselt von „Datei im eigenen Repo" auf „gepinntes
+Artefakt vom SDK".
+
+Das ist der Übergang, vor dem SW-SCOPE-005 warnt: billig hier, teuer da. §C.2
+(Pull statt Push) trägt ihn — der Consumer zieht die gepinnte SDK-Fassung und
+vergleicht; kein Repo kennt die Pfadlage eines anderen.
+
+### F.5 Was hier NICHT getan wird
+
+- `RalphLoopState` (zweites Enum, Teilmenge) wird nicht angefasst. Es ist eine
+  eigene, unabhängige Duplikation und ein eigener Befund, kein Teil von
+  SW-SCOPE-005. Es wird benannt, nicht eigenmächtig vereinheitlicht.
+- Die Member-Semantik (Übergangsregeln, Aufrufer) wird nicht aus dem Schema
+  herauserzwungen. Das wäre ein Vorgriff auf GLE-002 (Kernel State Machine) und
+  gehört in den Schnitt, nicht in die Vorbedingung.
+
+### F.6 Bewertung: Scheitert §C am ersten Anwendungsfall?
+
+Nein, aber §C musste präzisiert werden. Der Vertrag unterschied bisher nicht
+zwischen „Wertemenge im SDK" und „typisierter Structure im Consumer". Der
+Statusvokabular-Fall legt offen, dass §B/§C stillschweigend ersteres meinten.
+Mit der Unterscheidung in F.2 trägt §C den Fall: Pull einer gepinnten
+SDK-Version, Mengenvergleich als Wächter, Rot bei Drift. Der Vertrag ist am
+ersten Anwendungsfall korrigiert, nicht widerlegt.

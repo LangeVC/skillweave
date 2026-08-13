@@ -36,7 +36,8 @@
         "PREFLIGHT_COMPLETE",
         "BLOCKED_WAITING_FOR_GATE",
         "REVIEW_REQUIRED",
-        "FAILED"
+        "FAILED",
+        "STOPPED_BEFORE_B06"
       ]
     },
     "version": {
