@@ -16,6 +16,7 @@ on:
       ref:
         description: 'Ref zum Nachspiegeln, z.B. refs/tags/v2.3.0'
         required: true
+        type: string
 
 jobs:
   mirror:
