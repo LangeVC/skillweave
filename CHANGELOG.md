@@ -1,5 +1,38 @@
 # Changelog
 
+## Unveroeffentlicht
+
+### Der Kern laesst sich ohne `runtime` importieren
+
+`import skillweave` scheiterte bisher mit `ModuleNotFoundError`, sobald
+`runtime/` physisch fehlte — `__init__.py` importierte `.execution` und
+`.observation` eager und zog `runtime` ueber `state_machine.py`,
+`gate_policy.py` und `event_logger.py` nach. Ein Consumer, der die Engine
+einbettet, konnte damit nicht weniger als alles einbetten.
+
+Aufgeloest ueber PEP 562: 14 runtime-erreichbare Namen werden erst beim
+ersten Zugriff aufgeloest. `OPTIONAL_SUBPACKAGES = ("runtime",)` ist
+ausdruecklich deklariert statt implizit.
+
+**Verhaltensaenderung, die Konsumenten betreffen kann.** Die oeffentliche
+API ist zeichengleich — `__all__` unveraendert bei 50 Namen, `from
+skillweave import *` liefert dasselbe. Aber die Eager-Bindungen der
+Submodulnamen entfallen:
+
+```python
+hasattr(skillweave, "execution")              # True  -> False
+hasattr(skillweave, "observation")            # True  -> False
+hasattr(skillweave, "execution_integration")  # True  -> False
+dir(skillweave)                               # 16 Eintraege weniger
+
+import skillweave.execution                   # unveraendert
+from skillweave.execution.batch_planner import BatchPlanner   # unveraendert
+```
+
+Das liegt ausserhalb des `__all__`-Vertrags und wird im Repo nirgends
+attributverkettet genutzt. Wer `hasattr` zur Feature-Erkennung einsetzt,
+muss auf `importlib.util.find_spec("skillweave.execution")` wechseln.
+
 ## 1.3.0 — Runtime Foundation
 
 Der dokumentierte Lifecycle war bis hierher nicht durchsetzbar: `executor.py`
