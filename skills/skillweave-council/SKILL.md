@@ -117,14 +117,31 @@ skillweave-council uses Faigate for model routing:
 
 No API key management needed — Faigate handles authentication internally.
 
+### Faigate endpoint
+
+The council talks to Faigate at exactly one address, resolved in this order:
+
+1. `FAIGATE_BASE_URL` env var (full URL, e.g. `http://127.0.0.1:8090/v1`)
+2. `FAIGATE_HOST` + `FAIGATE_PORT` env vars
+3. Default: `http://127.0.0.1:8090/v1`
+
+The default is the address the brew-installed Faigate actually listens on
+(`127.0.0.1`, port `8090`). Do not guess a different port — `8080` is a
+foreign service (Docker), not Faigate.
+
 ## Sandbox Preflight
 
 The council validates:
-1. Faigate endpoint reachable
+1. Faigate endpoint reachable at the address resolved above
 2. At least 2 models available (for peer review)
 3. Chairman model available (for full mode)
 4. Web search provider configured (if time_range specified)
 5. JSON schema valid (if output=json)
+
+When the preflight fails, the message MUST name the address (and port) it
+checked, not just report "not reachable". An unreachability report without
+the address is not a diagnosis — it points the operator at nothing. For
+example: `Faigate not reachable at http://127.0.0.1:8090/v1 (connection refused)`.
 
 ## Testing
 
