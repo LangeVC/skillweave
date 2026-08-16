@@ -19,7 +19,15 @@ Dispatch 2 scope (SW-135-010, criteria 2 and 9):
     derived from write-scope overlap via the claim registry, never from a
     hand-written flag.
 
-Later dispatches add session-boundary enforcement and ``max_parallel``.
+Dispatch 3 scope (SW-135-010, criteria 7, 8 and 10):
+  * every emitted batch is a session boundary and carries the marker
+    explicitly, so a consumer never has to infer where one session ends;
+  * a sequence that does not declare ``session_boundary`` is refused, never
+    defaulted (inventing a boundary is the defect, LVC-219);
+  * red proof: the missing boundary is rejected with a message naming the
+    missing key, and overlapping lanes are never emitted as fan-out.
+
+Dispatch 4 adds ``max_parallel`` and dependent-gating.
 """
 
 from dataclasses import dataclass, field
@@ -220,3 +228,78 @@ def build_lanes(
             result.append([Lane(task=by_id[tid], execution_mode=EXECUTION_MODE_INLINE)])
 
     return result
+
+
+class MissingSessionBoundaryError(Exception):
+    """Raised when a sequence does not declare ``session_boundary``.
+
+    This error exists so a boundary is never invented. LVC-219: defaulting a
+    boundary is the defect, not a convenience — a caller that forgets the key
+    must be stopped, not silently given a wrong session split.
+    """
+
+    def __init__(self):
+        super().__init__(
+            "Sequence does not declare the required key 'session_boundary'; "
+            "refusing rather than inventing a session boundary"
+        )
+
+
+@dataclass
+class Sequence:
+    """A run to schedule: the tasks plus the session boundary they belong to.
+
+    ``session_boundary`` is required. A missing boundary is refused by
+    ``build_sessions`` (``MissingSessionBoundaryError``), never defaulted.
+    """
+
+    tasks: List[Task] = field(default_factory=list)
+    session_boundary: Optional[str] = None
+
+
+@dataclass
+class SessionBatch:
+    """A batch that IS a session boundary.
+
+    ``session_boundary`` is carried explicitly on the batch so a consumer
+    reads the marker instead of inferring where one session ends and the next
+    begins.
+    """
+
+    index: int
+    lanes: List[Lane]
+    session_boundary: str
+
+    @property
+    def task_ids(self) -> List[str]:
+        return [lane.task_id for lane in self.lanes]
+
+
+def build_sessions(
+    sequence: Sequence,
+    held_claims: Sequence[WriteScopeClaim] = (),
+) -> List[SessionBatch]:
+    """Build session boundary batches from a declared ``Sequence``.
+
+    Each emitted batch is a session boundary and carries ``session_boundary``
+    explicitly (criterion 7). Write-scope arbitration from ``build_lanes`` is
+    preserved end to end, so a batch whose lanes overlap in write scope is
+    never emitted as fan-out (criterion 10).
+
+    A sequence whose ``session_boundary`` is missing or empty is refused with
+    ``MissingSessionBoundaryError`` naming the key (criteria 8 and 10) — a
+    boundary is never invented.
+    """
+    if not sequence.session_boundary:
+        raise MissingSessionBoundaryError()
+
+    lane_groups = build_lanes(sequence.tasks, held_claims=held_claims)
+
+    sessions: List[SessionBatch] = []
+    for index, group in enumerate(lane_groups):
+        sessions.append(SessionBatch(
+            index=index,
+            lanes=group,
+            session_boundary=sequence.session_boundary,
+        ))
+    return sessions

@@ -24,6 +24,10 @@ from skillweave.runtime.dagscheduler import (
     UnknownDependencyError,
     build_batches,
     build_lanes,
+    build_sessions,
+    Sequence,
+    MissingSessionBoundaryError,
+    SessionBatch,
     EXECUTION_MODE_FANOUT,
     EXECUTION_MODE_INLINE,
 )
@@ -202,6 +206,57 @@ def test_dependencies_still_layer_with_write_scopes():
     assert _lane_ids(lanes) == [["a"], ["b", "c"]]
 
 
+# --- Dispatch 3 (criteria 7, 8, 10): session_boundary carried and enforced ---
+
+
+def test_session_boundary_is_carried_explicitly_on_every_batch():
+    # Criterion 7: each emitted batch IS a session boundary and carries the
+    # marker explicitly, so a consumer never has to infer where one ends.
+    seq = Sequence(session_boundary="chain-1", tasks=[
+        Task(id="a", write_scope=["/src/a/**"]),
+        Task(id="b", depends_on=["a"], write_scope=["/src/b/**"]),
+    ])
+    sessions = build_sessions(seq)
+    assert len(sessions) >= 1
+    for sb in sessions:
+        assert sb.session_boundary == "chain-1"
+
+
+def test_sequence_without_session_boundary_is_refused_naming_the_key():
+    # Criterion 8 + 10(a): a sequence that does not declare session_boundary is
+    # REFUSED, not defaulted; the error names the missing key.
+    seq = Sequence(session_boundary=None, tasks=[Task(id="a")])
+    try:
+        build_sessions(seq)
+        assert False, "expected MissingSessionBoundaryError"
+    except MissingSessionBoundaryError as e:
+        assert "session_boundary" in str(e)
+
+
+def test_overlapping_scopes_are_never_emitted_as_fanout_sessions():
+    # Criterion 10(b): a session batch whose lanes overlap in write scope is
+    # never emitted as fan-out. Overlap forces inline (disjoint batches).
+    seq = Sequence(session_boundary="chain-2", tasks=[
+        Task(id="a", write_scope=["/src/shared/**"]),
+        Task(id="b", write_scope=["/src/shared/**"]),
+    ])
+    sessions = build_sessions(seq)
+    for sb in sessions:
+        modes = [lane.execution_mode for lane in sb.lanes]
+        if EXECUTION_MODE_FANOUT in modes:
+            scopes = [tuple(sorted(lane.task.write_scope))
+                      for lane in sb.lanes
+                      if lane.execution_mode == EXECUTION_MODE_FANOUT]
+            assert len(scopes) == 1, (
+                "fan-out lanes must be pairwise disjoint; got a shared batch"
+            )
+    # and the specific pair here must both be inline, in separate batches.
+    flattened = [(lane.task_id, lane.execution_mode)
+                 for sb in sessions for lane in sb.lanes]
+    assert ("a", EXECUTION_MODE_INLINE) in flattened
+    assert ("b", EXECUTION_MODE_INLINE) in flattened
+
+
 def _run_all() -> int:
     tests = [
         test_linear_chain_produces_one_task_per_batch,
@@ -218,6 +273,9 @@ def _run_all() -> int:
         test_sibling_prefixes_that_are_not_ancestors_do_not_overlap,
         test_held_claim_forces_inline,
         test_dependencies_still_layer_with_write_scopes,
+        test_session_boundary_is_carried_explicitly_on_every_batch,
+        test_sequence_without_session_boundary_is_refused_naming_the_key,
+        test_overlapping_scopes_are_never_emitted_as_fanout_sessions,
     ]
     failed = 0
     for t in tests:
