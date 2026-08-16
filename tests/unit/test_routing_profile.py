@@ -32,6 +32,8 @@ from skillweave.routing import (
     TIER_TO_ROUTER,
     tier_to_router,
     tier_to_mode,
+    ResolutionRecord,
+    resolve_tier,
 )
 from skillweave.runtime.observer import ObserverRuntime
 
@@ -360,4 +362,106 @@ def test_tier_to_router_rejects_unknown_tier():
 
 def test_tier_to_router_has_no_surprise_entries():
     assert set(TIER_TO_ROUTER.keys()) == {TIER_FAST, TIER_BALANCED, TIER_DEEP}
+
+
+# ── Criterion 8: tier names intent; pinning is marked in the record ──────
+
+def test_tier_names_intent_not_a_model():
+    # A tier resolves through the router preset, not to a hardcoded model: the
+    # profile's tier is the *intent* axis, Faigate's ROUTER_PROFILES is the
+    # resolution. resolve_tier returns models drawn from the preset.
+    profile = _profile(tier="balanced")
+    record = resolve_tier(profile)
+    assert record.tier == "balanced"
+    assert record.router_name == "default"
+    assert record.mode == "standard"
+    assert record.resolved_models == ["sonnet", "gpt-4o", "gemini-pro", "deepseek-v4"]
+
+
+def test_resolution_record_marks_pinned_profile():
+    # A role that pins a concrete model id produces a record that is marked
+    # pinned and says so — so a later run can tell "requested by name" from
+    # "pinned to this exact model".
+    profile = _profile(
+        tier="balanced",
+        roles={"ops": {"model": "sonnet", "pin": "opus"}},
+    )
+    record = resolve_tier(profile)
+    assert record.is_pinned is True
+    assert record.pinned == "opus"
+    assert record.resolved_models == ["opus"]
+    # The record surfaces the pin in its serialisable form too.
+    assert record.to_dict()["pinned"] == "opus"
+
+
+def test_unpinned_profile_resolution_is_not_marked_pinned():
+    profile = _profile(tier="deep")
+    record = resolve_tier(profile)
+    assert record.is_pinned is False
+    assert record.pinned is None
+    assert record.resolved_models == ["sonnet", "gpt-4o", "gemini-pro",
+                                      "deepseek-v4", "llama-4", "mistral"]
+
+
+def test_pin_makes_profile_stable_when_preset_changes():
+    # Pinning a model id keeps the resolution stable no matter what the preset
+    # would otherwise say — that is the point of a pin (AK 8: profile stays
+    # valid when models change, pin says exactly what ran).
+    profile = _profile(
+        tier="balanced",
+        roles={"ops": {"pin": "sonnet"}},
+    )
+    record = resolve_tier(profile)
+    assert record.resolved_models == ["sonnet"]
+
+
+def test_contradictory_pins_are_not_silently_collapsed():
+    # Two roles pinning DIFFERENT models has no single resolution. It is
+    # reported as unpinned (rather than an invented winner), so a caller can see
+    # the contradiction instead of trusting a guessed model.
+    profile = _profile(
+        tier="balanced",
+        roles={
+            "ops": {"pin": "opus"},
+            "reviewer": {"pin": "sonnet"},
+        },
+    )
+    record = resolve_tier(profile)
+    assert record.is_pinned is False
+    assert record.pinned is None
+
+
+# ── Criterion 9: what actually resolved is recorded with the run ─────────
+
+def test_resolution_record_captures_requested_and_resolved():
+    # A later run must tell the difference between "what was requested" (tier)
+    # and "what actually resolved" (models + mode). The record keeps both sides.
+    profile = _profile(tier="fast")
+    record = resolve_tier(profile)
+    assert record.tier == "fast"
+    assert record.router_name == "quick"
+    assert record.mode == "quick"
+    assert record.resolved_models == ["gpt-4o-mini", "haiku"]
+
+
+def test_resolution_record_roundtrips():
+    record = ResolutionRecord(
+        tier="deep",
+        router_name="deep",
+        mode="full",
+        resolved_models=["sonnet", "opus"],
+        pinned="opus",
+    )
+    data = record.to_dict()
+    assert data["tier"] == "deep"
+    assert data["resolved_models"] == ["sonnet", "opus"]
+    assert data["pinned"] == "opus"
+    assert data["mode"] == "full"
+
+
+def test_pin_roundtrip_preserved():
+    profile = _profile(roles={"ops": {"pin": "opus"}})
+    rebuilt = from_dict(profile.to_dict())
+    assert rebuilt.role("ops").is_pinned is True
+    assert rebuilt.role("ops").pin == "opus"
 

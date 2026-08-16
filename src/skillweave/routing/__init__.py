@@ -18,6 +18,7 @@ from .profile import (
     TIER_TO_ROUTER,
     tier_to_router,
     tier_to_mode,
+    ResolutionRecord,
 )
 
 # The Faigate adapter is the shared model-routing surface. It lives here (not
@@ -33,6 +34,7 @@ from .faigate_adapter import (  # noqa: F401
     get_profile,
     list_detected_providers,
     list_profiles,
+    resolve_tier,
 )
 
 __all__ = [
@@ -55,6 +57,7 @@ __all__ = [
     "TIER_TO_ROUTER",
     "tier_to_router",
     "tier_to_mode",
+    "ResolutionRecord",
     "CouncilProvider",
     "FaigateProvider",
     "ModelInfo",
@@ -64,4 +67,5 @@ __all__ = [
     "get_profile",
     "list_detected_providers",
     "list_profiles",
+    "resolve_tier",
 ]

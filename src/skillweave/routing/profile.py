@@ -153,6 +153,7 @@ class RoleDefinition:
     is_observer: bool = False
     capabilities: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+    pin: Optional[str] = None
 
     @classmethod
     def from_dict(cls, key: str, data: Mapping[str, Any]) -> "RoleDefinition":
@@ -167,7 +168,17 @@ class RoleDefinition:
             is_observer=bool(data.get("observer", False)),
             capabilities=capabilities,
             metadata=dict(data.get("metadata", {})),
+            pin=data.get("pin"),
         )
+
+    @property
+    def is_pinned(self) -> bool:
+        """Whether this role pins a concrete model id.
+
+        A pinned role overrides Faigate's tier resolution with an explicit
+        model id, so it must be marked and surfaced in its record (AK 8).
+        """
+        return bool(self.pin)
 
     def can(self, capability: str) -> bool:
         """Return whether this role holds ``capability``.
@@ -390,6 +401,36 @@ def tier_to_mode(tier: str) -> str:
     return tier_to_router(tier)[1]
 
 
+@dataclass
+class ResolutionRecord:
+    """What a profile request actually resolved to (AK 8 + 9).
+
+    A later run must be able to tell which models *really* ran — not only which
+    tier was requested. This record is the durable answer: it keeps the
+    requested tier (intent), any concrete pin, and the model ids that the router
+    actually produced.
+    """
+
+    tier: str
+    router_name: str
+    mode: str
+    resolved_models: list[str]
+    pinned: Optional[str] = None
+
+    @property
+    def is_pinned(self) -> bool:
+        return bool(self.pinned)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "tier": self.tier,
+            "router_name": self.router_name,
+            "mode": self.mode,
+            "pinned": self.pinned,
+            "resolved_models": list(self.resolved_models),
+        }
+
+
 def from_dict(data: Mapping[str, Any]) -> RoutingProfile:
     """Convenience alias for :meth:`RoutingProfile.from_dict`."""
     return RoutingProfile.from_dict(data)
@@ -422,6 +463,8 @@ def _role_to_dict(role: RoleDefinition) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if role.model is not None:
         out["model"] = role.model
+    if role.pin is not None:
+        out["pin"] = role.pin
     if role.tool is not None:
         out["tool"] = {
             "name": role.tool.name,

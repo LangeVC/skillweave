@@ -442,3 +442,50 @@ def list_profiles() -> list[str]:
 
 def list_detected_providers() -> dict[str, str]:
     return {name: p.provider_name() for name, p in detect_providers().items()}
+
+
+def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
+    """Resolve a profile's tier into the models that will actually run (AK 8+9).
+
+    The tier names *intent*, not a model. Faigate's ``ROUTER_PROFILES`` decide
+    the concrete model pool and council mode, so the profile stays valid when a
+    preset's models change. A profile MAY pin a single concrete model id; in that
+    case the pinned model is what runs, and the returned record is marked
+    ``pinned`` so a later run can tell the difference between "what was
+    requested" and "what really ran".
+
+    Returns a :class:`~skillweave.routing.profile.ResolutionRecord` carrying the
+    requested tier, the router preset name, the council mode, the resolved model
+    ids, and any pin.
+    """
+    from .profile import ResolutionRecord, tier_to_router
+
+    router_name, mode = tier_to_router(profile.tier)
+    preset = ROUTER_PROFILES.get(router_name, ROUTER_PROFILES["default"])
+
+    pin = _profile_pin(profile)
+    resolved_models = [pin] if pin else list(preset["models"])
+
+    return ResolutionRecord(
+        tier=profile.tier,
+        router_name=router_name,
+        mode=mode,
+        resolved_models=resolved_models,
+        pinned=pin,
+    )
+
+
+def _profile_pin(profile: "RoutingProfile") -> Optional[str]:
+    """Return the single pinned model id for a profile, if any role pins one.
+
+    Pinning is per-role data (each ``RoleDefinition`` may carry ``pin``). A
+    profile where exactly one role pins a model is treated as pinned. If
+    several roles pin *different* models, there is no single resolution — that
+    contradiction is reported, not silently collapsed, so the caller can see it.
+    """
+    pins = {r.pin for r in profile.roles.values() if r.is_pinned}
+    if not pins:
+        return None
+    if len(pins) == 1:
+        return next(iter(pins))
+    return None
