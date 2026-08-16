@@ -6,10 +6,7 @@ four parts that shape how a role's model is chosen and how its tool is launched:
 1. **model choice per role** — each role maps to a model id (or the role's own
    request), separate from any shared tier.
 2. **tier** — ``fast`` | ``balanced`` | ``deep``. This is the vocabulary the
-   PRD names. Resolution to concrete router profile keys (e.g. the
-   ``quick``/``standard``/``full`` mode vocabulary that
-   the Faigate adapter understands) is Faigate's job; this module only
-   *carries* the tier so a resolver can later map it without re-reading raw YAML.
+   PRD names; see the vocabulary reconciliation below.
 3. **limits** — timeout, max retries, minimum models required, and the
    behaviour to take when one model fails.
 4. **target tool** — the tool name and its launch command.
@@ -19,6 +16,41 @@ Roles are DATA too, not an enum. The five built-ins (``ops``, ``reviewer``,
 may be declared in the same YAML. The built-in ``observer`` role is wired to
 the existing runtime observer (:class:`skillweave.runtime.observer.ObserverRuntime`),
 not re-invented here.
+
+Reconciled vocabulary
+---------------------
+Three vocabularies name "how much work / how deep" and used to float apart:
+
+* **profile tier** (``fast`` | ``balanced`` | ``deep``) — the level of *effort*
+  a caller declares. The one public, producer-agnostic axis.
+* **router profile name** (``default`` | ``quick`` | ``deep`` | ``expert``) —
+  a *named preset* bundling ``models`` + ``chairman`` + ``mode`` + ``temperature``.
+* **mode** (``quick`` | ``standard`` | ``full``) — *which council stages run*:
+  ``quick`` = stage 1 only, ``standard`` = stages 1+2, ``full`` = 1+2+3.
+
+``deep`` is the collision: as a *tier* it means "deepest effort"; as a *router
+profile name* it means one specific 6-model preset whose ``mode="full"``. The
+two are not the same thing, so the tier axis resolves to a concrete
+``(router_profile_name, mode)`` pair (see :data:`TIER_TO_ROUTER`) instead of
+guessing by name.
+
+The mapping and why:
+
+* ``fast``     → ``quick``   / ``mode="quick"``   — cheapest 2-model pool, stage 1
+  only. Both axes agree on "fastest possible" with no ambiguity.
+* ``balanced`` → ``default`` / ``mode="standard"`` — 4 mid models, stages 1+2 peer
+  review without a chairman. The everyday middle.
+* ``deep``     → ``deep``    / ``mode="full"``    — 6 models, all three stages with
+  a chairman. Genuinely the deepest *effort*, so the name alignment is real, not
+  incidental: this is the only preset that is simultaneously full-mode and
+  chairman-led with the widest pool.
+
+``expert`` is deliberately **not** a tier. It is a chairman-led, full-deliberation
+*premium-model* variant (``opus``-fronted) of ``deep``-effort: it differs in
+"which models", not "how much work". Folding it into the tier axis would make the
+tier lie about effort vs. model quality, so it stays reachable only by router
+profile name. Anything the three vocabularies cannot express without that lie is a
+finding to be reported, not a value to be invented alongside.
 """
 
 from __future__ import annotations
@@ -51,6 +83,31 @@ CAP_APPROVE_GATE = "can_approve_gate"
 INCOMPATIBLE_PAIRS = frozenset({
     (CAP_MUTATE_RUN_STATE, CAP_APPROVE_GATE),
 })
+
+# ── Vocabulary reconciliation ────────────────────────────────────────
+# The tier axis resolves to a concrete router preset + council mode. Reasoning
+# lives in the module docstring; this table is the executable form of it.
+#
+# ``name``  = the ROUTER_PROFILES key (``default``/``quick``/``deep``/``expert``)
+# ``mode``  = the council stage mode (``quick``/``standard``/``full``)
+TIER_ROUTER_NAME = {
+    TIER_FAST: "quick",
+    TIER_BALANCED: "default",
+    TIER_DEEP: "deep",
+}
+
+TIER_ROUTER_MODE = {
+    TIER_FAST: "quick",
+    TIER_BALANCED: "standard",
+    TIER_DEEP: "full",
+}
+
+# ``expert`` is intentionally absent from both tables: it is a model-quality
+# variant of ``deep`` effort, not a distinct effort level, so no tier maps to it.
+TIER_TO_ROUTER = {
+    tier: (TIER_ROUTER_NAME[tier], TIER_ROUTER_MODE[tier])
+    for tier in VALID_TIERS
+}
 
 
 class RoutingProfileError(ValueError):
@@ -305,6 +362,32 @@ def resolve_role(profile: RoutingProfile, key: str) -> RoleDefinition:
             f"role '{key}' is not declared in profile '{profile.name}'"
         )
     return role
+
+
+def tier_to_router(tier: str) -> tuple[str, str]:
+    """Resolve a profile tier to its ``(router_profile_name, mode)`` pair.
+
+    This is where the three vocabularies are reconciled explicitly: the tier
+    axis (``fast``/``balanced``/``deep``) collapses onto a concrete router
+    preset name (``default``/``quick``/``deep``/``expert``) *and* a council
+    stage mode (``quick``/``standard``/``full``). See the module docstring for
+    why ``deep`` maps to the ``deep`` preset with ``mode="full"``, and why
+    ``expert`` is not reachable from any tier.
+
+    Raises :class:`RoutingProfileError` for an unknown tier (the same guard the
+    profile applies at construction), so a caller can never silently pass a bad
+    tier through to the router.
+    """
+    if tier not in VALID_TIERS:
+        raise RoutingProfileError(
+            f"unknown tier '{tier}' (expected one of {sorted(VALID_TIERS)})"
+        )
+    return TIER_TO_ROUTER[tier]
+
+
+def tier_to_mode(tier: str) -> str:
+    """Return only the council stage mode for a tier (``quick|standard|full``)."""
+    return tier_to_router(tier)[1]
 
 
 def from_dict(data: Mapping[str, Any]) -> RoutingProfile:

@@ -29,6 +29,9 @@ from skillweave.routing import (
     CAP_MUTATE_RUN_STATE,
     CAP_APPROVE_GATE,
     RoutingProfileError,
+    TIER_TO_ROUTER,
+    tier_to_router,
+    tier_to_mode,
 )
 from skillweave.runtime.observer import ObserverRuntime
 
@@ -319,3 +322,42 @@ def test_roundtrip_preserves_capabilities():
     assert rebuilt.role_can("ops", CAP_MUTATE_RUN_STATE) is True
     assert rebuilt.role_can("ops", CAP_APPROVE_GATE) is False
     assert rebuilt.role_can("reviewer", CAP_APPROVE_GATE) is True
+
+
+# ── Criterion 7: three vocabularies reconciled explicitly ───────────────
+
+def test_tier_to_router_maps_all_three_tiers():
+    assert tier_to_router(TIER_FAST) == ("quick", "quick")
+    assert tier_to_router(TIER_BALANCED) == ("default", "standard")
+    assert tier_to_router(TIER_DEEP) == ("deep", "full")
+
+
+def test_tier_to_router_extracts_mode():
+    assert tier_to_mode(TIER_FAST) == "quick"
+    assert tier_to_mode(TIER_BALANCED) == "standard"
+    assert tier_to_mode(TIER_DEEP) == "full"
+
+
+def test_deep_is_disambiguated_between_tier_and_router_name():
+    # `deep` as a TIER resolves to the `deep` router preset with full mode —
+    # not the `expert` preset, and not name-matched to any other tier.
+    name, mode = tier_to_router(TIER_DEEP)
+    assert name == "deep"
+    assert mode == "full"
+
+
+def test_expert_is_not_a_tier():
+    # `expert` is a router preset (model quality), not an effort level: no
+    # tier may resolve to it, so the tier axis cannot lie about effort vs models.
+    for name, _mode in TIER_TO_ROUTER.values():
+        assert name != "expert"
+
+
+def test_tier_to_router_rejects_unknown_tier():
+    with pytest.raises(RoutingProfileError):
+        tier_to_router("warp")
+
+
+def test_tier_to_router_has_no_surprise_entries():
+    assert set(TIER_TO_ROUTER.keys()) == {TIER_FAST, TIER_BALANCED, TIER_DEEP}
+

@@ -15,6 +15,9 @@ from .profile import (
     CAP_APPROVE_GATE,
     INCOMPATIBLE_PAIRS,
     RoutingProfileError,
+    TIER_TO_ROUTER,
+    tier_to_router,
+    tier_to_mode,
 )
 
 # The Faigate adapter is the shared model-routing surface. It lives here (not
@@ -49,6 +52,9 @@ __all__ = [
     "CAP_APPROVE_GATE",
     "INCOMPATIBLE_PAIRS",
     "RoutingProfileError",
+    "TIER_TO_ROUTER",
+    "tier_to_router",
+    "tier_to_mode",
     "CouncilProvider",
     "FaigateProvider",
     "ModelInfo",
