@@ -148,30 +148,38 @@ class EventJournal:
             ).fetchone()
             return JournalEvent.from_dict(dict(row))
 
-        sequence = self._next_sequence(run_id)
-        event = JournalEvent(
-            sequence=sequence,
-            run_id=run_id,
-            event_type=event_type,
-            payload=payload or {},
-            correlation_id=correlation_id,
-            causation_id=causation_id,
-            idempotency_key=idempotency_key,
-        )
+        # Sequence allocation and INSERT happen atomically inside a single
+        # IMMEDIATE transaction so concurrent writers cannot both observe the
+        # same MAX(sequence) before either row is written.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            sequence = self._next_sequence(run_id)
+            event = JournalEvent(
+                sequence=sequence,
+                run_id=run_id,
+                event_type=event_type,
+                payload=payload or {},
+                correlation_id=correlation_id,
+                causation_id=causation_id,
+                idempotency_key=idempotency_key,
+            )
 
-        self._conn.execute(
-            """INSERT INTO events
-               (sequence, run_id, event_type, payload, correlation_id,
-                causation_id, idempotency_key, timestamp, version)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                event.sequence, event.run_id, event.event_type,
-                json.dumps(event.payload),
-                event.correlation_id, event.causation_id,
-                event.idempotency_key, event.timestamp, event.version,
-            ),
-        )
-        self._conn.commit()
+            self._conn.execute(
+                """INSERT INTO events
+                   (sequence, run_id, event_type, payload, correlation_id,
+                    causation_id, idempotency_key, timestamp, version)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    event.sequence, event.run_id, event.event_type,
+                    json.dumps(event.payload),
+                    event.correlation_id, event.causation_id,
+                    event.idempotency_key, event.timestamp, event.version,
+                ),
+            )
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
         return event
 
     def append_and_dispatch(

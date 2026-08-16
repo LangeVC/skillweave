@@ -12,8 +12,8 @@ def _get_next_level_from_context(context: WorkflowContext) -> Optional[Any]:
     return None
 
 
-def execute_step(step: StepSpec, context: WorkflowContext) -> dict:
-    """Execute a single step (sequential mode)."""
+def simulate_step(step: StepSpec, context: WorkflowContext) -> dict:
+    """Simulate a single step (sequential mode)."""
     context.current_step_id = step.id
     # Placeholder execution. In a real runtime, this would call the model/tools.
     result = {
@@ -28,10 +28,10 @@ def execute_step(step: StepSpec, context: WorkflowContext) -> dict:
     return result
 
 
-def execute_step_parallel(steps: List[StepSpec], context: WorkflowContext, 
+def simulate_step_parallel(steps: List[StepSpec], context: WorkflowContext, 
                           max_workers: int = 3, timeout: int = 300) -> Dict[str, Dict]:
     """
-    Execute multiple steps in parallel using thread pool.
+    Simulate multiple steps in parallel using thread pool.
     
     Note: In a real implementation, this would use Task tool subagents.
     This is a simulation for demonstration purposes.
@@ -186,7 +186,7 @@ def execute_with_dependency_awareness(sequence_steps: List[StepSpec], context: W
         print(f"Executing group {group_idx + 1}/{len(execution_groups)}: {len(ready_steps)} steps")
         
         # Execute steps in this group in parallel
-        group_results = execute_step_parallel(
+        group_results = simulate_step_parallel(
             ready_steps, context, 
             max_workers=min(max_parallel, len(ready_steps)),
             timeout=step_timeout

@@ -222,7 +222,13 @@ class AuthorityGuard:
             return caps.get("can_review_gate", False)
         if action == "mutate_run_state":
             return caps.get("can_mutate_run_state", False)
-        return True
+        if action == "tag":
+            return caps.get("can_tag", False)
+        if action == "release":
+            return caps.get("can_release", False)
+        if action == "delegate":
+            return caps.get("can_delegate", False)
+        return False
 
     def approve(
         self,
