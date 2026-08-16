@@ -44,6 +44,15 @@ Concerns, each mapped to a dispatch criterion:
     the first batch and never dispatches a dependent batch into the live
     worker; remaining capacity is not a reason to continue.
 
+8. One lane runs in one worker context. ``WorkerContext`` is bound to a single
+   ``target_role`` and refuses to run a task for any other lane rather than
+   silently serialising two lanes into the same worker.
+
+9. A worker is handed its cold start as data — a ``ColdStartBundle`` (005) —
+   never a transcript. ``start_from_bundle`` takes the bundle alone and derives
+   everything it needs (the lane role, the repo, the tool and model a caller
+   passes from the ``RoutingProfile``) to launch the worker.
+
 This module imports from ``registry`` (receipt types) only. It does not touch
 ``dagscheduler`` (010's file) and does not modify ``store``.
 """
@@ -58,6 +67,7 @@ import os
 import signal as _signal
 import subprocess
 
+from .handoff import ColdStartBundle
 from .registry import ArtifactReceipt, EvidenceQuality, EvidenceType
 
 
@@ -527,4 +537,107 @@ def dispatch_batch(
         ran_batch=0,
         batches_total=len(batches),
         stopped=True,
+    )
+
+
+class WorkerContextError(Exception):
+    """A worker was asked to run outside its single-lane context.
+
+    Raised instead of silently serialising a second lane into an already-bound
+    worker (criterion 8).
+    """
+
+    def __init__(self, bound_role: str, attempted_role: str):
+        self.bound_role = bound_role
+        self.attempted_role = attempted_role
+        super().__init__(
+            f"worker is bound to lane '{bound_role}', "
+            f"refusing to run lane '{attempted_role}' in the same context"
+        )
+
+
+@dataclass
+class WorkerContext:
+    """A single-lane worker context (criterion 8).
+
+    The context is bound to exactly one lane, identified by ``target_role``.
+    There is no path that places two lanes in the same worker: ``run`` refuses
+    any ``run_lane`` that differs from the bound role rather than silently
+    serialising the second lane into this worker.
+    """
+
+    target_role: str
+    tool: str
+    model: str
+    _bound: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.target_role:
+            raise WorkerContextError(self.target_role, "")
+        self._bound = True
+
+    @property
+    def is_bound(self) -> bool:
+        return self._bound
+
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        run_lane: str,
+        run_id: str,
+        subject_repo: str,
+        subject_commit: str,
+        created_at: Optional[str] = None,
+        cwd: Optional[str] = None,
+    ) -> ProcessResult:
+        """Run one task for ``run_lane``, refusing any lane but the bound role.
+
+        The check happens *before* any process is started: a mismatched lane is
+        a hard failure, never a silent serialisation into the live worker.
+        """
+        if run_lane != self.target_role:
+            raise WorkerContextError(self.target_role, run_lane)
+        return run_command(
+            list(command),
+            run_id=run_id,
+            subject_repo=subject_repo,
+            subject_commit=subject_commit,
+            tool=self.tool,
+            model=self.model,
+            created_at=created_at,
+            cwd=cwd,
+        )
+
+
+def start_from_bundle(
+    bundle: ColdStartBundle,
+    command: Sequence[str],
+    *,
+    tool: str,
+    model: str,
+    run_id: str,
+    created_at: Optional[str] = None,
+    cwd: Optional[str] = None,
+) -> ProcessResult:
+    """Start a worker from its ``ColdStartBundle`` alone (criterion 9).
+
+    The bundle is pure data, not a transcript, and is the only source of the
+    lane's identity here: ``target_role`` is the lane, ``repo_uri`` is the
+    subject repository, and ``prd_digest`` pins the subject commit the worker
+    was handed. ``tool`` and ``model`` still arrive from the ``RoutingProfile``
+    (criterion 7) — the bundle carries data, not a baked model.
+    """
+    lane = bundle.target_role
+    if not lane:
+        raise WorkerContextError("", "")
+    ctx = WorkerContext(target_role=lane, tool=tool, model=model)
+    return ctx.run(
+        list(command),
+        run_lane=lane,
+        run_id=run_id,
+        subject_repo=bundle.repo_uri,
+        subject_commit=bundle.prd_digest,
+        created_at=created_at,
+        cwd=cwd,
     )

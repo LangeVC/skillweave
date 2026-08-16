@@ -20,6 +20,10 @@ Covers the dispatch criteria of this lane:
    tool/model it was handed are recorded on the result (not baked in).
 10. A worker stops at the end of its batch: `dispatch_batch` runs exactly the
     first batch and never dispatches a dependent batch into the live worker.
+8. One lane runs in one worker context; a second lane in the same worker is
+   refused (an error), never silently serialised.
+9. A worker is handed its cold start as data (a `ColdStartBundle`), never a
+   transcript; a worker started from the bundle alone proceeds.
 
 Self-contained sys.path handling, independent of conftest/pytest.
 """
@@ -37,12 +41,16 @@ if str(_src) not in sys.path:
 from skillweave.runtime.runner_adapter import (
     BatchRun,
     ProcessResult,
+    WorkerContext,
+    WorkerContextError,
     dispatch_batch,
     run_command,
+    start_from_bundle,
     start_process,
     _pid_exists,
 )
 from skillweave.runtime import ArtifactReceipt, EvidenceType
+from skillweave.runtime.handoff import ColdStartBundle
 
 
 def _run(*args: str, **kwargs):
@@ -281,6 +289,74 @@ def test_worker_stops_at_end_of_batch_does_not_dispatch_dependent():
     assert not marker.exists()
 
 
+# --- criterion 8 ---
+
+def test_second_lane_in_same_worker_is_refused_not_serialised():
+    ctx = WorkerContext(target_role="verdict", tool="opencode", model="model-x")
+    # The bound lane runs fine.
+    ok = ctx.run(
+        [sys.executable, "-c", "pass"],
+        run_lane="verdict",
+        run_id="run-011",
+        subject_repo="skillweave",
+        subject_commit="abc123",
+    )
+    assert ok.succeeded is True
+    # A different lane in the same worker is a hard failure, never a serial run.
+    try:
+        ctx.run(
+            [sys.executable, "-c", "pass"],
+            run_lane="executor",
+            run_id="run-011",
+            subject_repo="skillweave",
+            subject_commit="abc123",
+        )
+    except WorkerContextError as e:
+        assert e.bound_role == "verdict"
+        assert e.attempted_role == "executor"
+    else:
+        raise AssertionError("second lane did not raise WorkerContextError")
+
+
+# --- criterion 9 ---
+
+def _bundle(**overrides) -> ColdStartBundle:
+    data = dict(
+        prd_uri="file:///prd.json",
+        prd_digest="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        chain_uri="file:///chain",
+        chain_digest="1111111111111111111111111111111111111111111111111111111111111111",
+        repo_uri="skillweave",
+        worktree_path="/tmp/wt",
+        branch="ops/SW-135-011-runner",
+        target_role="verdict",
+        sequence_id="seq-011",
+    )
+    data.update(overrides)
+    return ColdStartBundle(**data)
+
+
+def test_worker_starts_from_bundle_alone():
+    # The bundle is the sole source of lane identity and subject here — no
+    # transcript. A worker launched from data alone proceeds and produces a
+    # successful result bound to the bundle's role and repo.
+    bundle = _bundle()
+    result = start_from_bundle(
+        bundle,
+        [sys.executable, "-c", "print('cold-start-ok')"],
+        tool="opencode",
+        model="model-x",
+        run_id="run-011",
+    )
+    assert result.succeeded is True
+    assert b"cold-start-ok" in result.stdout
+    # Identity came from the bundle, not from a baked default or a transcript.
+    assert result.metadata["subject_repo"] == "skillweave"
+    assert result.metadata["subject_commit"] == bundle.prd_digest
+    assert result.tool == "opencode"
+    assert result.model == "model-x"
+
+
 def _run_all() -> int:
     tests = [
         test_trivial_command_runs_as_a_real_process,
@@ -296,6 +372,8 @@ def _run_all() -> int:
         test_tool_and_model_are_recorded_not_baked,
         test_omitting_tool_or_model_is_refused,
         test_worker_stops_at_end_of_batch_does_not_dispatch_dependent,
+        test_second_lane_in_same_worker_is_refused_not_serialised,
+        test_worker_starts_from_bundle_alone,
     ]
     failed = 0
     for t in tests:
