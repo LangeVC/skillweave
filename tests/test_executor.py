@@ -4,15 +4,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from skillweave.models import WorkflowContext, StepSpec
 from skillweave.executor import (
-    execute_step,
-    execute_step_parallel,
+    simulate_step,
+    simulate_step_parallel,
     execute_with_dependency_awareness,
     simulate_subagent_execution
 )
 import time
 
 
-def test_execute_step():
+def test_simulate_step():
     """Test single step execution."""
     step = StepSpec(
         id="test-step",
@@ -27,7 +27,7 @@ def test_execute_step():
         status="running"
     )
     
-    result = execute_step(step, context)
+    result = simulate_step(step, context)
     
     assert result["step_id"] == "test-step"
     assert result["step_name"] == "Test Step"
@@ -37,7 +37,7 @@ def test_execute_step():
     assert "test-step" in context.completed_steps
 
 
-def test_execute_step_parallel():
+def test_simulate_step_parallel():
     """Test parallel step execution."""
     steps = [
         StepSpec(id="step-01", name="Step 1", purpose="Test", instructions="Do 1"),
@@ -51,7 +51,7 @@ def test_execute_step_parallel():
         status="running"
     )
     
-    results = execute_step_parallel(steps, context, max_workers=2)
+    results = simulate_step_parallel(steps, context, max_workers=2)
     
     # Check that all steps have results
     assert len(results) == 3
@@ -138,7 +138,7 @@ def test_simulate_subagent_execution():
         assert "logs" in result
 
 
-def test_execute_step_parallel_with_timeout():
+def test_simulate_step_parallel_with_timeout():
     """Test parallel execution with timeout simulation."""
     steps = [
         StepSpec(id="fast-step", name="Fast", purpose="Test", instructions="Quick"),
@@ -154,7 +154,7 @@ def test_execute_step_parallel_with_timeout():
     # Use reasonable timeout - fast-step should complete, slow-step might timeout
     # Note: In simulation, both complete quickly, so we test the timeout logic
     # by checking that the function handles timeouts correctly
-    results = execute_step_parallel(steps, context, max_workers=2, timeout=10)
+    results = simulate_step_parallel(steps, context, max_workers=2, timeout=10)
     
     assert len(results) == 2
     
@@ -182,7 +182,7 @@ def test_error_handling_in_parallel_execution():
         status="running"
     )
     
-    results = execute_step_parallel(steps, context, max_workers=2)
+    results = simulate_step_parallel(steps, context, max_workers=2)
     
     # Both should have results
     assert len(results) == 2

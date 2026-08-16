@@ -1,5 +1,114 @@
 # Changelog
 
+## 1.3.5 — Contracts worth trusting, and a dispatcher on top
+
+Ten runtime contracts existed since 1.3.0 but did not hold what they promised.
+Each defect below was proven by a test that fails against 1.3.0 and passes
+here; where no such test was constructible, the criterion says so instead of
+inventing one.
+
+### Repairs
+
+- **Compare-and-swap detects conflicts again.** The guard read
+  `connection.total_changes`, which is cumulative per connection and therefore
+  never differs — every stale write reported success. Now `rowcount`.
+- **Journal sequences no longer collide.** Allocation and INSERT are one
+  `BEGIN IMMEDIATE` transaction. Eight writers appending 200 entries persisted
+  33 before; all of them now.
+- **AuthorityGuard fails closed.** An unknown action returned True. It returns
+  False, and an undeclared role holds no capability at all.
+- **Preflight validates the whole envelope** against resolved paths, not a
+  prefix of the string.
+- **Checkpoint, handoff and evidence survive the process.** They lived in
+  memory; they live in the same store as runs and transitions.
+- **The state vocabulary has one truth.** `STOPPED_BEFORE_B06` was in the enum
+  and not in the schema.
+- **`busy_timeout` is set explicitly**, with a stated reason. The value does not
+  change behaviour — `sqlite3.connect` already defaults to 5000. It stops a
+  concurrency-critical property from depending on a library default nobody chose.
+- **`executor` says what it is.** `execute_step` never executed anything;
+  it is `simulate_step`.
+
+### Arbitration and dispatch
+
+- **Write scopes are claimed and released**, not merely checked, and the claim
+  is persistent. Overlap is decided on resolved absolute paths.
+- **DagScheduler** turns a dependency graph into batches, rejects cycles by
+  name, enforces `max_parallel`, and refuses to release the dependents of a
+  failed gate. It starts no process and knows no runner.
+- **RunnerAdapter** starts real processes, binds their output to the run as
+  `ArtifactReceipt` evidence rather than free text, distinguishes exit code
+  from signal, kills the whole process group on cancel, and treats a worker
+  that dies without a result as a failure with a message.
+- **A batch bounds a session.** Both emit that boundary explicitly and refuse a
+  sequence that does not declare one.
+
+### Routing — leaving the model behind
+
+This is the part that makes SkillWeave usable from a model-bound harness. A run
+can be orchestrated from Codex, Claude Desktop, Claude Code or Antigravity and
+executed elsewhere — primarily OpenCode — with the model resolved through
+Faigate rather than inherited from wherever the operator happened to sit.
+
+- **RoutingProfile** is declarable data: a model per role, a tier Faigate
+  resolves, limits, and an optional target tool. Roles are data too, with
+  `observer` wired to the existing runtime observer. A role holding both
+  `can_mutate_run_state` and `can_approve_gate` is refused at load — that
+  combination is self-approval.
+- **The Faigate adapter left `council/`** for a shared routing surface; the
+  council consumes it through a re-export shim. `ROUTER_PROFILES` is subsumed,
+  not duplicated.
+- **Three tier vocabularies were reconciled** with the mapping written down.
+  `expert` deliberately stays a router profile and not a tier: it varies which
+  models run, not how much work is done.
+- **Three routing modes**: `pin` decides nothing, `auto` derives the tier from
+  the complexity promptchain-generate already computes, and `hybrid` lets auto
+  decide within declared bounds. A bound that moved the decision is recorded as
+  an adjustment, never as the original decision.
+- **The record separates requested from resolved** — tier, mode, the input that
+  drove it, every adjustment, and what Faigate actually returned.
+- **Dispatch is optional and per role.** A role without a target tool runs where
+  it is. Staying inside the current harness is a first-class configuration.
+
+### Notes
+
+The thirteen member versions in `capability.yaml` stay at 1.3.0. No skill
+changed in this release; only the runtime and the new routing layer did, and the
+bundle version moves because its composition did.
+
+## Unveroeffentlicht
+
+### Der Kern laesst sich ohne `runtime` importieren
+
+`import skillweave` scheiterte bisher mit `ModuleNotFoundError`, sobald
+`runtime/` physisch fehlte — `__init__.py` importierte `.execution` und
+`.observation` eager und zog `runtime` ueber `state_machine.py`,
+`gate_policy.py` und `event_logger.py` nach. Ein Consumer, der die Engine
+einbettet, konnte damit nicht weniger als alles einbetten.
+
+Aufgeloest ueber PEP 562: 14 runtime-erreichbare Namen werden erst beim
+ersten Zugriff aufgeloest. `OPTIONAL_SUBPACKAGES = ("runtime",)` ist
+ausdruecklich deklariert statt implizit.
+
+**Verhaltensaenderung, die Konsumenten betreffen kann.** Die oeffentliche
+API ist zeichengleich — `__all__` unveraendert bei 50 Namen, `from
+skillweave import *` liefert dasselbe. Aber die Eager-Bindungen der
+Submodulnamen entfallen:
+
+```python
+hasattr(skillweave, "execution")              # True  -> False
+hasattr(skillweave, "observation")            # True  -> False
+hasattr(skillweave, "execution_integration")  # True  -> False
+dir(skillweave)                               # 16 Eintraege weniger
+
+import skillweave.execution                   # unveraendert
+from skillweave.execution.batch_planner import BatchPlanner   # unveraendert
+```
+
+Das liegt ausserhalb des `__all__`-Vertrags und wird im Repo nirgends
+attributverkettet genutzt. Wer `hasattr` zur Feature-Erkennung einsetzt,
+muss auf `importlib.util.find_spec("skillweave.execution")` wechseln.
+
 ## 1.3.0 — Runtime Foundation
 
 Der dokumentierte Lifecycle war bis hierher nicht durchsetzbar: `executor.py`

@@ -5,6 +5,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 from .errors import InvalidTransitionError, VersionConflictError
+from .checkpoint import Checkpoint, EnvironmentFingerprint
+from .registry import ArtifactReceipt, EvidenceQuality
+from .handoff import ColdStartBundle, HandoffOffer
 
 import sqlite3
 
@@ -100,6 +103,11 @@ class SQLiteRunStore(RunStore):
         self._conn = sqlite3.connect(db_path)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
+        # 5000 is sqlite3.connect()'s built-in default. Stating it explicitly makes the
+        # write-lock behavior visible and independent of the library default, so a caller
+        # holding its own connection can no longer silently override it. Same value, no
+        # behavior change.
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._init_schema()
 
     def _init_schema(self):
@@ -126,6 +134,60 @@ class SQLiteRunStore(RunStore):
                 timestamp TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'ops'
             );
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                run_id TEXT PRIMARY KEY,
+                root_run_id TEXT NOT NULL,
+                parent_run_id TEXT,
+                journal_offset INTEGER NOT NULL DEFAULT 0,
+                environment TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                metadata TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE TABLE IF NOT EXISTS evidence (
+                artifact_id TEXT NOT NULL UNIQUE,
+                sha256 TEXT NOT NULL,
+                schema_version TEXT NOT NULL,
+                producer_command TEXT NOT NULL,
+                subject_repo TEXT NOT NULL,
+                subject_commit TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                evidence_type TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                method TEXT NOT NULL DEFAULT '',
+                system_source TEXT NOT NULL DEFAULT '',
+                sensitivity TEXT NOT NULL DEFAULT 'internal',
+                retention TEXT NOT NULL DEFAULT 'permanent',
+                transformation_history TEXT NOT NULL DEFAULT '[]',
+                quality TEXT NOT NULL DEFAULT '{}',
+                supersedes TEXT,
+                metadata TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE TABLE IF NOT EXISTS handoffs (
+                handoff_id TEXT PRIMARY KEY,
+                from_role TEXT NOT NULL,
+                to_role TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                cold_start_bundle TEXT NOT NULL,
+                allowed_actions TEXT NOT NULL DEFAULT '[]',
+                input_digests TEXT NOT NULL DEFAULT '{}',
+                state TEXT NOT NULL,
+                owner TEXT,
+                offered_at TEXT NOT NULL,
+                accepted_at TEXT,
+                completed_at TEXT,
+                metadata TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE TABLE IF NOT EXISTS write_scope_claims (
+                claim_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                resolved_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                released_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_write_scope_claims_run
+                ON write_scope_claims(run_id);
+            CREATE INDEX IF NOT EXISTS idx_write_scope_claims_path
+                ON write_scope_claims(resolved_path);
         """)
         self._conn.commit()
 
@@ -227,14 +289,14 @@ class SQLiteRunStore(RunStore):
         if target_state in ("advance_or_stop", "FAILED"):
             ended_at = now
 
-        self._conn.execute(
+        cur = self._conn.execute(
             """UPDATE runs SET state = ?, version = ?, updated_at = ?, ended_at = ?,
                role = COALESCE(?, role)
                WHERE run_id = ? AND version = ?""",
             (target_state, new_version, now, ended_at, role, run_id, expected_version),
         )
 
-        if self._conn.total_changes == 0:
+        if cur.rowcount == 0:
             raise VersionConflictError(run_id, expected_version, existing.version)
 
         self._conn.execute(
@@ -259,6 +321,337 @@ class SQLiteRunStore(RunStore):
                 (limit,),
             ).fetchall()
         return [self._row_to_record(r) for r in rows]
+
+    # ---- Checkpoint persistence ----
+
+    def save_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
+        import json
+        if checkpoint.created_at is None:
+            checkpoint.created_at = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """INSERT OR REPLACE INTO checkpoints
+               (run_id, root_run_id, parent_run_id, journal_offset,
+                environment, created_at, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                checkpoint.run_id,
+                checkpoint.root_run_id,
+                checkpoint.parent_run_id,
+                checkpoint.journal_offset,
+                json.dumps(checkpoint.environment.to_dict()),
+                checkpoint.created_at,
+                json.dumps(checkpoint.metadata),
+            ),
+        )
+        self._conn.commit()
+        return checkpoint
+
+    def get_checkpoint(self, run_id: str) -> Optional[Checkpoint]:
+        import json
+        row = self._conn.execute(
+            "SELECT * FROM checkpoints WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        env = json.loads(row["environment"]) if row["environment"] else {}
+        meta = json.loads(row["metadata"]) if row["metadata"] else {}
+        return Checkpoint(
+            run_id=row["run_id"],
+            root_run_id=row["root_run_id"],
+            parent_run_id=row["parent_run_id"],
+            journal_offset=row["journal_offset"],
+            environment=EnvironmentFingerprint(
+                hostname=env.get("hostname", ""),
+                os_name=env.get("os_name", ""),
+                python_version=env.get("python_version", ""),
+                branch=env.get("branch", ""),
+                commit_sha=env.get("commit_sha", ""),
+                key_hashes=env.get("key_hashes", {}),
+                captured_at=env.get("captured_at", ""),
+            ),
+            created_at=row["created_at"],
+            metadata=meta,
+        )
+
+    # ---- Write-scope arbitration ----
+
+    def claim_write_scope(
+        self,
+        run_id: str,
+        scope_paths: list[str],
+        claim_id: Optional[str] = None,
+    ) -> list["WriteScopeClaim"]:
+        """Claim a set of write scopes on behalf of a run, atomically.
+
+        All scopes are resolved first (same resolution as 004), then every held
+        claim is checked for overlap. If ANY scope overlaps an existing held
+        claim, the whole claim operation fails and nothing is persisted. On
+        success the claims are committed in a single transaction.
+        """
+        import uuid
+
+        from .write_scope import (
+            WriteScopeClaim,
+            ScopeConflictError,
+            resolve_scope_path,
+            paths_overlap,
+        )
+
+        resolved = [resolve_scope_path(p) for p in scope_paths]
+        if not resolved:
+            return []
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Single transaction: check-then-insert is atomic, so two concurrent
+        # claimers cannot both succeed on an overlapping scope.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            held_rows = self._conn.execute(
+                "SELECT claim_id, run_id, resolved_path FROM write_scope_claims "
+                "WHERE released_at IS NULL"
+            ).fetchall()
+
+            for new_path in resolved:
+                for row in held_rows:
+                    if paths_overlap(new_path, row["resolved_path"]):
+                        raise ScopeConflictError(run_id, row["run_id"], new_path)
+
+            claims: list[WriteScopeClaim] = []
+            for i, new_path in enumerate(resolved):
+                if len(resolved) == 1 and claim_id:
+                    cid = claim_id
+                else:
+                    cid = claim_id + "::" + str(i) if claim_id else str(uuid.uuid4())
+                self._conn.execute(
+                    "INSERT INTO write_scope_claims "
+                    "(claim_id, run_id, resolved_path, created_at, released_at) "
+                    "VALUES (?, ?, ?, ?, NULL)",
+                    (cid, run_id, new_path, now),
+                )
+                claims.append(WriteScopeClaim(
+                    claim_id=cid,
+                    run_id=run_id,
+                    resolved_path=new_path,
+                    created_at=now,
+                    released_at=None,
+                ))
+
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+
+        return claims
+
+    def release_write_scope(self, claim_id: str) -> bool:
+        """Release a held (claim_id, run_id) claim; idempotent.
+
+        Returns True if a held claim was released, False if it was already
+        released or did not exist.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        cur = self._conn.execute(
+            "UPDATE write_scope_claims SET released_at = ? "
+            "WHERE claim_id = ? AND released_at IS NULL",
+            (now, claim_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def list_write_scope_claims(
+        self,
+        run_id: Optional[str] = None,
+        include_released: bool = False,
+    ) -> list["WriteScopeClaim"]:
+        """List claims. By default only HELD claims and all runs."""
+        from .write_scope import WriteScopeClaim
+
+        if run_id is not None:
+            rows = self._conn.execute(
+                "SELECT * FROM write_scope_claims WHERE run_id = ? "
+                + ("" if include_released else "AND released_at IS NULL"),
+                (run_id,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM write_scope_claims "
+                + ("" if include_released else "WHERE released_at IS NULL")
+            ).fetchall()
+
+        return [
+            WriteScopeClaim(
+                claim_id=r["claim_id"],
+                run_id=r["run_id"],
+                resolved_path=r["resolved_path"],
+                created_at=r["created_at"],
+                released_at=r["released_at"],
+            )
+            for r in rows
+        ]
+
+    def resolve_orphaned_claims(self) -> list[str]:
+        """Release held claims whose owning run no longer exists.
+
+        A claim is orphaned when its run_id does not appear in ``runs``. Returns
+        the claim_ids that were forcibly released.
+        """
+        orphaned = self._conn.execute(
+            "SELECT c.claim_id FROM write_scope_claims c "
+            "LEFT JOIN runs r ON r.run_id = c.run_id "
+            "WHERE c.released_at IS NULL AND r.run_id IS NULL"
+        ).fetchall()
+        claim_ids = [r["claim_id"] for r in orphaned]
+
+        if claim_ids:
+            now = datetime.now(timezone.utc).isoformat()
+            self._conn.executemany(
+                "UPDATE write_scope_claims SET released_at = ? WHERE claim_id = ?",
+                [(now, cid) for cid in claim_ids],
+            )
+            self._conn.commit()
+        return claim_ids
+
+    # ---- Evidence persistence ----
+
+    def save_evidence(self, receipt: ArtifactReceipt) -> ArtifactReceipt:
+        import json
+        if receipt.created_at is None:
+            receipt.created_at = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """INSERT OR REPLACE INTO evidence
+               (artifact_id, sha256, schema_version, producer_command,
+                subject_repo, subject_commit, created_at, evidence_type, purpose,
+                method, system_source, sensitivity, retention,
+                transformation_history, quality, supersedes, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                receipt.artifact_id,
+                receipt.sha256,
+                receipt.schema_version,
+                receipt.producer_command,
+                receipt.subject_repo,
+                receipt.subject_commit,
+                receipt.created_at,
+                receipt.evidence_type,
+                receipt.purpose,
+                receipt.method,
+                receipt.system_source,
+                receipt.sensitivity,
+                receipt.retention,
+                json.dumps(receipt.transformation_history),
+                json.dumps(receipt.quality.to_dict()),
+                receipt.supersedes,
+                json.dumps(receipt.metadata),
+            ),
+        )
+        self._conn.commit()
+        return receipt
+
+    def get_evidence(self, artifact_id: str) -> Optional[ArtifactReceipt]:
+        import json
+        row = self._conn.execute(
+            "SELECT * FROM evidence WHERE artifact_id = ?", (artifact_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        history = json.loads(row["transformation_history"]) if row["transformation_history"] else []
+        quality = json.loads(row["quality"]) if row["quality"] else {}
+        meta = json.loads(row["metadata"]) if row["metadata"] else {}
+        return ArtifactReceipt(
+            artifact_id=row["artifact_id"],
+            sha256=row["sha256"],
+            schema_version=row["schema_version"],
+            producer_command=row["producer_command"],
+            subject_repo=row["subject_repo"],
+            subject_commit=row["subject_commit"],
+            created_at=row["created_at"],
+            evidence_type=row["evidence_type"],
+            purpose=row["purpose"],
+            method=row["method"],
+            system_source=row["system_source"],
+            sensitivity=row["sensitivity"],
+            retention=row["retention"],
+            transformation_history=history,
+            quality=EvidenceQuality(
+                relevance=quality.get("relevance", "medium"),
+                sufficiency=quality.get("sufficiency", "medium"),
+                reliability=quality.get("reliability", "medium"),
+                currency=quality.get("currency", "medium"),
+                integrity=quality.get("integrity", "medium"),
+                independence=quality.get("independence", "medium"),
+            ),
+            supersedes=row["supersedes"],
+            metadata=meta,
+        )
+
+    # ---- Handoff persistence ----
+
+    def save_handoff(self, offer: HandoffOffer) -> HandoffOffer:
+        import json
+        if offer.offered_at is None:
+            offer.offered_at = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """INSERT OR REPLACE INTO handoffs
+               (handoff_id, from_role, to_role, scope, cold_start_bundle,
+                allowed_actions, input_digests, state, owner, offered_at,
+                accepted_at, completed_at, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                offer.handoff_id,
+                offer.from_role,
+                offer.to_role,
+                offer.scope,
+                json.dumps(offer.cold_start_bundle.to_dict()),
+                json.dumps(offer.allowed_actions),
+                json.dumps(offer.input_digests),
+                offer.state,
+                offer.owner,
+                offer.offered_at,
+                offer.accepted_at,
+                offer.completed_at,
+                json.dumps(offer.metadata),
+            ),
+        )
+        self._conn.commit()
+        return offer
+
+    def get_handoff(self, handoff_id: str) -> Optional[HandoffOffer]:
+        import json
+        row = self._conn.execute(
+            "SELECT * FROM handoffs WHERE handoff_id = ?", (handoff_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        bundle = json.loads(row["cold_start_bundle"]) if row["cold_start_bundle"] else {}
+        actions = json.loads(row["allowed_actions"]) if row["allowed_actions"] else []
+        digests = json.loads(row["input_digests"]) if row["input_digests"] else {}
+        meta = json.loads(row["metadata"]) if row["metadata"] else {}
+        return HandoffOffer(
+            handoff_id=row["handoff_id"],
+            from_role=row["from_role"],
+            to_role=row["to_role"],
+            scope=row["scope"],
+            cold_start_bundle=ColdStartBundle(
+                prd_uri=bundle.get("prd_uri", ""),
+                prd_digest=bundle.get("prd_digest", ""),
+                chain_uri=bundle.get("chain_uri", ""),
+                chain_digest=bundle.get("chain_digest", ""),
+                repo_uri=bundle.get("repo_uri", ""),
+                worktree_path=bundle.get("worktree_path", ""),
+                branch=bundle.get("branch", ""),
+                target_role=bundle.get("target_role", ""),
+                sequence_id=bundle.get("sequence_id", ""),
+            ),
+            allowed_actions=actions,
+            input_digests=digests,
+            state=row["state"],
+            owner=row["owner"],
+            offered_at=row["offered_at"],
+            accepted_at=row["accepted_at"],
+            completed_at=row["completed_at"],
+            metadata=meta,
+        )
 
     def ensure_storage(self):
         pass

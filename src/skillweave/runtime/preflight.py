@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -47,8 +48,14 @@ class SessionEnvelope:
         return self.remote_repo == actual_remote
 
     def validate_write_scope(self, target_path: str) -> bool:
+        if not self.allowed_write_scopes:
+            return False
+        resolved_target = os.path.abspath(target_path)
         for scope in self.allowed_write_scopes:
-            if target_path.startswith(scope.replace("**", "")):
+            resolved_scope = os.path.abspath(scope.replace("**", "").rstrip("/"))
+            if resolved_scope == os.sep:
+                return True
+            if resolved_target.startswith(resolved_scope + os.sep) or resolved_target == resolved_scope:
                 return True
         return False
 
@@ -81,6 +88,33 @@ def run_preflight(
 ) -> PreflightResult:
     mismatches = []
     warnings = []
+
+    required_string_fields = (
+        "product",
+        "remote_repo",
+        "worktree",
+        "branch",
+        "role",
+        "prd_digest",
+        "chain_digest",
+    )
+    required_list_fields = ("allowed_write_scopes", "state_vocabulary", "forbidden_transitions")
+
+    for field_name in required_string_fields:
+        if not getattr(envelope, field_name, None):
+            mismatches.append({
+                "field": field_name,
+                "expected": "non-empty",
+                "actual": getattr(envelope, field_name, None),
+            })
+
+    for field_name in required_list_fields:
+        if getattr(envelope, field_name, None) is None:
+            mismatches.append({
+                "field": field_name,
+                "expected": "list",
+                "actual": None,
+            })
 
     if actual_product and not envelope.validate_product(actual_product):
         mismatches.append({

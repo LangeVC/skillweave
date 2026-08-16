@@ -13,6 +13,9 @@ strategy.md
 # SkillWeave runtime data (auto-generated, per-project)
 .skillweave/
 
+# Session state file (worktree-local, never committed)
+.swci-state.md
+
 # Debug/exploration scripts and generated artifacts
 *.debug*
 prd-skillweave-*.json
