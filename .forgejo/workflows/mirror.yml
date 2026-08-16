@@ -10,7 +10,6 @@ name: Mirror to GitHub
 on:
   push:
     branches: ["**"]
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       ref:

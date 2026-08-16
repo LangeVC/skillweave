@@ -1,0 +1,66 @@
+name: Release Tag Validate
+
+# Forgejo-seitiges Gate vor der Spiegelung eines v*-Tags (SW-CI-002-G).
+#
+# Ein Tag allein darf nicht nach GitHub durchschlagen, bevor nicht belegt ist,
+# dass (a) alle Versionsorte der BUNDLE-Linie mit source_of_truth uebereinstimmen,
+# und (b) der Tag selbst dem Versionsort entspricht (der CAP-CI-001-Fall: ein
+# v0.17.0-Tag, der auf einen Commit zeigt, dessen source_of_truth noch 0.16.0
+# sagt — `check` vergleicht Orte untereinander, dieser Drift faellt erst beim
+# Tag-Vergleich auf).
+#
+# version-sync.py wird hier NICHT vendort (PRD SW-CI-002-G, AK: "version-sync.py
+# ist nicht vendort"). Es ist kanonisch in lvc-ops/main und wird zur Laufzeit
+# beschafft; `check-tag` liest dieselbe .version.yaml wie das Bump-Werkzeug.
+#
+# Der capabilities:-Block der Bundle-capability.yaml ist ein MANIFEST, kein
+# Versionsort (Fall 4). Den prueft das eigenstaendige check-manifest.py — ohne
+# jeden Bezug auf source_of_truth. Abweichende Mitgliedsversionen sind erlaubt;
+# verboten ist nur, dass Manifest und Mitgliedsdatei sich widersprechen.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  validate:
+    name: Validate tag against .version.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch version-sync.py (canonical, lvc-ops/main)
+        run: |
+          # Runtime-beschafft, nicht vendort (SW-CI-002-G AK). liegt im
+          # RUNNER_TEMP, nicht im Repo — kein repo-owned literal invocation.
+          curl -fsSL \
+            "https://git.langevc.com/langevc/lvc-ops/raw/branch/main/scripts/version-sync.py" \
+            -o "$RUNNER_TEMP/version-sync.py"
+          echo "VERSION_SYNC=$RUNNER_TEMP/version-sync.py" >> "$GITHUB_ENV"
+
+      - name: Gate — locations (a/b) and tag == source_of_truth (c)
+        run: |
+          # check-tag vergleicht den Tag gegen source_of_truth OHNE v-Praefix.
+          python3 "$VERSION_SYNC" check-tag "${GITHUB_REF_NAME#v}" --repo .
+
+      - name: Gate — capabilities manifest == member files (case 4)
+        run: |
+          python3 scripts/check-manifest.py --repo .
+
+  mirror:
+    name: Mirror to GitHub
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to GitHub mirror
+        env:
+          GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+          MIRROR_REF: ${{ github.ref }}
+        run: |
+          remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave.git"
+          git push --force "$remote" "+${MIRROR_REF}:${MIRROR_REF}"
