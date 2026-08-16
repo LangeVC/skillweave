@@ -5,6 +5,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 from .errors import InvalidTransitionError, VersionConflictError
+from .checkpoint import Checkpoint, EnvironmentFingerprint
+from .registry import ArtifactReceipt, EvidenceQuality
+from .handoff import ColdStartBundle, HandoffOffer
 
 import sqlite3
 
@@ -125,6 +128,49 @@ class SQLiteRunStore(RunStore):
                 version INTEGER NOT NULL,
                 timestamp TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'ops'
+            );
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                run_id TEXT PRIMARY KEY,
+                root_run_id TEXT NOT NULL,
+                parent_run_id TEXT,
+                journal_offset INTEGER NOT NULL DEFAULT 0,
+                environment TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                metadata TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE TABLE IF NOT EXISTS evidence (
+                artifact_id TEXT NOT NULL UNIQUE,
+                sha256 TEXT NOT NULL,
+                schema_version TEXT NOT NULL,
+                producer_command TEXT NOT NULL,
+                subject_repo TEXT NOT NULL,
+                subject_commit TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                evidence_type TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                method TEXT NOT NULL DEFAULT '',
+                system_source TEXT NOT NULL DEFAULT '',
+                sensitivity TEXT NOT NULL DEFAULT 'internal',
+                retention TEXT NOT NULL DEFAULT 'permanent',
+                transformation_history TEXT NOT NULL DEFAULT '[]',
+                quality TEXT NOT NULL DEFAULT '{}',
+                supersedes TEXT,
+                metadata TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE TABLE IF NOT EXISTS handoffs (
+                handoff_id TEXT PRIMARY KEY,
+                from_role TEXT NOT NULL,
+                to_role TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                cold_start_bundle TEXT NOT NULL,
+                allowed_actions TEXT NOT NULL DEFAULT '[]',
+                input_digests TEXT NOT NULL DEFAULT '{}',
+                state TEXT NOT NULL,
+                owner TEXT,
+                offered_at TEXT NOT NULL,
+                accepted_at TEXT,
+                completed_at TEXT,
+                metadata TEXT NOT NULL DEFAULT '{}'
             );
         """)
         self._conn.commit()
@@ -259,6 +305,198 @@ class SQLiteRunStore(RunStore):
                 (limit,),
             ).fetchall()
         return [self._row_to_record(r) for r in rows]
+
+    # ---- Checkpoint persistence ----
+
+    def save_checkpoint(self, checkpoint: Checkpoint) -> Checkpoint:
+        import json
+        if checkpoint.created_at is None:
+            checkpoint.created_at = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """INSERT OR REPLACE INTO checkpoints
+               (run_id, root_run_id, parent_run_id, journal_offset,
+                environment, created_at, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                checkpoint.run_id,
+                checkpoint.root_run_id,
+                checkpoint.parent_run_id,
+                checkpoint.journal_offset,
+                json.dumps(checkpoint.environment.to_dict()),
+                checkpoint.created_at,
+                json.dumps(checkpoint.metadata),
+            ),
+        )
+        self._conn.commit()
+        return checkpoint
+
+    def get_checkpoint(self, run_id: str) -> Optional[Checkpoint]:
+        import json
+        row = self._conn.execute(
+            "SELECT * FROM checkpoints WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        env = json.loads(row["environment"]) if row["environment"] else {}
+        meta = json.loads(row["metadata"]) if row["metadata"] else {}
+        return Checkpoint(
+            run_id=row["run_id"],
+            root_run_id=row["root_run_id"],
+            parent_run_id=row["parent_run_id"],
+            journal_offset=row["journal_offset"],
+            environment=EnvironmentFingerprint(
+                hostname=env.get("hostname", ""),
+                os_name=env.get("os_name", ""),
+                python_version=env.get("python_version", ""),
+                branch=env.get("branch", ""),
+                commit_sha=env.get("commit_sha", ""),
+                key_hashes=env.get("key_hashes", {}),
+                captured_at=env.get("captured_at", ""),
+            ),
+            created_at=row["created_at"],
+            metadata=meta,
+        )
+
+    # ---- Evidence persistence ----
+
+    def save_evidence(self, receipt: ArtifactReceipt) -> ArtifactReceipt:
+        import json
+        if receipt.created_at is None:
+            receipt.created_at = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """INSERT OR REPLACE INTO evidence
+               (artifact_id, sha256, schema_version, producer_command,
+                subject_repo, subject_commit, created_at, evidence_type, purpose,
+                method, system_source, sensitivity, retention,
+                transformation_history, quality, supersedes, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                receipt.artifact_id,
+                receipt.sha256,
+                receipt.schema_version,
+                receipt.producer_command,
+                receipt.subject_repo,
+                receipt.subject_commit,
+                receipt.created_at,
+                receipt.evidence_type,
+                receipt.purpose,
+                receipt.method,
+                receipt.system_source,
+                receipt.sensitivity,
+                receipt.retention,
+                json.dumps(receipt.transformation_history),
+                json.dumps(receipt.quality.to_dict()),
+                receipt.supersedes,
+                json.dumps(receipt.metadata),
+            ),
+        )
+        self._conn.commit()
+        return receipt
+
+    def get_evidence(self, artifact_id: str) -> Optional[ArtifactReceipt]:
+        import json
+        row = self._conn.execute(
+            "SELECT * FROM evidence WHERE artifact_id = ?", (artifact_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        history = json.loads(row["transformation_history"]) if row["transformation_history"] else []
+        quality = json.loads(row["quality"]) if row["quality"] else {}
+        meta = json.loads(row["metadata"]) if row["metadata"] else {}
+        return ArtifactReceipt(
+            artifact_id=row["artifact_id"],
+            sha256=row["sha256"],
+            schema_version=row["schema_version"],
+            producer_command=row["producer_command"],
+            subject_repo=row["subject_repo"],
+            subject_commit=row["subject_commit"],
+            created_at=row["created_at"],
+            evidence_type=row["evidence_type"],
+            purpose=row["purpose"],
+            method=row["method"],
+            system_source=row["system_source"],
+            sensitivity=row["sensitivity"],
+            retention=row["retention"],
+            transformation_history=history,
+            quality=EvidenceQuality(
+                relevance=quality.get("relevance", "medium"),
+                sufficiency=quality.get("sufficiency", "medium"),
+                reliability=quality.get("reliability", "medium"),
+                currency=quality.get("currency", "medium"),
+                integrity=quality.get("integrity", "medium"),
+                independence=quality.get("independence", "medium"),
+            ),
+            supersedes=row["supersedes"],
+            metadata=meta,
+        )
+
+    # ---- Handoff persistence ----
+
+    def save_handoff(self, offer: HandoffOffer) -> HandoffOffer:
+        import json
+        if offer.offered_at is None:
+            offer.offered_at = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            """INSERT OR REPLACE INTO handoffs
+               (handoff_id, from_role, to_role, scope, cold_start_bundle,
+                allowed_actions, input_digests, state, owner, offered_at,
+                accepted_at, completed_at, metadata)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                offer.handoff_id,
+                offer.from_role,
+                offer.to_role,
+                offer.scope,
+                json.dumps(offer.cold_start_bundle.to_dict()),
+                json.dumps(offer.allowed_actions),
+                json.dumps(offer.input_digests),
+                offer.state,
+                offer.owner,
+                offer.offered_at,
+                offer.accepted_at,
+                offer.completed_at,
+                json.dumps(offer.metadata),
+            ),
+        )
+        self._conn.commit()
+        return offer
+
+    def get_handoff(self, handoff_id: str) -> Optional[HandoffOffer]:
+        import json
+        row = self._conn.execute(
+            "SELECT * FROM handoffs WHERE handoff_id = ?", (handoff_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        bundle = json.loads(row["cold_start_bundle"]) if row["cold_start_bundle"] else {}
+        actions = json.loads(row["allowed_actions"]) if row["allowed_actions"] else []
+        digests = json.loads(row["input_digests"]) if row["input_digests"] else {}
+        meta = json.loads(row["metadata"]) if row["metadata"] else {}
+        return HandoffOffer(
+            handoff_id=row["handoff_id"],
+            from_role=row["from_role"],
+            to_role=row["to_role"],
+            scope=row["scope"],
+            cold_start_bundle=ColdStartBundle(
+                prd_uri=bundle.get("prd_uri", ""),
+                prd_digest=bundle.get("prd_digest", ""),
+                chain_uri=bundle.get("chain_uri", ""),
+                chain_digest=bundle.get("chain_digest", ""),
+                repo_uri=bundle.get("repo_uri", ""),
+                worktree_path=bundle.get("worktree_path", ""),
+                branch=bundle.get("branch", ""),
+                target_role=bundle.get("target_role", ""),
+                sequence_id=bundle.get("sequence_id", ""),
+            ),
+            allowed_actions=actions,
+            input_digests=digests,
+            state=row["state"],
+            owner=row["owner"],
+            offered_at=row["offered_at"],
+            accepted_at=row["accepted_at"],
+            completed_at=row["completed_at"],
+            metadata=meta,
+        )
 
     def ensure_storage(self):
         pass
