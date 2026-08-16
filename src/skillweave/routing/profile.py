@@ -42,6 +42,16 @@ BUILTIN_ROLE_NAMES = (
     "worker",
 )
 
+# The two capabilities whose conjunction is self-approval: a role that may both
+# mutate run state AND approve a gate can approve its own work. That is the hole
+# the ops/reviewer split exists to close, so it is refused at load time.
+CAP_MUTATE_RUN_STATE = "can_mutate_run_state"
+CAP_APPROVE_GATE = "can_approve_gate"
+
+INCOMPATIBLE_PAIRS = frozenset({
+    (CAP_MUTATE_RUN_STATE, CAP_APPROVE_GATE),
+})
+
 
 class RoutingProfileError(ValueError):
     """Raised when a routing profile or role definition is malformed."""
@@ -71,12 +81,20 @@ class ToolSpec:
 
 @dataclass
 class RoleDefinition:
-    """A role as data: its key, the model that answers for it, and its tool."""
+    """A role as data: its key, the model that answers for it, its tool, and
+    the capabilities it declares in the same profile file.
+
+    ``capabilities`` is a mapping of capability name to truthiness, loaded from
+    the profile file and never hardcoded. A role that declares no capabilities
+    (or that is not declared at all) has an empty mapping and therefore DENIES
+    every check: this is the "falling closed" default.
+    """
 
     key: str
     model: Optional[str] = None
     tool: Optional[ToolSpec] = None
     is_observer: bool = False
+    capabilities: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -84,13 +102,34 @@ class RoleDefinition:
         model = data.get("model")
         tool_data = data.get("tool")
         tool = ToolSpec.from_dict(tool_data) if tool_data else None
+        capabilities = dict(data.get("capabilities", {}) or {})
         return cls(
             key=key,
             model=model,
             tool=tool,
             is_observer=bool(data.get("observer", False)),
+            capabilities=capabilities,
             metadata=dict(data.get("metadata", {})),
         )
+
+    def can(self, capability: str) -> bool:
+        """Return whether this role holds ``capability``.
+
+        Falls closed: an absent capability is ``False``, not ``True``.
+        """
+        value = self.capabilities.get(capability)
+        return bool(value)
+
+
+def load_matrix(roles: Mapping[str, RoleDefinition]) -> dict[str, RoleDefinition]:
+    """Return the capability matrix for a set of roles, keyed by role name.
+
+    This is the "matrix loaded from the file, not hardcoded" surface: it is
+    built purely from the declared roles' own ``capabilities`` mappings. A role
+    key that is not present simply has no entry, so downstream ``can`` checks
+    on it fall closed.
+    """
+    return {key: role for key, role in roles.items()}
 
 
 @dataclass
@@ -160,6 +199,23 @@ class RoutingProfile:
         role = self.roles.get(key)
         return role.tool if role else None
 
+    def capability_matrix(self) -> dict[str, RoleDefinition]:
+        """The capability matrix loaded from this profile's own file.
+
+        Roles that were not declared are absent, so a caller checking them
+        falls closed rather than defaulting to open.
+        """
+        return load_matrix(self.roles)
+
+    def role_can(self, key: str, capability: str) -> bool:
+        """Whether the role ``key`` holds ``capability``, falling closed.
+
+        An undeclared role, or a declared role missing the capability, returns
+        ``False`` and never raises.
+        """
+        role = self.roles.get(key)
+        return role.can(capability) if role else False
+
     def observer_role(self) -> Optional[RoleDefinition]:
         """Return the built-in ``observer`` role (wired to the runtime observer)."""
         role = self.roles.get("observer")
@@ -199,6 +255,7 @@ class RoutingProfile:
             # A role that names itself after the runtime observer is wired to it.
             if key == "observer":
                 role.is_observer = True
+            _check_incompatible(role)
             roles[key] = role
 
         return cls(
@@ -208,6 +265,23 @@ class RoutingProfile:
             roles=roles,
             metadata=dict(data.get("metadata", {})),
         )
+
+
+def _check_incompatible(role: RoleDefinition) -> None:
+    """Refuse roles whose declared capabilities combine into self-approval.
+
+    A single role holding both ``can_mutate_run_state`` and ``can_approve_gate``
+    can approve its own work — exactly the separation of duties the ops/reviewer
+    split closes. This is checked at LOAD time so a malformed profile cannot be
+    constructed in the first place.
+    """
+    for left, right in INCOMPATIBLE_PAIRS:
+        if role.can(left) and role.can(right):
+            raise RoutingProfileError(
+                f"role '{role.key}' holds both '{left}={role.capabilities.get(left)}' "
+                f"and '{right}={role.capabilities.get(right)}': "
+                "this is self-approval and is refused at load time"
+            )
 
 
 def builtin_roles() -> dict[str, RoleDefinition]:
@@ -272,6 +346,8 @@ def _role_to_dict(role: RoleDefinition) -> dict[str, Any]:
         }
         if role.tool.args:
             out["tool"]["args"] = list(role.tool.args)
+    if role.capabilities:
+        out["capabilities"] = dict(role.capabilities)
     if role.is_observer:
         out["observer"] = True
     if role.metadata:

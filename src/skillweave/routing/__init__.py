@@ -5,11 +5,16 @@ from .profile import (
     from_dict,
     load_profile,
     load_profiles,
+    load_matrix,
     builtin_roles,
     resolve_role,
     TIER_FAST,
     TIER_BALANCED,
     TIER_DEEP,
+    CAP_MUTATE_RUN_STATE,
+    CAP_APPROVE_GATE,
+    INCOMPATIBLE_PAIRS,
+    RoutingProfileError,
 )
 
 __all__ = [
@@ -19,9 +24,14 @@ __all__ = [
     "from_dict",
     "load_profile",
     "load_profiles",
+    "load_matrix",
     "builtin_roles",
     "resolve_role",
     "TIER_FAST",
     "TIER_BALANCED",
     "TIER_DEEP",
+    "CAP_MUTATE_RUN_STATE",
+    "CAP_APPROVE_GATE",
+    "INCOMPATIBLE_PAIRS",
+    "RoutingProfileError",
 ]

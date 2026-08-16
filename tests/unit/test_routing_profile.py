@@ -1,10 +1,16 @@
-"""Tests for declarative routing profiles (SW-135 dispatch 1).
+"""Tests for declarative routing profiles (SW-135 dispatches 1 and 2).
 
-Covers the two acceptance criteria of the dispatch:
+Dispatch 1 criteria:
 1. A RoutingProfile is declarable as data and carries all four parts:
    model choice per role, tier (fast/balanced/deep), limits, target tool.
 2. Roles are DATA (not an enum); built-ins ops/reviewer/observer/chairman/worker
    plus declarable extras; observer is wired to the existing runtime observer.
+
+Dispatch 2 criteria:
+3. A role carries its capabilities in the same profile file; the capability
+   matrix is loaded from there, not hardcoded; an undeclared role falls closed.
+4. Incompatible capabilities (can_mutate_run_state + can_approve_gate) are
+   refused at load time — that combination is self-approval.
 """
 import pytest
 
@@ -15,10 +21,14 @@ from skillweave.routing import (
     builtin_roles,
     from_dict,
     load_profiles,
+    load_matrix,
     resolve_role,
     TIER_FAST,
     TIER_BALANCED,
     TIER_DEEP,
+    CAP_MUTATE_RUN_STATE,
+    CAP_APPROVE_GATE,
+    RoutingProfileError,
 )
 from skillweave.runtime.observer import ObserverRuntime
 
@@ -174,3 +184,138 @@ def test_roundtrip_preserves_all_four_parts():
     assert rebuilt.model_for("ops") == profile.model_for("ops")
     assert rebuilt.model_for("worker") == profile.model_for("worker")
     assert rebuilt.tool_for("worker").launch_command == profile.tool_for("worker").launch_command
+
+
+# ── Criterion 3: capabilities come from the same file, falling closed ────
+
+def test_role_carries_capabilities_from_same_file():
+    profile = _profile(
+        roles={
+            "ops": {
+                "model": "sonnet",
+                "capabilities": {CAP_MUTATE_RUN_STATE: True},
+            },
+            "reviewer": {
+                "model": "gpt-4o",
+                "capabilities": {CAP_APPROVE_GATE: True},
+            },
+        }
+    )
+    assert profile.role_can("ops", CAP_MUTATE_RUN_STATE) is True
+    assert profile.role_can("ops", CAP_APPROVE_GATE) is False
+    assert profile.role_can("reviewer", CAP_MUTATE_RUN_STATE) is False
+    assert profile.role_can("reviewer", CAP_APPROVE_GATE) is True
+
+
+def test_capability_matrix_is_loaded_not_hardcoded():
+    profile = _profile(
+        roles={
+            "ops": {"capabilities": {CAP_MUTATE_RUN_STATE: True}},
+            "custom_writer": {"capabilities": {CAP_MUTATE_RUN_STATE: True}},
+        }
+    )
+    matrix = profile.capability_matrix()
+    assert isinstance(matrix, dict)
+    # The matrix reflects exactly what the file declared: no role that was not
+    # declared appears, and no capability is invented for it.
+    assert "custom_writer" in matrix
+    assert matrix["custom_writer"].can(CAP_MUTATE_RUN_STATE) is True
+    assert matrix["custom_writer"].can(CAP_APPROVE_GATE) is False
+
+
+def test_undeclared_role_falls_closed():
+    profile = _profile(
+        roles={
+            "ops": {"capabilities": {CAP_MUTATE_RUN_STATE: True}},
+            "reviewer": {"capabilities": {CAP_APPROVE_GATE: True}},
+        }
+    )
+    # "gremlin" is nowhere in the profile: every capability check must deny.
+    assert profile.role("gremlin") is None
+    assert profile.role_can("gremlin", CAP_MUTATE_RUN_STATE) is False
+    assert profile.role_can("gremlin", CAP_APPROVE_GATE) is False
+
+
+def test_declared_role_without_capabilities_falls_closed():
+    profile = _profile(
+        roles={"plain_role": {"model": "sonnet"}}
+    )
+    assert profile.role_can("plain_role", CAP_MUTATE_RUN_STATE) is False
+    assert profile.role_can("plain_role", CAP_APPROVE_GATE) is False
+
+
+def test_load_matrix_returns_only_declared_roles():
+    roles = {
+        "ops": RoleDefinition(key="ops", capabilities={CAP_MUTATE_RUN_STATE: True}),
+        "reviewer": RoleDefinition(key="reviewer", capabilities={CAP_APPROVE_GATE: True}),
+    }
+    matrix = load_matrix(roles)
+    assert set(matrix.keys()) == {"ops", "reviewer"}
+
+
+# ── Criterion 4: self-approval refused at load time ───────────────────────
+
+def test_self_approval_refused_at_load_time():
+    with pytest.raises(RoutingProfileError):
+        from_dict({
+            "name": "sw135",
+            "tier": "balanced",
+            "limits": {},
+            "roles": {
+                "rot": {
+                    "capabilities": {
+                        CAP_MUTATE_RUN_STATE: True,
+                        CAP_APPROVE_GATE: True,
+                    },
+                },
+            },
+        })
+
+
+def test_self_approval_refused_even_if_one_capability_false():
+    # Only a role holding BOTH capabilities (both truthy) is self-approval.
+    profile = _profile(
+        roles={
+            "ops": {
+                "capabilities": {
+                    CAP_MUTATE_RUN_STATE: True,
+                    CAP_APPROVE_GATE: False,
+                },
+            },
+        }
+    )
+    assert profile.role("ops") is not None
+    assert profile.role_can("ops", CAP_MUTATE_RUN_STATE) is True
+    assert profile.role_can("ops", CAP_APPROVE_GATE) is False
+
+
+def test_self_approval_refused_also_in_load_profiles():
+    with pytest.raises(RoutingProfileError):
+        load_profiles({
+            "bad": {
+                "name": "bad",
+                "tier": "balanced",
+                "limits": {},
+                "roles": {
+                    "rot": {
+                        "capabilities": {
+                            CAP_MUTATE_RUN_STATE: True,
+                            CAP_APPROVE_GATE: True,
+                        },
+                    },
+                },
+            }
+        })
+
+
+def test_roundtrip_preserves_capabilities():
+    profile = _profile(
+        roles={
+            "ops": {"capabilities": {CAP_MUTATE_RUN_STATE: True}},
+            "reviewer": {"capabilities": {CAP_APPROVE_GATE: True}},
+        }
+    )
+    rebuilt = from_dict(profile.to_dict())
+    assert rebuilt.role_can("ops", CAP_MUTATE_RUN_STATE) is True
+    assert rebuilt.role_can("ops", CAP_APPROVE_GATE) is False
+    assert rebuilt.role_can("reviewer", CAP_APPROVE_GATE) is True
