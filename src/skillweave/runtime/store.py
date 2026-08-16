@@ -177,6 +177,17 @@ class SQLiteRunStore(RunStore):
                 completed_at TEXT,
                 metadata TEXT NOT NULL DEFAULT '{}'
             );
+            CREATE TABLE IF NOT EXISTS write_scope_claims (
+                claim_id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                resolved_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                released_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_write_scope_claims_run
+                ON write_scope_claims(run_id);
+            CREATE INDEX IF NOT EXISTS idx_write_scope_claims_path
+                ON write_scope_claims(resolved_path);
         """)
         self._conn.commit()
 
@@ -361,6 +372,145 @@ class SQLiteRunStore(RunStore):
             created_at=row["created_at"],
             metadata=meta,
         )
+
+    # ---- Write-scope arbitration ----
+
+    def claim_write_scope(
+        self,
+        run_id: str,
+        scope_paths: list[str],
+        claim_id: Optional[str] = None,
+    ) -> list["WriteScopeClaim"]:
+        """Claim a set of write scopes on behalf of a run, atomically.
+
+        All scopes are resolved first (same resolution as 004), then every held
+        claim is checked for overlap. If ANY scope overlaps an existing held
+        claim, the whole claim operation fails and nothing is persisted. On
+        success the claims are committed in a single transaction.
+        """
+        import uuid
+
+        from .write_scope import (
+            WriteScopeClaim,
+            ScopeConflictError,
+            resolve_scope_path,
+            paths_overlap,
+        )
+
+        resolved = [resolve_scope_path(p) for p in scope_paths]
+        if not resolved:
+            return []
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Single transaction: check-then-insert is atomic, so two concurrent
+        # claimers cannot both succeed on an overlapping scope.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            held_rows = self._conn.execute(
+                "SELECT claim_id, run_id, resolved_path FROM write_scope_claims "
+                "WHERE released_at IS NULL"
+            ).fetchall()
+
+            for new_path in resolved:
+                for row in held_rows:
+                    if paths_overlap(new_path, row["resolved_path"]):
+                        raise ScopeConflictError(run_id, row["run_id"], new_path)
+
+            claims: list[WriteScopeClaim] = []
+            for i, new_path in enumerate(resolved):
+                if len(resolved) == 1 and claim_id:
+                    cid = claim_id
+                else:
+                    cid = claim_id + "::" + str(i) if claim_id else str(uuid.uuid4())
+                self._conn.execute(
+                    "INSERT INTO write_scope_claims "
+                    "(claim_id, run_id, resolved_path, created_at, released_at) "
+                    "VALUES (?, ?, ?, ?, NULL)",
+                    (cid, run_id, new_path, now),
+                )
+                claims.append(WriteScopeClaim(
+                    claim_id=cid,
+                    run_id=run_id,
+                    resolved_path=new_path,
+                    created_at=now,
+                    released_at=None,
+                ))
+
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+
+        return claims
+
+    def release_write_scope(self, claim_id: str) -> bool:
+        """Release a held (claim_id, run_id) claim; idempotent.
+
+        Returns True if a held claim was released, False if it was already
+        released or did not exist.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        cur = self._conn.execute(
+            "UPDATE write_scope_claims SET released_at = ? "
+            "WHERE claim_id = ? AND released_at IS NULL",
+            (now, claim_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def list_write_scope_claims(
+        self,
+        run_id: Optional[str] = None,
+        include_released: bool = False,
+    ) -> list["WriteScopeClaim"]:
+        """List claims. By default only HELD claims and all runs."""
+        from .write_scope import WriteScopeClaim
+
+        if run_id is not None:
+            rows = self._conn.execute(
+                "SELECT * FROM write_scope_claims WHERE run_id = ? "
+                + ("" if include_released else "AND released_at IS NULL"),
+                (run_id,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM write_scope_claims "
+                + ("" if include_released else "WHERE released_at IS NULL")
+            ).fetchall()
+
+        return [
+            WriteScopeClaim(
+                claim_id=r["claim_id"],
+                run_id=r["run_id"],
+                resolved_path=r["resolved_path"],
+                created_at=r["created_at"],
+                released_at=r["released_at"],
+            )
+            for r in rows
+        ]
+
+    def resolve_orphaned_claims(self) -> list[str]:
+        """Release held claims whose owning run no longer exists.
+
+        A claim is orphaned when its run_id does not appear in ``runs``. Returns
+        the claim_ids that were forcibly released.
+        """
+        orphaned = self._conn.execute(
+            "SELECT c.claim_id FROM write_scope_claims c "
+            "LEFT JOIN runs r ON r.run_id = c.run_id "
+            "WHERE c.released_at IS NULL AND r.run_id IS NULL"
+        ).fetchall()
+        claim_ids = [r["claim_id"] for r in orphaned]
+
+        if claim_ids:
+            now = datetime.now(timezone.utc).isoformat()
+            self._conn.executemany(
+                "UPDATE write_scope_claims SET released_at = ? WHERE claim_id = ?",
+                [(now, cid) for cid in claim_ids],
+            )
+            self._conn.commit()
+        return claim_ids
 
     # ---- Evidence persistence ----
 
