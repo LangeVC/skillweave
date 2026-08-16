@@ -12,14 +12,12 @@ Three modes exist, and only these three:
     the operator's override and is never silently improved upon.
 
 ``auto``
-    Derive the tier from the one complexity number promptchain-generate
-    already computed. That number collapses three upstream measures — points,
-    criteria count, dependency depth — into a single count for a task. This
-    module consumes that number; it does not compute a second complexity of
-    its own, because two disagreeing measures are exactly the defect this
-    prevents. The three components are the *provenance* of the number, not a
-    second signal auto re-derives: auto trusts the number the producer wrote
-    down.
+    Derive the tier from complexity: either the raw metrics (points, criteria
+    count, dependency depth) converted here via the named :func:`rank_metrics`
+    step, or a rank the producer already emitted. There is exactly one measure
+    of complexity, and the conversion between the raw scale and the rank scale
+    is explicit with its thresholds written down — never two disagreeing
+    measures, never an undeclared translation between two number scales.
 
 ``hybrid``
     Let ``auto`` decide, but only WITHIN bounds the profile declares. The
@@ -69,6 +67,90 @@ CEILING_KEY = "ceiling_tier"
 ADJUST_FLOOR = "floor"
 ADJUST_CEILING = "ceiling"
 
+# The rank is what decide() consumes: 0 = fast, 1 = balanced, >=2 = deep.
+# promptchain-generate emits raw metrics (points, criteria count, dependency
+# depth); this module owns the named step that turns those into a rank so the
+# thresholds are written down in exactly one place.
+RANK_FAST = 0
+RANK_BALANCED = 1
+RANK_DEEP = 2
+
+# Raw-metric ranges measured from complexity-analysis.md on 2026-08-16, so the
+# thresholds below are calibrated to data, not invented symmetry.
+MEASURED_POINTS = (1, 8)
+MEASURED_CRITERIA = (3, 10)
+MEASURED_DEPTH = (0, 5)
+
+# The single named conversion: raw metrics -> rank. A task is "fast" only when
+# it is small on every axis; "deep" as soon as any axis is heavy; "balanced"
+# in between. The thresholds are literals so the translation is auditable and
+# cannot drift silently between two number scales.
+FAST_MAX_POINTS = 2
+FAST_MAX_CRITERIA = 4
+FAST_MAX_DEPTH = 1
+DEEP_MIN_POINTS = 6
+DEEP_MIN_CRITERIA = 8
+DEEP_MIN_DEPTH = 3
+
+
+@dataclass(frozen=True)
+class ComplexityRank:
+    """The named raw-metric-to-rank step, with its source values kept.
+
+    ``points``, ``criteria``, and ``depth`` are the raw metrics
+    promptchain-generate measured. ``rank`` is the value ``decide`` consumes.
+    This dataclass exists so the conversion is explicit and anywhere a decision
+    is recorded, the record can name which raw values produced which rank —
+    an undeclared translation between the two scales is how a routing layer
+    silently overspends.
+    """
+
+    points: int
+    criteria: int
+    depth: int
+    rank: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "points": self.points,
+            "criteria": self.criteria,
+            "depth": self.depth,
+            "rank": self.rank,
+        }
+
+
+def rank_metrics(points: int, criteria: int, depth: int) -> ComplexityRank:
+    """Convert the three raw complexity metrics into a declared rank.
+
+    The thresholds are the literals above: a task is fast only if it is small
+    on every axis (``points <= FAST_MAX_POINTS`` and ``criteria <=
+    FAST_MAX_CRITERIA`` and ``depth <= FAST_MAX_DEPTH``); deep as soon as any
+    axis is heavy (``points >= DEEP_MIN_POINTS`` or ``criteria >=
+    DEEP_MIN_CRITERIA`` or ``depth >= DEEP_MIN_DEPTH``); balanced otherwise.
+    """
+    if points < 0 or criteria < 0 or depth < 0:
+        raise RoutingProfileError(
+            f"raw metrics must be non-negative, got "
+            f"points={points} criteria={criteria} depth={depth}"
+        )
+    small = (
+        points <= FAST_MAX_POINTS
+        and criteria <= FAST_MAX_CRITERIA
+        and depth <= FAST_MAX_DEPTH
+    )
+    heavy = (
+        points >= DEEP_MIN_POINTS
+        or criteria >= DEEP_MIN_CRITERIA
+        or depth >= DEEP_MIN_DEPTH
+    )
+    if small:
+        rank = RANK_FAST
+    elif heavy:
+        rank = RANK_DEEP
+    else:
+        rank = RANK_BALANCED
+    return ComplexityRank(points=points, criteria=criteria, depth=depth, rank=rank)
+
 
 @dataclass
 class Adjustment:
@@ -109,51 +191,71 @@ class RoutingDecision:
     adjustments: list[Adjustment] = field(default_factory=list)
     pinned: Optional[str] = None
     input: Any = None
+    rank: Optional[ComplexityRank] = None
 
     def to_dict(self) -> dict[str, Any]:
+        rank = self.rank.to_dict() if self.rank is not None else None
         return {
             "mode": self.mode,
             "profile": self.profile,
             "tier": self.tier,
             "pinned": self.pinned,
             "input": self.input,
+            "rank": rank,
             "adjustments": [a.to_dict() for a in self.adjustments],
         }
 
 
-def _tier_from_complexity(complexity: Any) -> str:
-    """Map the consumed complexity value onto a tier.
+def _tier_from_complexity(complexity: Any) -> tuple[str, Optional[ComplexityRank]]:
+    """Resolve the consumed complexity value onto a tier, naming its rank.
 
-    ``complexity`` is the single number promptchain-generate already computed
-    for the task — the count that folds points, criteria count, and dependency
-    depth together — and is passed here as a non-negative integer (0 -> fast,
-    1 -> balanced, >=2 -> deep). A tier name (``fast``/``balanced``/``deep``)
-    is also accepted for a caller that has already resolved the value onto the
-    tier axis (as dispatch 3 records). Everything else is refused loudly, so
-    auto can never turn an unknown value into a silent guess.
+    ``complexity`` is one of:
 
-    This is the consumption half and nothing more: it does not compute points,
-    criteria, or depth, it trusts the number the producer wrote down. There is
-    exactly one measure of complexity in play, and this reads it.
+    * a :class:`ComplexityRank` — raw metrics with the conversion already done
+      here, so the returned rank is named in the record;
+    * a bare non-negative integer rank (0 -> fast, 1 -> balanced, >=2 -> deep)
+      the producer emitted directly;
+    * a tier name (``fast``/``balanced``/``deep``) the producer resolved.
+
+    Only the first form carries raw values, so only then is a rank named in the
+    record. The bare-integer and tier-name forms are the producer's own rank,
+    not a conversion this module performed. Everything else is refused loudly.
+
+    Returns ``(tier, rank_or_none)``: the rank is non-None exactly when raw
+    metrics were converted here, so the decision record can state which raw
+    value produced which rank.
     """
+    if isinstance(complexity, ComplexityRank):
+        rank = complexity.rank
+        tier = _tier_name_from_rank(rank)
+        return tier, complexity
     if isinstance(complexity, str):
         if complexity not in VALID_TIERS:
             raise RoutingProfileError(
                 f"unknown complexity '{complexity}' "
                 f"(expected one of {sorted(VALID_TIERS)})"
             )
-        return complexity
+        return complexity, None
     if isinstance(complexity, int) and not isinstance(complexity, bool):
         if complexity < 0:
             raise RoutingProfileError(
                 f"complexity must be non-negative, got {complexity}"
             )
-        ordered = [TIER_FAST, TIER_BALANCED, TIER_DEEP]
-        return ordered[min(complexity, len(ordered) - 1)]
+        return _tier_name_from_rank(complexity), None
     raise RoutingProfileError(
-        f"complexity must be a tier name or a non-negative integer, got "
-        f"{complexity!r}"
+        f"complexity must be a ComplexityRank, a tier name, or a non-negative "
+        f"integer, got {complexity!r}"
     )
+
+
+def _tier_name_from_rank(rank: int) -> str:
+    """Map a non-negative rank onto the named tier axis.
+
+    This is the shared tail of the conversion: 0 -> fast, 1 -> balanced,
+    >=2 -> deep. The rank is already validated non-negative by its callers.
+    """
+    ordered = [TIER_FAST, TIER_BALANCED, TIER_DEEP]
+    return ordered[min(rank, len(ordered) - 1)]
 
 
 def _role_pin(profile: RoutingProfile, role: Optional[str]) -> Optional[str]:
@@ -199,11 +301,11 @@ def decide(
 
     ``mode`` must be one of :data:`MODE_PIN`, :data:`MODE_AUTO`, :data:`MODE_HYBRID`.
     Any other value raises :class:`RoutingProfileError` — modes are declared,
-    never inferred. ``complexity`` is the single number promptchain-generate
-    already computed for the task (points, criteria count, dependency depth
-    folded together); ``auto`` (and ``hybrid``, which is auto-with-bounds)
-    derive the tier from it. ``role`` is the per-role pin scope relevant only
-    inside hybrid.
+    never inferred. ``complexity`` is what ``auto`` (and ``hybrid``, which is
+    auto-with-bounds) derive the tier from: a :class:`ComplexityRank` (raw
+    metrics converted here, whose raw values and rank are named in the record),
+    a bare rank the producer already emitted, or a resolved tier name.
+    ``role`` is the per-role pin scope relevant only inside hybrid.
 
     Under ``pin`` no automatic decision runs at all: ``complexity`` is not
     read, the tier is not derived, no bound is consulted — the pin is the
@@ -236,7 +338,7 @@ def decide(
 
     # auto and hybrid both derive the tier from complexity. hybrid then clamps
     # that tier inside declared bounds; auto does not.
-    tier = _tier_from_complexity(complexity)
+    tier, rank = _tier_from_complexity(complexity)
 
     if mode == MODE_AUTO:
         return RoutingDecision(
@@ -245,6 +347,7 @@ def decide(
             tier=tier,
             pinned=None,
             input=complexity,
+            rank=rank,
             adjustments=[],
         )
 
@@ -267,5 +370,6 @@ def decide(
         tier=tier,
         pinned=pinned,
         input=complexity,
+        rank=rank,
         adjustments=adjustments,
     )

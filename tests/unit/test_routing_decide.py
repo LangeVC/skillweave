@@ -29,6 +29,7 @@ from skillweave.routing.decide import (
     decide,
     RoutingDecision,
     Adjustment,
+    rank_metrics,
 )
 
 
@@ -271,4 +272,59 @@ def test_pin_is_never_improved_upon():
     decision = decide(profile, MODE_PIN, complexity=TIER_FAST, role="reviewer")
     assert decision.tier == "deep"  # bounds ignored under pin
     assert decision.adjustments == []
+
+
+# ── Criterion 4: the raw-metric-to-rank step is explicit and named ──────
+
+def test_the_conversion_step_is_named_and_has_thresholds():
+    # The translation from raw metrics to rank is a named, public function
+    # (rank_metrics) with literal thresholds, so it is auditable and never an
+    # undeclared jump between two number scales.
+    assert rank_metrics(points=1, criteria=3, depth=0).rank == 0  # small on every axis
+    assert rank_metrics(points=2, criteria=4, depth=1).rank == 0
+    assert rank_metrics(points=3, criteria=5, depth=1).rank == 1  # between
+    assert rank_metrics(points=6, criteria=3, depth=0).rank == 2  # heavy points
+    assert rank_metrics(points=1, criteria=8, depth=0).rank == 2  # heavy criteria
+    assert rank_metrics(points=1, criteria=3, depth=3).rank == 2  # heavy depth
+
+
+def test_a_three_point_three_criteria_task_is_not_deep():
+    # The measured defect: a 3-point / 3-criteria task must not route to the
+    # most expensive tier. Under the explicit thresholds it is balanced.
+    rank = rank_metrics(points=3, criteria=3, depth=0)
+    assert rank.rank == 1
+    decision = decide(_profile(), MODE_AUTO, complexity=rank)
+    assert decision.tier == TIER_BALANCED
+
+
+def test_rank_is_named_in_the_record():
+    # When raw metrics are converted here, the decision record names which raw
+    # values produced which rank, so the translation is visible in the record.
+    rank = rank_metrics(points=3, criteria=3, depth=0)
+    decision = decide(_profile(), MODE_AUTO, complexity=rank)
+    assert decision.rank is not None
+    assert decision.rank.points == 3
+    assert decision.rank.criteria == 3
+    assert decision.rank.depth == 0
+    assert decision.rank.rank == 1
+    data = decision.to_dict()
+    assert data["rank"] == {"points": 3, "criteria": 3, "depth": 0, "rank": 1}
+
+
+def test_bare_rank_from_producer_has_no_conversion_named():
+    # If the producer already emitted a rank, this module converted nothing, so
+    # the record carries no rank mapping — and a bare rank is NOT treated as a
+    # raw metric that silently lands on deep.
+    decision = decide(_profile(), MODE_AUTO, complexity=1)
+    assert decision.tier == TIER_BALANCED
+    assert decision.rank is None
+
+
+def test_raw_metrics_refuse_negative_values():
+    with pytest.raises(RoutingProfileError):
+        rank_metrics(points=-1, criteria=3, depth=0)
+    with pytest.raises(RoutingProfileError):
+        rank_metrics(points=1, criteria=-3, depth=0)
+    with pytest.raises(RoutingProfileError):
+        rank_metrics(points=1, criteria=3, depth=-1)
 
