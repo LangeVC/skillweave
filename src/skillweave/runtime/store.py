@@ -227,14 +227,14 @@ class SQLiteRunStore(RunStore):
         if target_state in ("advance_or_stop", "FAILED"):
             ended_at = now
 
-        self._conn.execute(
+        cur = self._conn.execute(
             """UPDATE runs SET state = ?, version = ?, updated_at = ?, ended_at = ?,
                role = COALESCE(?, role)
                WHERE run_id = ? AND version = ?""",
             (target_state, new_version, now, ended_at, role, run_id, expected_version),
         )
 
-        if self._conn.total_changes == 0:
+        if cur.rowcount == 0:
             raise VersionConflictError(run_id, expected_version, existing.version)
 
         self._conn.execute(
