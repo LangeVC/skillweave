@@ -1,0 +1,56 @@
+name: Release on Tag
+
+# SW-CI-003: ein Tag-Push loest etwas aus. Bisher haengen release.yml und
+# auto-release-notes.yml an `on: release` (Release-OBJEKT), nichts an `tags:`.
+# Ein von Forgejo gespiegelter v*-Tag laeuft hier ein und legt das
+# Release-Objekt an — ohne dass jemand auf GitHub von Hand draufklicken muss.
+#
+# Der Tag ist auf der kanonischen Seite (Forgejo) bereits durch
+# validate-release-tag.yml gegangen. Hier wird ihm vertraut: er wird NICHT
+# erneut gegen die 13 Mitgliedsmanifeste geprueft — das waere der Fehler, den
+# SW-CI-002-G korrigiert hat (die Mitgliedsversionen sind keine Orte der
+# Bundle-Release-Linie). Geprueft wird hier nur die Namenskonvention, die CI
+# (auto-tag-release.yml) und der Releasechain-Skill ohnehin fordern.
+#
+# github.server_url-Guard: laeuft nur auf GitHub, nie auf dem Forgejo-Runner.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_NAME_PREFIX: "SkillWeave"
+
+jobs:
+  release:
+    name: Create GitHub Release
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce naming convention (SkillWeave vX.Y.Z)
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NAME="${RELEASE_NAME_PREFIX} ${TAG}"
+          if ! echo "${NAME}" | grep -qE '^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "HARD GATE REJECTED — '${NAME}' passt nicht auf ^SkillWeave vX.Y.Z$"
+            exit 1
+          fi
+          echo "${NAME}" > release-name.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ env.RELEASE_NAME_PREFIX }} ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
