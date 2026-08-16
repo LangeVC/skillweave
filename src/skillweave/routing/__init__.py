@@ -34,6 +34,7 @@ from .faigate_adapter import (  # noqa: F401
     get_profile,
     list_detected_providers,
     list_profiles,
+    known_model_ids,
     resolve_tier,
 )
 
@@ -67,5 +68,6 @@ __all__ = [
     "get_profile",
     "list_detected_providers",
     "list_profiles",
+    "known_model_ids",
     "resolve_tier",
 ]

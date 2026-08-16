@@ -444,6 +444,18 @@ def list_detected_providers() -> dict[str, str]:
     return {name: p.provider_name() for name, p in detect_providers().items()}
 
 
+def known_model_ids() -> frozenset[str]:
+    """Return every model id Faigate can resolve, across all router presets.
+
+    This is the deterministic "is a model available" surface: it is derived
+    from ``ROUTER_PROFILES``, not from a live provider probe, so it never does
+    network I/O and never flakes. A model id outside this set cannot be resolved
+    by Faigate and must be reported, not silently ignored (AK 10).
+    """
+    ids = {model for preset in ROUTER_PROFILES.values() for model in preset["models"]}
+    return frozenset(ids)
+
+
 def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     """Resolve a profile's tier into the models that will actually run (AK 8+9).
 
@@ -454,14 +466,20 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     ``pinned`` so a later run can tell the difference between "what was
     requested" and "what really ran".
 
+    A role that declares a ``model`` (or ``pin``) id Faigate cannot resolve is
+    refused here with an error naming BOTH the profile and the role — no silent
+    fallback (AK 10).
+
     Returns a :class:`~skillweave.routing.profile.ResolutionRecord` carrying the
     requested tier, the router preset name, the council mode, the resolved model
     ids, and any pin.
     """
-    from .profile import ResolutionRecord, tier_to_router
+    from .profile import ResolutionRecord, RoutingProfileError, tier_to_router
 
     router_name, mode = tier_to_router(profile.tier)
     preset = ROUTER_PROFILES.get(router_name, ROUTER_PROFILES["default"])
+
+    _check_unavailable_models(profile)
 
     pin = _profile_pin(profile)
     resolved_models = [pin] if pin else list(preset["models"])
@@ -473,6 +491,26 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
         resolved_models=resolved_models,
         pinned=pin,
     )
+
+
+def _check_unavailable_models(profile: "RoutingProfile") -> None:
+    """Refuse roles whose declared model or pin Faigate cannot resolve.
+
+    A role's ``model`` and ``pin`` name a concrete model id. If that id is not
+    in any router preset, Faigate cannot supply it, so we fail loudly — naming
+    the profile and the role — instead of silently substituting another model.
+    """
+    from .profile import RoutingProfileError
+
+    available = known_model_ids()
+    for key, role in profile.roles.items():
+        for field, value in (("model", role.model), ("pin", role.pin)):
+            if value is not None and value not in available:
+                raise RoutingProfileError(
+                    f"profile '{profile.name}' role '{key}' names {field} "
+                    f"'{value}' which Faigate cannot resolve "
+                    f"(available: {sorted(available)})"
+                )
 
 
 def _profile_pin(profile: "RoutingProfile") -> Optional[str]:

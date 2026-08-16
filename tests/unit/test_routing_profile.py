@@ -34,6 +34,8 @@ from skillweave.routing import (
     tier_to_mode,
     ResolutionRecord,
     resolve_tier,
+    known_model_ids,
+    ROUTER_PROFILES,
 )
 from skillweave.runtime.observer import ObserverRuntime
 
@@ -464,4 +466,42 @@ def test_pin_roundtrip_preserved():
     rebuilt = from_dict(profile.to_dict())
     assert rebuilt.role("ops").is_pinned is True
     assert rebuilt.role("ops").pin == "opus"
+
+
+# ── Criterion 10: red proof — unavailable model fails loud ───────────────
+
+def test_unavailable_model_names_profile_and_role():
+    # A role declaring a model Faigate cannot resolve is refused, and the error
+    # names BOTH the profile and the role — no silent fallback to another model.
+    profile = _profile(roles={"ops": {"model": "turbo-9000"}})
+    with pytest.raises(RoutingProfileError) as exc:
+        resolve_tier(profile)
+    message = str(exc.value)
+    assert "sw135" in message
+    assert "ops" in message
+    assert "turbo-9000" in message
+
+
+def test_unavailable_pin_names_profile_and_role():
+    # The same loudness applies to a pin: it is a concrete model id, so an
+    # unresolvable pin fails naming profile and role rather than being dropped.
+    profile = _profile(roles={"worker": {"pin": "claude-nonexistent"}})
+    with pytest.raises(RoutingProfileError) as exc:
+        resolve_tier(profile)
+    message = str(exc.value)
+    assert "sw135" in message
+    assert "worker" in message
+    assert "claude-nonexistent" in message
+
+
+def test_known_model_ids_is_exhaustive_and_disjoint_from_unknown():
+    ids = known_model_ids()
+    assert "sonnet" in ids
+    assert "opus" in ids
+    assert "turbo-9000" not in ids
+    # Every preset's models are resolvable, i.e. the availability set is the
+    # union of all preset pools, not a guess.
+    for preset in ROUTER_PROFILES.values():
+        for model in preset["models"]:
+            assert model in ids
 
