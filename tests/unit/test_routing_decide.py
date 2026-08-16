@@ -216,3 +216,59 @@ def test_decision_roundtrips_to_dict():
 def test_decision_record_names_profile():
     decision = decide(_profile(), MODE_PIN)
     assert decision.profile == "sw135"
+
+
+# ── Criterion 3: auto reads the existing complexity ─────────────────────
+
+def test_auto_consumes_the_single_complexity_number():
+    # The consumed complexity is one non-negative number — the count that folds
+    # points, criteria count, and dependency depth. auto reads that number and
+    # maps it onto the tier axis; it does not invent a second measure.
+    profile = _profile()
+    assert decide(profile, MODE_AUTO, complexity=0).tier == TIER_FAST
+    assert decide(profile, MODE_AUTO, complexity=1).tier == TIER_BALANCED
+    assert decide(profile, MODE_AUTO, complexity=3).tier == TIER_DEEP
+
+
+def test_auto_computes_no_second_complexity():
+    # auto trusts the number it was handed. Feeding the same number always
+    # yields the same tier regardless of the profile's own tier — the profile
+    # tier is never consulted as a second complexity signal under auto.
+    fast_profile = _profile(tier="deep")
+    deep_profile = _profile(tier="fast")
+    assert decide(fast_profile, MODE_AUTO, complexity=0).tier == TIER_FAST
+    assert decide(deep_profile, MODE_AUTO, complexity=2).tier == TIER_DEEP
+
+
+def test_auto_refuses_a_non_number_complexity():
+    # A second, differing measure can only enter if auto accepts something it
+    # did not compute. It does not: booleans and floats are refused, so the
+    # only path in is the producer's own number (or a resolved tier name).
+    profile = _profile()
+    with pytest.raises(RoutingProfileError):
+        decide(profile, MODE_AUTO, complexity=True)
+    with pytest.raises(RoutingProfileError):
+        decide(profile, MODE_AUTO, complexity=1.5)
+
+
+# ── Criterion 4: pin decides nothing ────────────────────────────────────
+
+def test_pin_runs_no_derivation_and_ignores_complexity():
+    # Pin never reads the complexity nor derives a tier from it: the profile's
+    # own tier is the decision, and a complexity handed alongside is dropped.
+    profile = _profile(tier="deep")
+    decision = decide(profile, MODE_PIN, complexity=0)  # would be fast under auto
+    assert decision.tier == "deep"
+    assert decision.input is None
+    assert decision.adjustments == []
+    assert decision.mode == MODE_PIN
+
+
+def test_pin_is_never_improved_upon():
+    # A pin is the operator's override. No bound, floor, ceiling, or automatic
+    # adjustment modifies it — the profile tier is returned verbatim.
+    profile = _hybrid_profile(floor="fast", ceiling="balanced", tier="deep")
+    decision = decide(profile, MODE_PIN, complexity=TIER_FAST, role="reviewer")
+    assert decision.tier == "deep"  # bounds ignored under pin
+    assert decision.adjustments == []
+

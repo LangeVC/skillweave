@@ -12,12 +12,14 @@ Three modes exist, and only these three:
     the operator's override and is never silently improved upon.
 
 ``auto``
-    Derive the tier from complexity. The complexity value is what
-    promptchain-generate already computed (points, criteria count, dependency
-    depth) — this module consumes it, it does not compute a second measure of
-    its own. Resolving those raw measures into the declared complexity value is
-    the upstream producer's job (dispatch 3); here the value drives the tier
-    directly.
+    Derive the tier from the one complexity number promptchain-generate
+    already computed. That number collapses three upstream measures — points,
+    criteria count, dependency depth — into a single count for a task. This
+    module consumes that number; it does not compute a second complexity of
+    its own, because two disagreeing measures are exactly the defect this
+    prevents. The three components are the *provenance* of the number, not a
+    second signal auto re-derives: auto trusts the number the producer wrote
+    down.
 
 ``hybrid``
     Let ``auto`` decide, but only WITHIN bounds the profile declares. The
@@ -120,14 +122,19 @@ class RoutingDecision:
 
 
 def _tier_from_complexity(complexity: Any) -> str:
-    """Map the declared complexity value onto a tier.
+    """Map the consumed complexity value onto a tier.
 
-    ``complexity`` is either a tier name directly (``fast``/``balanced``/
-    ``deep``) or a non-negative integer rank resolved against the three ordered
-    tiers (0 -> fast, 1 -> balanced, >=2 -> deep). An unknown value is refused
-    loudly, mirroring profile.py's tier guard. This is the consumption half:
-    it does not compute points/criteria/depth, it trusts whatever the producer
-    already resolved into this value.
+    ``complexity`` is the single number promptchain-generate already computed
+    for the task — the count that folds points, criteria count, and dependency
+    depth together — and is passed here as a non-negative integer (0 -> fast,
+    1 -> balanced, >=2 -> deep). A tier name (``fast``/``balanced``/``deep``)
+    is also accepted for a caller that has already resolved the value onto the
+    tier axis (as dispatch 3 records). Everything else is refused loudly, so
+    auto can never turn an unknown value into a silent guess.
+
+    This is the consumption half and nothing more: it does not compute points,
+    criteria, or depth, it trusts the number the producer wrote down. There is
+    exactly one measure of complexity in play, and this reads it.
     """
     if isinstance(complexity, str):
         if complexity not in VALID_TIERS:
@@ -139,7 +146,7 @@ def _tier_from_complexity(complexity: Any) -> str:
     if isinstance(complexity, int) and not isinstance(complexity, bool):
         if complexity < 0:
             raise RoutingProfileError(
-                f"complexity rank must be non-negative, got {complexity}"
+                f"complexity must be non-negative, got {complexity}"
             )
         ordered = [TIER_FAST, TIER_BALANCED, TIER_DEEP]
         return ordered[min(complexity, len(ordered) - 1)]
@@ -192,9 +199,15 @@ def decide(
 
     ``mode`` must be one of :data:`MODE_PIN`, :data:`MODE_AUTO`, :data:`MODE_HYBRID`.
     Any other value raises :class:`RoutingProfileError` — modes are declared,
-    never inferred. ``complexity`` is the value ``auto`` (and ``hybrid``, which
-    is auto-with-bounds) derives the tier from; ``role`` is the per-role pin
-    scope relevant only inside hybrid.
+    never inferred. ``complexity`` is the single number promptchain-generate
+    already computed for the task (points, criteria count, dependency depth
+    folded together); ``auto`` (and ``hybrid``, which is auto-with-bounds)
+    derive the tier from it. ``role`` is the per-role pin scope relevant only
+    inside hybrid.
+
+    Under ``pin`` no automatic decision runs at all: ``complexity`` is not
+    read, the tier is not derived, no bound is consulted — the pin is the
+    operator's override and is never silently ignored or improved upon.
 
     Returns a :class:`RoutingDecision` carrying the mode, profile, final tier,
     any pin, and any adjustments. Adjustments only ever appear under hybrid and
