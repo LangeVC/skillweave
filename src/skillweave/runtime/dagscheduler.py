@@ -31,7 +31,7 @@ Dispatch 4 adds ``max_parallel`` and dependent-gating.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence
+from typing import List, Mapping, Optional, Sequence
 
 from .write_scope import resolve_scope_path, paths_overlap, WriteScopeClaim
 
@@ -68,6 +68,7 @@ class Task:
     id: str
     depends_on: List[str] = field(default_factory=list)
     write_scope: List[str] = field(default_factory=list)
+    gate: Optional[str] = None
 
 
 @dataclass
@@ -303,3 +304,102 @@ def build_sessions(
             session_boundary=sequence.session_boundary,
         ))
     return sessions
+
+
+@dataclass
+class Schedule:
+    """A gated, parallel-capped session schedule.
+
+    ``batches`` are the session boundary batches that may run, in order.
+    ``blocked`` names every task (sorted) that was never released because one
+    of its dependencies carried a gate that did not pass — transitively, so a
+    task downstream of a blocked task is itself blocked. Blocked tasks are
+    reported, never silently dropped (same philosophy as ``CyclicGraphError``).
+    """
+
+    batches: List[SessionBatch]
+    blocked: List[str]
+
+
+def _split_by_max_parallel(
+    lane_groups: Sequence[Sequence[Lane]],
+    max_parallel: int,
+) -> List[List[Lane]]:
+    """Cap the number of lanes per group at ``max_parallel``.
+
+    Only fan-out groups can hold more than one lane; inline groups hold exactly
+    one and are left untouched. ``max_parallel`` is guaranteed >= 1 by the
+    caller. Id order is preserved, so the split is deterministic.
+    """
+    split: List[List[Lane]] = []
+    for group in lane_groups:
+        group = list(group)
+        if len(group) <= max_parallel:
+            split.append(group)
+            continue
+        for start in range(0, len(group), max_parallel):
+            split.append(group[start:start + max_parallel])
+    return split
+
+
+def build_schedule(
+    sequence: Sequence,
+    gate_results: Optional[Mapping[str, bool]] = None,
+    max_parallel: Optional[int] = None,
+    held_claims: Sequence[WriteScopeClaim] = (),
+) -> Schedule:
+    """Build a gated, parallel-capped schedule from a ``Sequence``.
+
+    Extends ``build_sessions`` with dispatch-4 guarantees:
+
+    * ``max_parallel`` caps how many lanes share one fan-out batch (criterion
+      3). When unset there is no cap; a value < 1 is refused.
+    * a lane whose ``gate`` did not pass (missing or ``False`` in
+      ``gate_results``) does NOT release its dependents (criterion 4). Blocked
+      tasks — and anything downstream of them — are returned in
+      ``Schedule.blocked`` rather than vanishing from the plan.
+
+    The scheduler still starts no process and knows no runner (criterion 6):
+    gating and parallelism are decided here declaratively, never by
+    executing work.
+    """
+    if not sequence.session_boundary:
+        raise MissingSessionBoundaryError()
+    if max_parallel is not None and max_parallel < 1:
+        raise ValueError(
+            f"max_parallel must be >= 1 or None, got {max_parallel}"
+        )
+
+    results = dict(gate_results) if gate_results else {}
+
+    # Layering, cycle/dupe/unknown-dep validation, and determinism come from
+    # build_batches. Gating is a release condition layered on top: a dependent
+    # is released only when every dependency is scheduled AND its gate passed.
+    batches = build_batches(sequence.tasks)
+    by_id = {t.id: t for t in sequence.tasks}
+
+    blocked: set = set()
+    for batch in batches:
+        for task in batch.tasks:
+            if task.id in blocked:
+                continue
+            for dep in task.depends_on:
+                dep_task = by_id[dep]
+                dep_blocked = dep in blocked
+                gate = dep_task.gate
+                gate_failed = gate is not None and not results.get(gate, False)
+                if dep_blocked or gate_failed:
+                    blocked.add(task.id)
+                    break
+
+    unblocked = [t for t in sequence.tasks if t.id not in blocked]
+    lane_groups = build_lanes(unblocked, held_claims=held_claims)
+    if max_parallel is not None:
+        lane_groups = _split_by_max_parallel(lane_groups, max_parallel)
+
+    session_batches = [
+        SessionBatch(index=i, lanes=list(group),
+                     session_boundary=sequence.session_boundary)
+        for i, group in enumerate(lane_groups)
+    ]
+    return Schedule(batches=session_batches, blocked=sorted(blocked))
