@@ -103,6 +103,11 @@ class SQLiteRunStore(RunStore):
         self._conn = sqlite3.connect(db_path)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
+        # 5000 is sqlite3.connect()'s built-in default. Stating it explicitly makes the
+        # write-lock behavior visible and independent of the library default, so a caller
+        # holding its own connection can no longer silently override it. Same value, no
+        # behavior change.
+        self._conn.execute("PRAGMA busy_timeout=5000")
         self._init_schema()
 
     def _init_schema(self):
