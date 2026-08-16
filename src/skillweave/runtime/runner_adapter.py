@@ -34,6 +34,16 @@ Concerns, each mapped to a dispatch criterion:
    splits that into an explicit ``exit_code`` (``None`` when signaled) and
    ``signal`` (``None`` on a clean exit).
 
+7. The interface names no concrete provider and no concrete model. The target
+   tool and the model are *required* parameters (``tool`` and ``model``, no
+   default) that the caller supplies — lane 012's ``RoutingProfile`` carries
+   them. A default baked into this module is the defect this criterion
+   prevents: it would re-bind the whole layer to one model.
+
+10. At the end of its batch a worker stops. ``dispatch_batch`` runs exactly
+    the first batch and never dispatches a dependent batch into the live
+    worker; remaining capacity is not a reason to continue.
+
 This module imports from ``registry`` (receipt types) only. It does not touch
 ``dagscheduler`` (010's file) and does not modify ``store``.
 """
@@ -106,6 +116,8 @@ class ProcessResult:
     signal: Optional[int]
     termination: str
     pid: int
+    tool: str
+    model: str
     stdout_receipt: Optional[ArtifactReceipt]
     stderr_receipt: Optional[ArtifactReceipt]
     message: str = ""
@@ -191,6 +203,8 @@ class RunningProcess:
     _run_id: str
     _subject_repo: str
     _subject_commit: str
+    _tool: str
+    _model: str
     _created_at: Optional[str] = None
     _cancelled: bool = False
 
@@ -357,6 +371,8 @@ class RunningProcess:
             signal=signal,
             termination=termination,
             pid=self.pid,
+            tool=self._tool,
+            model=self._model,
             stdout_receipt=stdout_receipt,
             stderr_receipt=stderr_receipt,
             message=message,
@@ -367,6 +383,8 @@ class RunningProcess:
                 "subject_repo": self._subject_repo,
                 "subject_commit": self._subject_commit,
                 "created_at": created_at,
+                "tool": self._tool,
+                "model": self._model,
             },
         )
 
@@ -377,10 +395,16 @@ def start_process(
     run_id: str,
     subject_repo: str,
     subject_commit: str,
+    tool: str,
+    model: str,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
 ) -> RunningProcess:
     """Start ``command`` as a real process and return a live handle.
+
+    ``tool`` and ``model`` are *required* and carry no default here: they are
+    the target tool and model resolved by lane 012's ``RoutingProfile``. This
+    module names no concrete provider and no concrete model (criterion 7).
 
     The worker runs in its own session (process group) so ``cancel()`` and
     ``wait(timeout=...)`` can kill every descendant it spawned. Use
@@ -401,6 +425,8 @@ def start_process(
         _run_id=run_id,
         _subject_repo=subject_repo,
         _subject_commit=subject_commit,
+        _tool=tool,
+        _model=model,
         _created_at=created_at,
     )
 
@@ -411,6 +437,8 @@ def run_command(
     run_id: str,
     subject_repo: str,
     subject_commit: str,
+    tool: str,
+    model: str,
     created_at: Optional[str] = None,
     input_bytes: Optional[bytes] = None,
     timeout: Optional[float] = None,
@@ -418,17 +446,85 @@ def run_command(
 ) -> ProcessResult:
     """Run ``command`` to completion and return bound evidence.
 
-    A blocking convenience over ``start_process``. ``timeout``, when set, yields
-    a defined ``termination == "timed_out"`` result rather than raising; a
-    worker that dies without producing a result is reported as a failure with a
-    message, never a silent success.
+    A blocking convenience over ``start_process``. ``tool`` and ``model`` are
+    required (no default here) — they travel from the ``RoutingProfile`` and
+    are recorded on the result. ``timeout``, when set, yields a defined
+    ``termination == "timed_out"`` result rather than raising; a worker that
+    dies without producing a result is reported as a failure with a message,
+    never a silent success.
     """
     handle = start_process(
         command,
         run_id=run_id,
         subject_repo=subject_repo,
         subject_commit=subject_commit,
+        tool=tool,
+        model=model,
         created_at=created_at,
         cwd=cwd,
     )
     return handle.wait(timeout=timeout, input_bytes=input_bytes)
+
+
+@dataclass
+class BatchRun:
+    """The outcome of dispatching one batch of tasks.
+
+    ``ran_batch`` is the index (always ``0``) of the batch that actually ran
+    and ``batches_total`` is how many were handed over. ``stopped`` is always
+    ``True``: a worker stops at the end of its batch (criterion 10) and never
+    carries on into a dependent batch.
+    """
+
+    results: List[ProcessResult]
+    ran_batch: int
+    batches_total: int
+    stopped: bool = True
+
+
+def dispatch_batch(
+    batches: Sequence[Sequence[Sequence[str]]],
+    *,
+    run_id: str,
+    subject_repo: str,
+    subject_commit: str,
+    tool: str,
+    model: str,
+    created_at: Optional[str] = None,
+    cwd: Optional[str] = None,
+) -> BatchRun:
+    """Run exactly the first batch of tasks, then stop.
+
+    ``batches`` is an ordered list of batches (each batch is a list of command
+    line argument vectors), the shape ``dagscheduler`` produces. This adapter
+    runs only ``batches[0]`` and returns immediately; it never dispatches a
+    dependent batch into the live worker, and remaining capacity is not a
+    reason to continue (criterion 10).
+
+    ``tool`` and ``model`` are required and carry no default — the caller
+    supplies them from the ``RoutingProfile`` (criterion 7).
+    """
+    if not batches:
+        return BatchRun(results=[], ran_batch=0, batches_total=0, stopped=True)
+
+    first = batches[0]
+    results: List[ProcessResult] = []
+    for index, argv in enumerate(first):
+        result = run_command(
+            list(argv),
+            run_id=f"{run_id}-{index}",
+            subject_repo=subject_repo,
+            subject_commit=subject_commit,
+            tool=tool,
+            model=model,
+            created_at=created_at,
+            cwd=cwd,
+        )
+        results.append(result)
+
+    return BatchRun(
+        results=results,
+        ran_batch=0,
+        batches_total=len(batches),
+        stopped=True,
+    )

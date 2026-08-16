@@ -15,11 +15,18 @@ Covers the dispatch criteria of this lane:
 6. Exit code and termination signal are distinguished and both recorded
    (`exit_code is None` iff the process was signaled; `signal is None` on a
    clean exit).
+7. The target tool and the model are *required* parameters with no default;
+   the module names no concrete provider and no concrete model, and the
+   tool/model it was handed are recorded on the result (not baked in).
+10. A worker stops at the end of its batch: `dispatch_batch` runs exactly the
+    first batch and never dispatches a dependent batch into the live worker.
 
 Self-contained sys.path handling, independent of conftest/pytest.
 """
 
+import inspect
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -28,7 +35,9 @@ if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
 from skillweave.runtime.runner_adapter import (
+    BatchRun,
     ProcessResult,
+    dispatch_batch,
     run_command,
     start_process,
     _pid_exists,
@@ -37,6 +46,8 @@ from skillweave.runtime import ArtifactReceipt, EvidenceType
 
 
 def _run(*args: str, **kwargs):
+    kwargs.setdefault("tool", "test-tool")
+    kwargs.setdefault("model", "test-model")
     return run_command(
         list(args),
         run_id="run-011",
@@ -100,6 +111,8 @@ def test_cancel_kills_the_process_and_no_child_survives():
         run_id="run-011",
         subject_repo="skillweave",
         subject_commit="abc123",
+        tool="test-tool",
+        model="test-model",
         created_at="2026-08-16T00:00:00Z",
     )
     worker_pid = handle.pid
@@ -195,6 +208,79 @@ def test_signal_termination_is_distinguished_from_exit_code():
     assert result.succeeded is False
 
 
+# --- criterion 7 ---
+
+def test_tool_and_model_have_no_default_in_the_interface():
+    # A default baked into the module is the defect this criterion prevents.
+    # Both signatures must expose `tool` and `model` as required parameters
+    # (their default is the "empty" sentinel inspect uses).
+    for fn in (start_process, run_command):
+        params = inspect.signature(fn).parameters
+        assert params["tool"].default is inspect.Parameter.empty, fn.__name__
+        assert params["model"].default is inspect.Parameter.empty, fn.__name__
+
+
+def test_tool_and_model_are_recorded_not_baked():
+    # Hand the adapter a tool/model and prove they travel through to the
+    # result (both as dedicated fields and in metadata), i.e. they come from
+    # the caller, never a name this module chose itself.
+    result = _run(
+        sys.executable, "-c", "pass", tool="opencode", model="model-xyz-7"
+    )
+    assert result.tool == "opencode"
+    assert result.model == "model-xyz-7"
+    assert result.metadata["tool"] == "opencode"
+    assert result.metadata["model"] == "model-xyz-7"
+    assert result.succeeded is True
+
+
+def test_omitting_tool_or_model_is_refused():
+    # Runtime proof of "no default": calling without the required keyword is a
+    # TypeError before anything runs, not a silent fallback to a baked name.
+    try:
+        run_command(
+            [sys.executable, "-c", "pass"],
+            run_id="run-011",
+            subject_repo="skillweave",
+            subject_commit="abc123",
+            tool="opencode",
+        )
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("missing required 'model' did not raise TypeError")
+
+
+# --- criterion 10 ---
+
+def test_worker_stops_at_end_of_batch_does_not_dispatch_dependent():
+    # Two batches; the second is "dependent" and, if the adapter misbehaved and
+    # continued past its batch, would run a command that writes a marker file.
+    marker = Path(tempfile.gettempdir()) / f"sw135-011-dependent-{time.time_ns()}.flag"
+    batch_0 = [[sys.executable, "-c", "print('batch-0')"]]
+    batch_1 = [[sys.executable, "-c", f"open({str(marker)!r}, 'w').write('ran')"]]
+
+    result = dispatch_batch(
+        [batch_0, batch_1],
+        run_id="run-011",
+        subject_repo="skillweave",
+        subject_commit="abc123",
+        tool="opencode",
+        model="model-xyz-7",
+        created_at="2026-08-16T00:00:00Z",
+    )
+
+    assert isinstance(result, BatchRun)
+    assert result.ran_batch == 0
+    assert result.batches_total == 2
+    assert result.stopped is True
+    # Exactly the first batch's single task ran, and nothing else.
+    assert len(result.results) == 1
+    assert result.results[0].succeeded is True
+    # The dependent batch's command never executed.
+    assert not marker.exists()
+
+
 def _run_all() -> int:
     tests = [
         test_trivial_command_runs_as_a_real_process,
@@ -206,6 +292,10 @@ def _run_all() -> int:
         test_nonzero_exit_is_a_failure_with_message,
         test_clean_exit_records_exit_code_and_no_signal,
         test_signal_termination_is_distinguished_from_exit_code,
+        test_tool_and_model_have_no_default_in_the_interface,
+        test_tool_and_model_are_recorded_not_baked,
+        test_omitting_tool_or_model_is_refused,
+        test_worker_stops_at_end_of_batch_does_not_dispatch_dependent,
     ]
     failed = 0
     for t in tests:
