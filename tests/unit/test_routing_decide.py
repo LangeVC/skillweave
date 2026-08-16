@@ -27,6 +27,7 @@ from skillweave.routing.decide import (
     MODE_HYBRID,
     VALID_MODES,
     decide,
+    decide_resolved,
     RoutingDecision,
     Adjustment,
     rank_metrics,
@@ -327,4 +328,81 @@ def test_raw_metrics_refuse_negative_values():
         rank_metrics(points=1, criteria=-3, depth=0)
     with pytest.raises(RoutingProfileError):
         rank_metrics(points=1, criteria=3, depth=-1)
+
+
+# ── Criterion 6: the decision is recorded, with what Faigate resolved ────
+
+def test_decision_records_every_driver():
+    # The record carries mode, profile, tier, the input that drove the tier,
+    # the rank (when raw metrics were converted here), and the adjustments that
+    # clamped it — six fields, no prose.
+    rank = rank_metrics(points=3, criteria=3, depth=1)
+    decision = decide(_hybrid_profile(floor="balanced"), MODE_HYBRID, complexity=rank)
+    assert decision.mode == MODE_HYBRID
+    assert decision.profile == "sw135"
+    assert decision.tier == TIER_BALANCED
+    assert decision.input is rank
+    assert decision.rank is rank
+    assert len(decision.adjustments) == 0
+
+
+def test_decide_resolved_attaches_faigate_resolution():
+    # decide_resolved records what Faigate turned the decision into: the
+    # ResolutionRecord names the router preset, council mode, and model ids.
+    decision = decide_resolved(_profile(), MODE_AUTO, complexity=TIER_FAST)
+    assert decision.resolution is not None
+    assert decision.resolution.tier == TIER_FAST
+    assert decision.resolution.router_name == "quick"
+    assert decision.resolution.mode == "quick"
+    assert decision.resolution.resolved_models  # Faigate named concrete models
+    # The resolution must match the decided tier, not the profile's default.
+    assert decision.tier == TIER_FAST
+
+
+def test_decide_resolved_records_adjusted_tier():
+    # Under hybrid a below-floor decision is clamped to the floor, and the
+    # Faigate resolution must reflect the clamped tier, not the raw complexity.
+    decision = decide_resolved(
+        _hybrid_profile(floor="deep"),
+        MODE_HYBRID,
+        complexity=TIER_FAST,
+    )
+    assert decision.tier == TIER_DEEP
+    assert decision.resolution.tier == TIER_DEEP
+    assert decision.resolution.router_name == "deep"
+    assert decision.resolution.mode == "full"
+
+
+def test_pin_resolution_has_no_automatic_improvement():
+    # Under pin, no automatic decision runs and the resolution reflects the
+    # operator's override verbatim: the profile's own tier is what Faigate
+    # resolves, never an improvement on it.
+    decision = decide_resolved(_profile(tier="deep"), MODE_PIN, complexity=TIER_FAST)
+    assert decision.tier == TIER_DEEP
+    assert decision.input is None
+    assert decision.adjustments == []
+    assert decision.resolution.tier == TIER_DEEP
+
+
+# ── Determinism: same task, same profile, same mode → same decision ──────
+
+def test_decide_is_deterministic():
+    # The same task, profile, and mode produce the same decision, held by a
+    # test not a docstring. Repeated calls yield byte-identical records.
+    profile = _hybrid_profile(floor="balanced", ceiling="deep")
+    rank = rank_metrics(points=3, criteria=5, depth=1)
+    first = decide(profile, MODE_HYBRID, complexity=rank).to_dict()
+    for _ in range(5):
+        assert decide(profile, MODE_HYBRID, complexity=rank).to_dict() == first
+
+
+def test_decide_resolved_is_deterministic():
+    # Adding the Faigate resolution must not break determinism: identical input
+    # yields an identical resolution record.
+    profile = _hybrid_profile(floor="balanced", ceiling="deep")
+    rank = rank_metrics(points=6, criteria=4, depth=0)
+    first = decide_resolved(profile, MODE_HYBRID, complexity=rank).to_dict()
+    for _ in range(5):
+        assert decide_resolved(profile, MODE_HYBRID, complexity=rank).to_dict() == first
+
 

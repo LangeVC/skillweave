@@ -33,10 +33,13 @@ names it, so a caller can never pass a free-form string and have it treated as
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Optional
 
+from skillweave.routing.faigate_adapter import resolve_tier
+
 from skillweave.routing.profile import (
+    ResolutionRecord,
     RoutingProfile,
     RoutingProfileError,
     RoleDefinition,
@@ -182,7 +185,16 @@ class RoutingDecision:
 
     A later run can reconstruct the whole story from this single record: which
     mode was declared, which tier resulted, what complexity input drove it (if
-    any), and exactly which floor/ceiling bounds adjusted it along the way.
+    any), which floor/ceiling bounds adjusted it along the way, and — when a
+    resolution was attached — what Faigate resolved the request to.
+
+    ``resolution`` is the :class:`~skillweave.routing.profile.ResolutionRecord`
+    Faigate produced from the decision's tier. It is optional: ``decide`` only
+    *attaches* a resolution it was handed, it never performs one. That split
+    keeps ``decide`` pure — a decision is a function of its declared mode,
+    profile, and complexity, and is therefore deterministic — while a separate
+    step (``decide_resolved``) records what the router actually turned the
+    decision into.
     """
 
     mode: str
@@ -192,9 +204,11 @@ class RoutingDecision:
     pinned: Optional[str] = None
     input: Any = None
     rank: Optional[ComplexityRank] = None
+    resolution: Optional[ResolutionRecord] = None
 
     def to_dict(self) -> dict[str, Any]:
         rank = self.rank.to_dict() if self.rank is not None else None
+        resolution = self.resolution.to_dict() if self.resolution is not None else None
         return {
             "mode": self.mode,
             "profile": self.profile,
@@ -202,6 +216,7 @@ class RoutingDecision:
             "pinned": self.pinned,
             "input": self.input,
             "rank": rank,
+            "resolution": resolution,
             "adjustments": [a.to_dict() for a in self.adjustments],
         }
 
@@ -372,4 +387,44 @@ def decide(
         input=complexity,
         rank=rank,
         adjustments=adjustments,
+    )
+
+
+def decide_resolved(
+    profile: RoutingProfile,
+    mode: str,
+    complexity: Any = None,
+    role: Optional[str] = None,
+) -> RoutingDecision:
+    """Decide, then record what Faigate resolved the decision to.
+
+    This is the recording step for the whole story (AK 6): ``decide`` computes
+    the decision, then the decision's final tier is resolved through Faigate
+    (:func:`~skillweave.routing.faigate_adapter.resolve_tier`) and the resulting
+    :class:`~skillweave.routing.profile.ResolutionRecord` is attached to the
+    record. A later run needs only this single record to reconstruct mode,
+    profile, tier, the input that drove it, every bound that adjusted it, and
+    what Faigate resolved it to.
+
+    The decision itself is unchanged by the resolution: the record is what
+    gains the resolution field, not the decision, so the determinism of
+    ``decide`` is preserved and the "what really ran" answer rides alongside
+    "what was decided" instead of replacing it.
+    """
+    decision = decide(profile, mode, complexity=complexity, role=role)
+    # resolve_tier derives from profile.tier; the decision's tier may differ
+    # (auto/hybrid derive from complexity), so resolve against a profile copy
+    # carrying the decided tier. Faigate sees only the tier — the copy is not
+    # persisted, so no profile data is altered by the recording step.
+    tiered = replace(profile, tier=decision.tier)
+    resolution = resolve_tier(tiered)
+    return RoutingDecision(
+        mode=decision.mode,
+        profile=decision.profile,
+        tier=decision.tier,
+        adjustments=decision.adjustments,
+        pinned=decision.pinned,
+        input=decision.input,
+        rank=decision.rank,
+        resolution=resolution,
     )
