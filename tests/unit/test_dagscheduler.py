@@ -23,7 +23,11 @@ from skillweave.runtime.dagscheduler import (
     CyclicGraphError,
     UnknownDependencyError,
     build_batches,
+    build_lanes,
+    EXECUTION_MODE_FANOUT,
+    EXECUTION_MODE_INLINE,
 )
+from skillweave.runtime.write_scope import WriteScopeClaim
 
 
 def _ids(batches):
@@ -118,6 +122,86 @@ def test_duplicate_task_ids_are_rejected():
         assert "a" in str(e)
 
 
+# --- Dispatch 2 (criteria 2 and 9): write-scope fan-out vs inline ---
+
+
+def _lane_ids(lane_batches):
+    return [[lane.task_id for lane in group] for group in lane_batches]
+
+
+def _mode(lane_batches, task_id):
+    for group in lane_batches:
+        for lane in group:
+            if lane.task_id == task_id:
+                return lane.execution_mode
+    return None
+
+
+def test_disjoint_scopes_share_one_batch_as_fanout():
+    tasks = [Task(id="a", write_scope=["/src/a/**"]),
+             Task(id="b", write_scope=["/src/b/**"])]
+    lanes = build_lanes(tasks)
+    assert _lane_ids(lanes) == [["a", "b"]]
+    assert _mode(lanes, "a") == EXECUTION_MODE_FANOUT
+    assert _mode(lanes, "b") == EXECUTION_MODE_FANOUT
+
+
+def test_overlapping_scopes_never_share_a_batch():
+    # a and c both write /src/shared — they must be inline and separated.
+    tasks = [Task(id="a", write_scope=["/src/shared/**"]),
+             Task(id="b", write_scope=["/src/b/**"]),
+             Task(id="c", write_scope=["/src/shared/**"])]
+    lanes = build_lanes(tasks)
+    # b is disjoint, so it fans out alone; a and c are inline, one per batch.
+    assert _lane_ids(lanes) == [["b"], ["a"], ["c"]]
+    assert _mode(lanes, "b") == EXECUTION_MODE_FANOUT
+    assert _mode(lanes, "a") == EXECUTION_MODE_INLINE
+    assert _mode(lanes, "c") == EXECUTION_MODE_INLINE
+
+
+def test_ancestor_scope_overlaps_descendant():
+    # /src is an ancestor of /src/a: overlap via paths_overlap, not substring.
+    tasks = [Task(id="a", write_scope=["/src"]),
+             Task(id="b", write_scope=["/src/a/**"])]
+    lanes = build_lanes(tasks)
+    assert _lane_ids(lanes) == [["a"], ["b"]]
+    assert _mode(lanes, "a") == EXECUTION_MODE_INLINE
+    assert _mode(lanes, "b") == EXECUTION_MODE_INLINE
+
+
+def test_sibling_prefixes_that_are_not_ancestors_do_not_overlap():
+    # /src/foobar and /src/foo must NOT overlap (separator boundary in 009).
+    tasks = [Task(id="a", write_scope=["/src/foo"]),
+             Task(id="b", write_scope=["/src/foobar"])]
+    lanes = build_lanes(tasks)
+    assert _lane_ids(lanes) == [["a", "b"]]
+    assert _mode(lanes, "a") == EXECUTION_MODE_FANOUT
+    assert _mode(lanes, "b") == EXECUTION_MODE_FANOUT
+
+
+def test_held_claim_forces_inline():
+    # b's scope is already held by another run; b must not fan out.
+    held = [WriteScopeClaim(claim_id="c1", run_id="other",
+                            resolved_path="/src/b", created_at="t")]
+    tasks = [Task(id="a", write_scope=["/src/a/**"]),
+             Task(id="b", write_scope=["/src/b/**"])]
+    lanes = build_lanes(tasks, held_claims=held)
+    assert _lane_ids(lanes) == [["a"], ["b"]]
+    assert _mode(lanes, "a") == EXECUTION_MODE_FANOUT
+    assert _mode(lanes, "b") == EXECUTION_MODE_INLINE
+
+
+def test_dependencies_still_layer_with_write_scopes():
+    # depends_on ordering is preserved; scopes only split within a layer.
+    tasks = [Task(id="a", write_scope=["/x"]),
+             Task(id="b", depends_on=["a"], write_scope=["/y"]),
+             Task(id="c", depends_on=["a"], write_scope=["/x"])]
+    lanes = build_lanes(tasks)
+    # layer 0: a fan-out alone; layer 1: b (disjoint) and c (overlaps a? no,
+    # /y vs /x disjoint -> both fan-out share batch)
+    assert _lane_ids(lanes) == [["a"], ["b", "c"]]
+
+
 def _run_all() -> int:
     tests = [
         test_linear_chain_produces_one_task_per_batch,
@@ -128,6 +212,12 @@ def _run_all() -> int:
         test_independent_tasks_share_one_batch_in_id_order,
         test_determinism_same_graph_same_batches_under_permutation,
         test_duplicate_task_ids_are_rejected,
+        test_disjoint_scopes_share_one_batch_as_fanout,
+        test_overlapping_scopes_never_share_a_batch,
+        test_ancestor_scope_overlaps_descendant,
+        test_sibling_prefixes_that_are_not_ancestors_do_not_overlap,
+        test_held_claim_forces_inline,
+        test_dependencies_still_layer_with_write_scopes,
     ]
     failed = 0
     for t in tests:
