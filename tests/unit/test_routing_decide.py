@@ -28,6 +28,8 @@ from skillweave.routing.decide import (
     VALID_MODES,
     decide,
     decide_resolved,
+    faigate_endpoint,
+    resolve_reachable,
     RoutingDecision,
     Adjustment,
     rank_metrics,
@@ -404,5 +406,100 @@ def test_decide_resolved_is_deterministic():
     first = decide_resolved(profile, MODE_HYBRID, complexity=rank).to_dict()
     for _ in range(5):
         assert decide_resolved(profile, MODE_HYBRID, complexity=rank).to_dict() == first
+
+
+# ── Criterion 8: Faigate unreachable is a defined state ──────────────────
+
+def test_faigate_endpoint_names_a_concrete_address():
+    # The error path always names a concrete endpoint, never a blank.
+    endpoint = faigate_endpoint()
+    assert endpoint.startswith("http://")
+    assert "/v1" in endpoint
+
+
+def test_unreachable_without_fallback_raises_naming_endpoint():
+    # When Faigate does not answer and no fallback is declared, the run fails
+    # with a message naming the endpoint — it never silently uses another model.
+    profile = _profile()
+    with pytest.raises(RoutingProfileError) as exc:
+        resolve_reachable(
+            profile, MODE_AUTO, complexity=TIER_FAST,
+            reachability=lambda ep: False,
+        )
+    assert faigate_endpoint() in str(exc.value)
+    assert "unreachable" in str(exc.value).lower()
+
+
+def test_unreachable_with_declared_fallback_uses_it():
+    # Only a *declared* fallback profile is applied; it is never invented.
+    profile = _profile(tier="balanced")
+    fallback = _profile(name="fallback", tier="deep")
+    decision = resolve_reachable(
+        profile, MODE_PIN,
+        reachability=lambda ep: False,
+        fallback_profile=fallback,
+    )
+    assert decision.profile == "fallback"
+    assert decision.tier == "deep"
+    assert decision.resolution is not None
+    assert decision.resolution.tier == "deep"
+
+
+def test_reachable_resolves_normally():
+    # The happy path behaves like decide_resolved; no fallback is consulted.
+    profile = _profile(tier="balanced")
+    decision = resolve_reachable(
+        profile, MODE_AUTO, complexity=TIER_FAST,
+        reachability=lambda ep: True,
+    )
+    assert decision.resolution is not None
+    assert decision.resolution.tier == TIER_FAST
+    assert decision.profile == "sw135"
+
+
+def test_unreachable_resolution_is_deterministic():
+    # The declared-fallback path is deterministic too: same input, same record.
+    profile = _profile()
+    fallback = _profile(name="fallback", tier="deep")
+    first = resolve_reachable(
+        profile, MODE_PIN, reachability=lambda ep: False, fallback_profile=fallback,
+    ).to_dict()
+    for _ in range(5):
+        again = resolve_reachable(
+            profile, MODE_PIN, reachability=lambda ep: False, fallback_profile=fallback,
+        ).to_dict()
+        assert again == first
+
+
+# ── Criterion 9: red proof across all three modes ────────────────────────
+
+def test_red_auto_different_complexity_different_tiers():
+    # Two tasks of different complexity must route to different tiers under
+    # auto, or the complexity axis measures nothing.
+    low = decide(_profile(), MODE_AUTO, complexity=rank_metrics(points=1, criteria=1, depth=0))
+    high = decide(_profile(), MODE_AUTO, complexity=rank_metrics(points=6, criteria=6, depth=2))
+    assert low.tier != high.tier
+
+
+def test_red_pin_ignores_complexity():
+    # The same task under pin routes to the pinned profile regardless of
+    # complexity: a fast complexity still returns the profile's deep tier.
+    profile = _profile(tier="deep")
+    decision = decide(profile, MODE_PIN, complexity=TIER_FAST)
+    assert decision.tier == "deep"
+    # And a deep complexity under a fast-profile pin still returns fast.
+    fast = _profile(tier="fast")
+    assert decide(fast, MODE_PIN, complexity=TIER_DEEP).tier == "fast"
+
+
+def test_red_hybrid_below_floor_is_raised_and_recorded():
+    # A task whose complexity would pick a tier below the floor is raised, and
+    # the adjustment is visible in the record.
+    profile = _hybrid_profile(floor="balanced")
+    decision = decide(profile, MODE_HYBRID, complexity=TIER_FAST)
+    assert decision.tier == TIER_BALANCED
+    assert decision.adjustments
+    assert decision.adjustments[0].from_tier == TIER_FAST
+    assert decision.adjustments[0].to_tier == TIER_BALANCED
 
 

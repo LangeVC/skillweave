@@ -36,7 +36,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any, Optional
 
-from skillweave.routing.faigate_adapter import resolve_tier
+from skillweave.routing.faigate_adapter import (
+    FaigateProvider,
+    detect_providers,
+    resolve_tier,
+)
 
 from skillweave.routing.profile import (
     ResolutionRecord,
@@ -427,4 +431,74 @@ def decide_resolved(
         input=decision.input,
         rank=decision.rank,
         resolution=resolution,
+    )
+
+
+def faigate_endpoint() -> str:
+    """Return the Faigate base endpoint the run would resolve against.
+
+    The endpoint is Faigate's own ``/v1`` base URL. When Faigate is configured
+    via environment or local token files, this is the address the error path
+    names; when none is configured, Faigate's local default is named so the
+    message still points at a concrete address, never a blank.
+    """
+    providers = detect_providers()
+    provider = providers.get("faigate")
+    if provider is not None and isinstance(provider, FaigateProvider):
+        return provider.base_url
+    from skillweave.routing.faigate_adapter import (
+        FAIGATE_DEFAULT_HOST,
+        FAIGATE_DEFAULT_PORT,
+    )
+    return f"http://{FAIGATE_DEFAULT_HOST}:{FAIGATE_DEFAULT_PORT}/v1"
+
+
+def resolve_reachable(
+    profile: RoutingProfile,
+    mode: str,
+    complexity: Any = None,
+    role: Optional[str] = None,
+    *,
+    reachability: Any = None,
+    fallback_profile: Optional[RoutingProfile] = None,
+) -> RoutingDecision:
+    """Decide and resolve, treating "Faignate unreachable" as a defined state.
+
+    This is ``decide_resolved`` plus the one runtime fact it cannot know
+    statically: whether Faigate actually answers. ``reachability`` is a probe
+    ``(endpoint: str) -> bool``; the default probes the detected Faigate
+    provider's availability (a failed ``/v1/models`` call counts as
+    unreachable). Tests may inject a stub to keep the result deterministic and
+    network-free.
+
+    When Faigate is unreachable the run fails loudly — naming the endpoint — or,
+    *only when a fallback profile is explicitly declared*, falls back to that
+    declared profile. A fallback is never invented: without one, the error is
+    the result. This keeps "what really ran" honest — an undeclared model is
+    never substituted for an unreachable router.
+    """
+    endpoint = faigate_endpoint()
+
+    if reachability is not None:
+        reached = reachability(endpoint)
+    else:
+        providers = detect_providers()
+        provider = providers.get("faigate")
+        reached = False
+        if provider is not None:
+            try:
+                reached = provider._req("/models").get("error") is None
+            except Exception:
+                reached = False
+
+    if reached:
+        return decide_resolved(profile, mode, complexity=complexity, role=role)
+
+    if fallback_profile is not None:
+        return decide_resolved(
+            fallback_profile, mode, complexity=complexity, role=role
+        )
+
+    raise RoutingProfileError(
+        f"Faignate unreachable at {endpoint}; no fallback profile declared"
     )
