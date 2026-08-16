@@ -8,7 +8,7 @@ four parts that shape how a role's model is chosen and how its tool is launched:
 2. **tier** — ``fast`` | ``balanced`` | ``deep``. This is the vocabulary the
    PRD names. Resolution to concrete router profile keys (e.g. the
    ``quick``/``standard``/``full`` mode vocabulary that
-   ``council.faigate_adapter`` understands) is Faigate's job; this module only
+   the Faigate adapter understands) is Faigate's job; this module only
    *carries* the tier so a resolver can later map it without re-reading raw YAML.
 3. **limits** — timeout, max retries, minimum models required, and the
    behaviour to take when one model fails.

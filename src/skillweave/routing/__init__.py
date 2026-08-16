@@ -17,6 +17,21 @@ from .profile import (
     RoutingProfileError,
 )
 
+# The Faigate adapter is the shared model-routing surface. It lives here (not
+# under council/) so both the council and the RunnerAdapter import the same
+# module. The ``council.faigate_adapter`` path remains as a back-compat shim.
+from .faigate_adapter import (  # noqa: F401
+    CouncilProvider,
+    FaigateProvider,
+    ModelInfo,
+    ROUTER_PROFILES,
+    detect_providers,
+    get_best_provider,
+    get_profile,
+    list_detected_providers,
+    list_profiles,
+)
+
 __all__ = [
     "RoleDefinition",
     "RoutingProfile",
@@ -34,4 +49,13 @@ __all__ = [
     "CAP_APPROVE_GATE",
     "INCOMPATIBLE_PAIRS",
     "RoutingProfileError",
+    "CouncilProvider",
+    "FaigateProvider",
+    "ModelInfo",
+    "ROUTER_PROFILES",
+    "detect_providers",
+    "get_best_provider",
+    "get_profile",
+    "list_detected_providers",
+    "list_profiles",
 ]
