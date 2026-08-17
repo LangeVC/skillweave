@@ -19,13 +19,16 @@ class ModelResponse:
     response: str
     elapsed_ms: float
     error: str | None = None
+    answering_model: str | None = None   # the model that actually answered (from the envelope)
 
 
 @dataclass
 class Ranking:
-    reviewer: str          # model that did the review
+    reviewer: str          # requested seat that did the review
     rankings: dict[str, int]  # response_label → rank (1=best)
     raw_text: str
+    reviewer_answering_model: str | None = None  # the model that actually performed this review
+    self_ranked: bool = False  # True when the reviewing model also authored a ranked response
 
 
 @dataclass
@@ -148,10 +151,12 @@ class CouncilEngine:
                     self.provider.query(model_id, messages, config.temperature),
                     timeout=config.timeout_per_model
                 )
+                answering_model = getattr(response, "answering_model", None)
                 return ModelResponse(
                     model_id=model_id,
                     response=response,
-                    elapsed_ms=(time.monotonic() - t0) * 1000
+                    elapsed_ms=(time.monotonic() - t0) * 1000,
+                    answering_model=answering_model,
                 )
             except Exception as e:
                 return ModelResponse(
@@ -164,11 +169,13 @@ class CouncilEngine:
         tasks = [query_one(m) for m in config.models]
         responses = await asyncio.gather(*tasks, return_exceptions=False)
         successful = [r for r in responses if r.response and not r.error]
-        if len(successful) < config.min_models_required:
+        distinct_models = {r.answering_model or r.model_id for r in successful}
+        if len(distinct_models) < config.min_models_required:
             failed_models = [r.model_id for r in responses if r.error]
             raise CouncilDegradedError(
-                f"Only {len(successful)} models responded (minimum: {config.min_models_required}). "
-                f"Failed: {failed_models}"
+                f"Only {len(distinct_models)} distinct models responded "
+                f"(minimum: {config.min_models_required}, seats requested: {len(config.models)}). "
+                f"Distinct: {sorted(m for m in distinct_models if m)}. Failed: {failed_models}"
             )
         return successful
 
@@ -177,16 +184,20 @@ class CouncilEngine:
         LABELS = "ABCDEFGH"
         anonymized = {}
         label_map = {}
+        answering_map = {}
         labels_used = []
         for i, r in enumerate(responses):
             if r.response and not r.error:
                 label = LABELS[i]
                 anonymized[label] = r.response
                 label_map[label] = r.model_id
+                answering_map[label] = r.answering_model or r.model_id
                 labels_used.append(label)
 
         if len(labels_used) < 2:
             return []
+
+        authored_by = set(answering_map.values())
 
         async def review_one(model_id: str) -> Ranking:
             t0 = time.monotonic()
@@ -198,7 +209,15 @@ class CouncilEngine:
                     timeout=config.timeout_per_model
                 )
                 rankings = _parse_rankings(raw, labels_used)
-                return Ranking(reviewer=model_id, rankings=rankings, raw_text=raw)
+                reviewer_answering_model = getattr(raw, "answering_model", None) or model_id
+                self_ranked = reviewer_answering_model in authored_by
+                return Ranking(
+                    reviewer=model_id,
+                    rankings=rankings,
+                    raw_text=raw,
+                    reviewer_answering_model=reviewer_answering_model,
+                    self_ranked=self_ranked,
+                )
             except Exception as e:
                 return Ranking(reviewer=model_id, rankings={}, raw_text=f"ERROR: {e}")
 
