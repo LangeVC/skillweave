@@ -468,11 +468,15 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     ``pinned`` so a later run can tell the difference between "what was
     requested" and "what really ran".
 
-    Availability of a pinned or declared model is resolved against what Faigate
-    can *actually serve* (the live ``/v1/models`` roster), not against
-    ``ROUTER_PROFILES``. ``ROUTER_PROFILES`` keep their own job — casting the
-    council (chairman + model pool + mode) per tier — and are not repurposed as
-    an availability registry.
+    Availability of a pinned or declared model is resolved against the live
+    ``/v1/models`` roster, not against ``ROUTER_PROFILES``. ``ROUTER_PROFILES``
+    keep their own job — casting the council (chairman + model pool + mode) per
+    tier — and are not repurposed as an availability registry. The roster is
+    the best reachable availability signal but is not proof of what Faigate
+    actually answers: measured, a listed id (``gemini-pro``) is still silently
+    substituted for ``deepseek-v4-flash``. Judging an answer against the
+    requested model is therefore out of scope here (SW-COUNCIL-001); this gate
+    only refuses an id whose absence Faigate itself reports via the roster.
 
     The availability outcome is one of three: a model Faigate confirms it
     serves proceeds; a model Faigate confirms it does NOT serve is refused
