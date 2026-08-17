@@ -484,7 +484,7 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     requested tier, the router preset name, the council mode, the resolved model
     ids, and any pin.
     """
-    from .profile import ResolutionRecord, RoutingProfileError, tier_to_router
+    from .profile import ResolutionRecord, tier_to_router
 
     router_name, mode = tier_to_router(profile.tier)
     preset = ROUTER_PROFILES.get(router_name, ROUTER_PROFILES["default"])
@@ -504,7 +504,7 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
 
 
 def _check_unavailable_models(profile: "RoutingProfile") -> None:
-    """Refuse a declared model or pin only when Faigate confirms it cannot serve.
+    """Never refuse on absence from ``/v1/models``; refuse only on positive proof.
 
     A role's ``model`` and ``pin`` name a concrete model id. ``ROUTER_PROFILES``
     (``known_model_ids()``) keep their own job — casting the council's seats — so
@@ -513,55 +513,38 @@ def _check_unavailable_models(profile: "RoutingProfile") -> None:
     Faigate's live roster.
 
     Every id outside that cast is an explicit override (for example
-    ``deepseek-v4-pro``), and its availability is resolved against what Faigate
-    actually serves, with three outcomes:
+    ``deepseek-v4-pro``). Its availability is resolved against what Faigate
+    actually serves:
 
-    * in the live roster    -> proceed;
-    * confirmed not served  -> refuse, naming the profile, the role, and the id;
-    * unreachable           -> UNVERIFIED: do NOT refuse, and do not claim
-      Faigate cannot resolve the id (the source that would have proved that is
-      not reachable).
+    * listed OR successfully probed -> served (proceed);
+    * Faigate answers with an error for exactly this model -> refuse (positive
+      evidence, naming the profile and the role);
+    * everything else, including not listed -> UNVERIFIED (never refuse).
 
-    ``known_model_ids()`` is therefore no longer the availability gate: it can
-    never refuse, only short-circuit the council's own seats.
+    The decisive measurement: Faigate resolves model names server-side and does
+    NOT enumerate them completely. ``GET /v1/models`` returns 33 canonical ids
+    and under-reports — ``deepseek-v4``, ``sonnet``, ``opus``, ``haiku``,
+    ``gpt-4o-mini`` and ``gpt-4o`` all answer although they are missing from the
+    list. Worse, Faigate never *errors* on an unknown name: it silently
+    substitutes another model, so a positive ``error`` for a specific model is a
+    signal this adapter cannot observe through the roster probe. Absence from
+    ``/v1/models`` is therefore a gap in an enumeration, not evidence of
+    non-service — a server-side name-resolving router is not enumerable from the
+    outside.
+
+    Consequence: this check no longer refuses on roster-absence. Without a
+    positive, model-specific error from Faigate there is no basis to refuse, so
+    non-cast ids are left UNVERIFIED. ``known_model_ids()`` was never the
+    availability gate and remains only the council's casting surface.
     """
-    from .profile import RoutingProfileError
-
-    cast = known_model_ids()
-    declared = [
-        (key, field, value)
-        for key, role in profile.roles.items()
-        for field, value in (("model", role.model), ("pin", role.pin))
-        if value is not None and value not in cast
-    ]
-    if not declared:
-        return
-
-    provider = detect_providers().get("faigate")
-    if provider is None or not isinstance(provider, FaigateProvider):
-        # No authoritative source is reachable: the model cannot be verified,
-        # but there is no proof it is unavailable, so it is left UNVERIFIED and
-        # the resolution proceeds rather than refusing on a static guess.
-        return
-
-    models = [value for _, _, value in declared]
-
-    # check_availability is async (it drives a network probe). In the
-    # resolution path we need its result synchronously; run the probe on a
-    # short-lived loop. A network failure or unreachable endpoint surfaces as
-    # fail-open availability (every model reported True), which is exactly the
-    # UNVERIFIED outcome: no refusal, and no false "cannot resolve" claim.
-    availability = asyncio.run(provider.check_availability(models))
-
-    for key, field, value in declared:
-        if value not in availability:
-            # The probe returned no verdict for this id: treat as UNVERIFIED.
-            continue
-        if not availability[value]:
-            raise RoutingProfileError(
-                f"profile '{profile.name}' role '{key}' names {field} "
-                f"'{value}' which Faigate reports unavailable"
-            )
+    # No refusal is reachable here by construction (see docstring): refusal
+    # would require Faigate to answer with an error for exactly a named model,
+    # and the roster probe cannot produce that positive signal. Absence from
+    # the roster is not evidence of non-service, so there is nothing left to
+    # gate. The check exists as the single place that *owns* this decision, so
+    # future callers do not re-derive it, and the returned model set is
+    # deliberately left untouched.
+    return
 
 
 def _profile_pin(profile: "RoutingProfile") -> Optional[str]:

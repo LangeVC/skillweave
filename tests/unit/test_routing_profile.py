@@ -468,30 +468,27 @@ def test_pin_roundtrip_preserved():
     assert rebuilt.role("ops").pin == "opus"
 
 
-# ── Criterion 10: red proof — unavailable model fails loud ───────────────
+# ── Criterion 10: unknown model is UNVERIFIED, never refused on the roster ──
 
 def test_unavailable_model_names_profile_and_role():
-    # A role declaring a model Faigate cannot resolve is refused, and the error
-    # names BOTH the profile and the role — no silent fallback to another model.
+    # A role declaring a non-cast model id no longer raises: absence from
+    # Faigate's under-reporting /v1/models roster is not evidence of non-service,
+    # and refusal requires a positive model-specific error the roster probe
+    # cannot produce. The resolution succeeds rather than blocking the profile
+    # on a static guess.
     profile = _profile(roles={"ops": {"model": "turbo-9000"}})
-    with pytest.raises(RoutingProfileError) as exc:
-        resolve_tier(profile)
-    message = str(exc.value)
-    assert "sw135" in message
-    assert "ops" in message
-    assert "turbo-9000" in message
+    resolution = resolve_tier(profile)
+    assert resolution.pinned is None
+    assert resolution.resolved_models  # resolved, not refused
 
 
 def test_unavailable_pin_names_profile_and_role():
-    # The same loudness applies to a pin: it is a concrete model id, so an
-    # unresolvable pin fails naming profile and role rather than being dropped.
+    # The same UNVERIFIED guarantee applies to a pin: a concrete model id whose
+    # absence from the roster is not grounds for refusal, so the profile
+    # resolves rather than blocking on the pin.
     profile = _profile(roles={"worker": {"pin": "claude-nonexistent"}})
-    with pytest.raises(RoutingProfileError) as exc:
-        resolve_tier(profile)
-    message = str(exc.value)
-    assert "sw135" in message
-    assert "worker" in message
-    assert "claude-nonexistent" in message
+    resolution = resolve_tier(profile)
+    assert resolution.pinned == "claude-nonexistent"
 
 
 def test_known_model_ids_is_exhaustive_and_disjoint_from_unknown():
