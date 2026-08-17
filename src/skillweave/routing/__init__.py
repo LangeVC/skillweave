@@ -50,6 +50,20 @@ from .faigate_adapter import (  # noqa: F401
     resolve_tier,
 )
 
+# The tool-agnostic dispatch seam (SW-RT-001): a role's tool is launched, the
+# work handed over, and the result bound as evidence. It sits beside the profile
+# and shares the same export surface, so consumers import it from the package.
+from .dispatch import (  # noqa: F401
+    DispatchFailure,
+    DispatchResult,
+    InPlaceRecord,
+    RoleOutcome,
+    dispatch,
+    launch_from_role,
+    run_in_place,
+    tokenize_launch,
+)
+
 __all__ = [
     "RoleDefinition",
     "RoutingProfile",
@@ -89,4 +103,12 @@ __all__ = [
     "list_profiles",
     "known_model_ids",
     "resolve_tier",
+    "DispatchFailure",
+    "DispatchResult",
+    "InPlaceRecord",
+    "RoleOutcome",
+    "dispatch",
+    "launch_from_role",
+    "run_in_place",
+    "tokenize_launch",
 ]
