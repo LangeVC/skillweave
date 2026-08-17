@@ -1,0 +1,35 @@
+{
+  "artifact": {
+    "byte_length": 0,
+    "id": "dispatch-sw-rt-007-dispatch2",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "type": "artifact"
+  },
+  "dispatch": "2",
+  "exit_code": 1,
+  "harness": "opencode",
+  "harness_evidence": {
+    "via": "caller"
+  },
+  "harness_source": "declared",
+  "lane": "SW-RT-007",
+  "launch_args": [],
+  "launch_command": "/opt/homebrew/bin/opencode run --model deepseek-v4-pro",
+  "message": "worker exited with code 1 without success (/opt/homebrew/bin/opencode run --model deepseek-v4-pro)",
+  "proven": true,
+  "reported_at_utc": "2026-08-17T21:00:50.865425+00:00",
+  "resolved_model": "deepseek-v4-pro",
+  "signal": null,
+  "stderr_byte_length": 4460,
+  "stderr_sha256": "55484e5ea0eb43c16813b4adb2a7dcaffe0a92ff2f289498e6d7c4ec391dd2c1",
+  "stdout": "",
+  "subject_commit": "24cd936a2ba0c6c87da7cfc1844ededf87b03cb7",
+  "succeeded": false,
+  "termination": "exited",
+  "tool": "opencode",
+  "unproven_harnesses": [
+    "claude-code",
+    "codex",
+    "antigravity"
+  ]
+}

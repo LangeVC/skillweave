@@ -26,3 +26,19 @@ The run itself — launching a role's tool from inside each harness and binding
 the result — is verified separately. This file only declares the mechanism;
 the proof that a given harness actually sets the variable on a real run is the
 next dispatch.
+
+## Dispatch 2 proof status
+
+As of dispatch 2, exactly one harness has been proven by a real run; the other
+three are unproven and each records what its operator must do to close the gap.
+
+| Harness      | Status      | Evidence / remaining action                                          |
+|--------------|-------------|----------------------------------------------------------------------|
+| `opencode`   | PROVEN      | A real dispatch through the seam launched `/opt/homebrew/bin/opencode run --model deepseek-v4-pro` with live input; the interactive process exited 1 (`UnknownError` on its stderr), stdout empty, and the result was still bound as evidence (`docs/dispatch-2-report.json`). The launch, resolved model, exit code, and artifact are recorded truthfully; the interactive agent's non-zero exit is part of that record, not a masked success. |
+| `claude-code`| UNPROVEN    | Operator must set `SKILLWEAVE_HARNESS=claude-code` in `~/.claude/settings.json` (`"env"` object) and run a dispatch from inside Claude Code, then report the resolved model, exit code, and artifact. |
+| `codex`      | UNPROVEN    | Operator must add `SKILLWEAVE_HARNESS = "codex"` under `[shell_environment_policy.set]` in `~/.codex/config.toml` and run a dispatch from inside Codex. |
+| `antigravity`| UNPROVEN    | Operator must set `SKILLWEAVE_HARNESS=antigravity` in the Antigravity MCP config or launching shell; note Antigravity resolves `skillweave-*` from `~/.skillweave/skills/` (an April 23 copy), so stale skill material may run even with the variable set — a finding for capacium FEAT-003. |
+
+`UNPROVEN` is a result, not a gap: the criterion is met only where a real run
+originated from that harness. One process labelled three ways would not be
+three proofs.
