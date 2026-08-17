@@ -4,7 +4,9 @@
 arguments (:class:`~skillweave.routing.profile.ToolSpec`). This module is the
 seam that *uses* that declaration: it hands the work to the launched process,
 collects what came back, and binds it to the run as evidence, never as free
-text.
+text. A role that carries no tool runs in place and is recorded as having done
+so; a launch that never starts is a named failure carrying the command that
+failed — never a run without a result.
 
 The adapter is tool-agnostic by construction. It receives the tool name, the
 launch command, the arguments, and the work, and it does not branch on any of
@@ -12,7 +14,7 @@ them: the tool name is recorded on the result, never inspected. The first
 consumer of the seam is a caller, not the shape of the interface — no concrete
 tool name appears anywhere in this module.
 
-Two criteria are discharged here:
+Four criteria are discharged here:
 
 1. A role carrying a ``ToolSpec`` is launched from its ``launch_command`` and
    ``args``; the work is handed over to that process and the result is
@@ -24,18 +26,30 @@ Two criteria are discharged here:
    arguments, and work are all passed through: none is inspected to choose a
    path. A test asserts that no concrete tool name appears in this module.
 
+3. A role WITHOUT a ``ToolSpec`` runs in place and is recorded as having done
+   so — an explicit ``InPlaceRecord``, not an absent one. Running in the current
+   harness is a declared configuration and must be distinguishable afterwards
+   from a dispatch that silently did not happen.
+
+4. A failing launch is a ``DispatchFailure`` carrying the command that failed.
+   A tool that never starts is never recorded as a run without a result: the
+   never-started case returns a typed failure naming the command, never a
+   silent empty success.
+
 The launch itself is delegated to ``runtime.runner_adapter``, which owns the
 process concerns (real subprocess, capture, timeout, cancel, exit/signal split).
 This module contributes only what routing adds on top: reading the launch
 command from the spec, tokenising it, appending the spec's arguments, handing
-the work over as input, and promoting the collected output into bound evidence.
+the work over as input, promoting the collected output into bound evidence, and
+turning the three role outcomes (launched, in-place, never-started) into typed
+records.
 """
 
 from __future__ import annotations
 
 import shlex
-from dataclasses import dataclass, field
-from typing import Any, Optional, Sequence
+from dataclasses import dataclass
+from typing import Optional, Sequence, Union
 
 from skillweave.routing.profile import ToolSpec
 from skillweave.runtime.runner_adapter import ProcessResult, run_command
@@ -60,7 +74,7 @@ def tokenize_launch(command: str) -> list[str]:
 
 @dataclass
 class DispatchResult:
-    """What one dispatch produced: the process result plus the bound evidence.
+    """What a successful dispatch produced: the process result plus the evidence.
 
     ``result`` is the ``ProcessResult`` from ``runtime.runner_adapter`` — the
     collected output, exit code, signal, and termination. ``artifact`` is the
@@ -80,6 +94,47 @@ class DispatchResult:
     @property
     def succeeded(self) -> bool:
         return self.result.succeeded
+
+
+@dataclass
+class InPlaceRecord:
+    """A role that ran in place: an explicit record, not an absent one.
+
+    A role without a ``ToolSpec`` runs in the current harness. That is a
+    declared configuration and must be recorded as having happened, so a later
+    run can tell "ran in place" from "dispatch silently did not happen".
+    """
+
+    run_id: str
+    role: str
+    recorded_at: str
+
+    @property
+    def in_place(self) -> bool:
+        return True
+
+
+@dataclass
+class DispatchFailure:
+    """A launch that never started: a named failure carrying the command.
+
+    ``command`` is the full argument vector that failed to start. ``message``
+    names it and the reason, so a tool that never starts is a visible failure,
+    never a run without a result and never an empty success.
+    """
+
+    run_id: str
+    role: str
+    tool: str
+    command: list[str]
+    message: str
+
+    @property
+    def succeeded(self) -> bool:
+        return False
+
+
+RoleOutcome = Union[DispatchResult, InPlaceRecord, DispatchFailure]
 
 
 def _artifact_for(
@@ -141,13 +196,17 @@ def dispatch(
     model: str,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
-) -> DispatchResult:
+) -> Union[DispatchResult, DispatchFailure]:
     """Launch ``tool`` from its spec, hand over ``work``, and bind the result.
 
     The full command is the tokenised ``launch_command`` followed by the spec's
     ``args``. The work is handed to the child over standard input as bytes. The
     collected stdout is promoted to an ``ArtifactReceipt`` (typed ``artifact``)
     bound to ``run_id``, so it persists as evidence, not free text.
+
+    A launch command that cannot be started (for example a non-existent
+    executable) is caught and returned as a :class:`DispatchFailure` naming the
+    command — never a run without a result, and never an empty success.
 
     ``model`` is required (as it is throughout the runner): it travels to the
     process result so the record names which model the run resolved to, but it
@@ -156,17 +215,27 @@ def dispatch(
     is tool-agnostic.
     """
     argv = tokenize_launch(tool.launch_command) + [str(a) for a in tool.args]
-    result = run_command(
-        argv,
-        run_id=run_id,
-        subject_repo=subject_repo,
-        subject_commit=subject_commit,
-        tool=tool.name,
-        model=model,
-        created_at=created_at,
-        input_bytes=work,
-        cwd=cwd,
-    )
+    try:
+        result = run_command(
+            argv,
+            run_id=run_id,
+            subject_repo=subject_repo,
+            subject_commit=subject_commit,
+            tool=tool.name,
+            model=model,
+            created_at=created_at,
+            input_bytes=work,
+            cwd=cwd,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        return DispatchFailure(
+            run_id=run_id,
+            role="",
+            tool=tool.name,
+            command=argv,
+            message=f"failed to launch {' '.join(argv)}: {exc}",
+        )
+
     artifact = _artifact_for(
         run_id=run_id,
         tool=tool.name,
@@ -188,7 +257,29 @@ def dispatch(
     )
 
 
+def run_in_place(
+    role: str,
+    *,
+    run_id: str,
+    recorded_at: Optional[str] = None,
+) -> InPlaceRecord:
+    """Record that ``role`` ran in place in the current harness.
+
+    This is the explicit record for a role without a ``ToolSpec`` (criterion 3):
+    it exists so "ran in place" is a positive, distinguishble fact, not an
+    absent entry that later looks like a dispatch that never happened.
+    """
+    from datetime import datetime, timezone
+
+    return InPlaceRecord(
+        run_id=run_id,
+        role=role,
+        recorded_at=recorded_at or datetime.now(timezone.utc).isoformat(),
+    )
+
+
 def launch_from_role(
+    role: str,
     tool: Optional[ToolSpec],
     work: bytes,
     *,
@@ -198,19 +289,25 @@ def launch_from_role(
     model: str,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
-) -> DispatchResult:
-    """Convenience wrapper that raises when a role carries no tool.
+) -> RoleOutcome:
+    """Launch ``role``'s tool, or record in place when the role has none.
 
-    A role without a ``ToolSpec`` cannot be launched; it runs in place and is
-    recorded as having done so by its caller (that is the next dispatch's
-    concern, not this one). Here a missing tool is refused loudly rather than
-    silently producing an empty dispatch.
+    Three outcomes, each a typed record, never a silent gap:
+
+    * a role carrying a ``ToolSpec`` → :class:`DispatchResult` (launched, bound
+      evidence) or :class:`DispatchFailure` (the launch never started, naming
+      the command);
+    * a role without a ``ToolSpec`` → :class:`InPlaceRecord`, an explicit "ran
+      in place" fact.
+
+    Nothing here branches on the tool name, the launch command, the arguments,
+    or the work: only on whether a tool is present at all, which is the one
+    declared structural axis, not a content decision.
     """
     if tool is None:
-        raise ValueError(
-            f"role carries no tool spec; cannot launch run '{run_id}'"
-        )
-    return dispatch(
+        return run_in_place(role, run_id=run_id, recorded_at=created_at)
+
+    outcome = dispatch(
         tool,
         work,
         run_id=run_id,
@@ -220,3 +317,6 @@ def launch_from_role(
         created_at=created_at,
         cwd=cwd,
     )
+    if isinstance(outcome, DispatchFailure):
+        outcome.role = role
+    return outcome
