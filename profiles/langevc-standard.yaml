@@ -29,16 +29,16 @@ roles:
     capabilities:
       can_observe_run: true
   ops:
-    model: deepseek-v4-pro
+    model: faigate/deepseek-v4-pro
     tool:
       name: opencode
-      launch_command: /opt/homebrew/bin/opencode run --model deepseek-v4-pro
+      launch_command: /opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -
     capabilities:
       can_mutate_run_state: true
   reviewer:
-    model: deepseek-v4-pro
+    model: faigate/deepseek-v4-pro
     tool:
       name: opencode
-      launch_command: /opt/homebrew/bin/opencode run --model deepseek-v4-pro
+      launch_command: /opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -
     capabilities:
       can_approve_gate: true

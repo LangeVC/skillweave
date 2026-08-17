@@ -49,19 +49,22 @@ def test_standard_case_loads_from_declared_path():
     assert observer.is_observer is True
     assert observer.tool is None
 
-    # ops and reviewer resolve to OpenCode on deepseek-v4-pro.
-    assert profile.model_for("ops") == "deepseek-v4-pro"
-    assert profile.model_for("reviewer") == "deepseek-v4-pro"
+    # ops and reviewer resolve to OpenCode on faigate/deepseek-v4-pro. The
+    # trailing "-" is the stdin marker: the seam hands work over stdin, and
+    # ``opencode run`` reads the prompt from stdin only when the message
+    # positional is "-".
+    assert profile.model_for("ops") == "faigate/deepseek-v4-pro"
+    assert profile.model_for("reviewer") == "faigate/deepseek-v4-pro"
 
     ops_tool = profile.tool_for("ops")
     assert ops_tool is not None
     assert ops_tool.name == "opencode"
-    assert ops_tool.launch_command == "/opt/homebrew/bin/opencode run --model deepseek-v4-pro"
+    assert ops_tool.launch_command == "/opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -"
 
     reviewer_tool = profile.tool_for("reviewer")
     assert reviewer_tool is not None
     assert reviewer_tool.name == "opencode"
-    assert reviewer_tool.launch_command == "/opt/homebrew/bin/opencode run --model deepseek-v4-pro"
+    assert reviewer_tool.launch_command == "/opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -"
 
 
 def test_observer_in_place_keeps_self_approval_split():
