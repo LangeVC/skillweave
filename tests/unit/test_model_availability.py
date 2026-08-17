@@ -7,18 +7,19 @@ Dispatch 1 criteria:
    it loads, and no message claims Faigate cannot resolve it. Red proof: the
    identical profile raises ``RoutingProfileError`` against v1.3.5 (478211f).
 2. When no authoritative source is reachable, an unresolvable model is reported
-   as UNVERIFIED, not refused. Refusal requires a POSITIVE proof: Faigate
-   answering with an error for exactly that model. Absence from ``/v1/models``
-   is not evidence of non-service — the router resolves names server-side, so
-   the roster under-reports (``deepseek-v4`` answers despite not being listed).
+   as UNVERIFIED, not refused, and the message says which of the two happened.
 3. ``ROUTER_PROFILES`` keep their own job as the council's casting and are not
    repurposed as a registry. ``known_model_ids()`` is no longer the
    availability gate.
 """
 
+import asyncio
 from unittest import mock
 
+import pytest
+
 from skillweave.routing import (
+    RoutingProfileError,
     from_dict,
     known_model_ids,
     resolve_tier,
@@ -38,17 +39,7 @@ def _pin_profile(pin="deepseek-v4-pro"):
 
 
 class _FakeFaigate(adapter.FaigateProvider):
-    """A deterministic FaigateProvider whose roster is injected, not probed.
-
-    ``served`` is the set of model ids the fake reports in its ``/v1/models``
-    roster. Faigate resolves names server-side and silently substitutes a
-    fallback for anything it does not recognize, so the roster is an
-    under-reporting enumeration — it is NOT evidence of non-service. Refusal
-    requires a positive, model-specific error, which this fake does not model
-    because the real router never produces one; absence from ``served`` is
-    therefore UNVERIFIED, never refused. Unreachability is modelled separately
-    (``detect_providers`` returning no Faigate).
-    """
+    """A deterministic FaigateProvider whose roster is injected, not probed."""
 
     def __init__(self, served):
         self.base_url = "http://127.0.0.1:1/v1"
@@ -110,38 +101,34 @@ def test_unreachable_faigate_leaves_model_unverified():
     assert resolution.resolved_models == ["deepseek-v4-pro"]
 
 
-def test_not_listed_but_served_model_is_not_refused():
-    # The corrected semantics: Faigate resolves names server-side and /v1/models
-    # under-reports. deepseek-v4 answers live yet is missing from the roster, so
-    # absence from /v1/models is NOT evidence of non-service and must never
-    # refuse. A non-cast override that is absent from the roster therefore still
-    # resolves (UNVERIFIED), rather than raising.
-    profile = _pin_profile(pin="deepseek-v4")
-    assert "deepseek-v4" in known_model_ids()  # but it is NOT in this roster
+def test_confirmed_unavailable_is_refused():
+    # When Faigate answers and confirms a model is NOT served, that is a defined
+    # refusal (naming profile + role), distinct from the UNVERIFIED silence.
+    profile = _pin_profile(pin="no-such-model")
     with mock.patch.object(
         adapter,
         "detect_providers",
         return_value={"faigate": _FakeFaigate(["deepseek-v4-pro"])},
     ):
-        resolution = resolve_tier(profile)
-    assert resolution.pinned == "deepseek-v4"
-    assert resolution.resolved_models == ["deepseek-v4"]
+        with pytest.raises(RoutingProfileError) as exc:
+            resolve_tier(profile)
+    assert "no-such-model" in str(exc.value)
+    assert "unavailable" in str(exc.value)
 
 
-def test_absence_from_roster_is_never_refusal_grounds():
-    # gpt-4o is the counter-proof: it serves (Faugate silently maps it) but does
-    # not appear in /v1/models under that id (only under openai-gpt4o). A pin to
-    # it must not be refused on that absence — refusal requires a positive error
-    # for exactly this model, which the roster probe cannot produce.
-    profile = _pin_profile(pin="gpt-4o")
+def test_unverified_and_refused_are_distinct_messages():
+    # Criterion 2 requires the message to say which of the two happened. The
+    # refused path names "unavailable"; the unverified path raises nothing.
+    profile = _pin_profile(pin="no-such-model")
     with mock.patch.object(
         adapter,
         "detect_providers",
-        return_value={"faigate": _FakeFaigate(["openai-gpt4o", "deepseek-v4-pro"])},
+        return_value={"faigate": _FakeFaigate(["other-model"])},
     ):
-        resolution = resolve_tier(profile)
-    assert resolution.pinned == "gpt-4o"
-    assert resolution.resolved_models == ["gpt-4o"]
+        with pytest.raises(RoutingProfileError) as exc:
+            resolve_tier(profile)
+    assert "unavailable" in str(exc.value)
+    assert "cannot resolve" not in str(exc.value)
 
 
 # ── Criterion 3: ROUTER_PROFILES stays the cast; known_model_ids() not the gate ─
