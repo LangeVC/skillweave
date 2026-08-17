@@ -36,13 +36,29 @@ Four criteria are discharged here:
    never-started case returns a typed failure naming the command, never a
    silent empty success.
 
+5. ``dispatch`` and ``launch_from_role`` take a ``timeout`` and pass it to the
+   runtime, which already accepts one. A caller that sets none gets a
+   *documented* default (:data:`DEFAULT_DISPATCH_TIMEOUT`), never an unbounded
+   wait and never a number invented by whoever wrote the proof. A timeout is
+   reported as a timeout (``result.termination == "timed_out"``), never as a
+   failure of the tool.
+
+6. The record distinguishes DECLARED from TERMINATED. DECLARED is the timeout
+   cap the caller set (or the documented default) — carried as ``timeout`` on
+   the :class:`DispatchResult` and in the artifact metadata. TERMINATED is how
+   the process actually ended — ``result.termination`` ("exited", "signaled",
+   "cancelled", "timed_out"). A dispatch that launched correctly and was cut
+   short has ``termination == "timed_out"`` while ``succeeded`` is False; a
+   later reader needs both facts, so both are recorded separately.
+
 The launch itself is delegated to ``runtime.runner_adapter``, which owns the
 process concerns (real subprocess, capture, timeout, cancel, exit/signal split).
 This module contributes only what routing adds on top: reading the launch
 command from the spec, tokenising it, appending the spec's arguments, handing
 the work over as input, promoting the collected output into bound evidence, and
 turning the three role outcomes (launched, in-place, never-started) into typed
-records.
+records — and, since SW-RT-008, passing the caller's timeout through and keeping
+the declared cap apart from the terminating state.
 """
 
 from __future__ import annotations
@@ -58,6 +74,13 @@ from skillweave.runtime.registry import (
     EvidenceQuality,
     EvidenceType,
 )
+
+
+#: Documented default timeout (seconds) for a dispatch launch. A caller that
+#: passes no timeout gets this, never an unbounded wait and never an ad-hoc
+#: number. The runtime treats ``None`` as "wait forever", so the default is
+#: applied here, at the seam, before the call is handed down.
+DEFAULT_DISPATCH_TIMEOUT: float = 900.0
 
 
 def tokenize_launch(command: str) -> list[str]:
@@ -90,10 +113,16 @@ class DispatchResult:
     args: list[str]
     result: ProcessResult
     artifact: Optional[ArtifactReceipt]
+    timeout: Optional[float]
 
     @property
     def succeeded(self) -> bool:
         return self.result.succeeded
+
+    @property
+    def termination(self) -> str:
+        """How the process actually ended (TERMINATED), distinct from the cap."""
+        return self.result.termination
 
 
 @dataclass
@@ -148,13 +177,16 @@ def _artifact_for(
     stdout: bytes,
     exit_code: Optional[int],
     signal: Optional[int],
+    timeout: Optional[float],
+    termination: str,
 ) -> ArtifactReceipt:
     """Build the ``ArtifactReceipt`` that binds the collected output to the run.
 
     The output is stored by digest only (``sha256``); the raw bytes are never
     the object's identity. ``metadata`` carries the run id, the tool name, the
-    exit code, and the signal, so the receipt answers "which run, which tool,
-    how did it end" without a second lookup.
+    exit code, the signal, — and, since SW-RT-008, the DECLARED timeout and the
+    TERMINATED state as two separate keys, so the receipt answers "which run,
+    which tool, how did it end, and what was declared" without a second lookup.
     """
     import hashlib
 
@@ -182,6 +214,8 @@ def _artifact_for(
             "byte_length": len(stdout or b""),
             "exit_code": exit_code,
             "signal": signal,
+            "declared_timeout": timeout,
+            "termination": termination,
         },
     )
 
@@ -196,6 +230,7 @@ def dispatch(
     model: str,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
+    timeout: Optional[float] = None,
 ) -> Union[DispatchResult, DispatchFailure]:
     """Launch ``tool`` from its spec, hand over ``work``, and bind the result.
 
@@ -203,6 +238,14 @@ def dispatch(
     ``args``. The work is handed to the child over standard input as bytes. The
     collected stdout is promoted to an ``ArtifactReceipt`` (typed ``artifact``)
     bound to ``run_id``, so it persists as evidence, not free text.
+
+    ``timeout`` is the DECLARED cap, in seconds, passed through to the runtime.
+    ``None`` (the default) resolves to :data:`DEFAULT_DISPATCH_TIMEOUT` at the
+    seam — the runtime never sees an unbounded wait and never an invented
+    number. A launch cut short by the cap returns ``result.termination ==
+    "timed_out"`` (a timeout, never a tool failure). The declared cap is kept on
+    the ``DispatchResult`` and in the artifact metadata, separate from the
+    TERMINATED state.
 
     A launch command that cannot be started (for example a non-existent
     executable) is caught and returned as a :class:`DispatchFailure` naming the
@@ -215,6 +258,7 @@ def dispatch(
     is tool-agnostic.
     """
     argv = tokenize_launch(tool.launch_command) + [str(a) for a in tool.args]
+    effective_timeout = DEFAULT_DISPATCH_TIMEOUT if timeout is None else timeout
     try:
         result = run_command(
             argv,
@@ -226,6 +270,7 @@ def dispatch(
             created_at=created_at,
             input_bytes=work,
             cwd=cwd,
+            timeout=effective_timeout,
         )
     except (FileNotFoundError, OSError) as exc:
         return DispatchFailure(
@@ -246,6 +291,8 @@ def dispatch(
         stdout=result.stdout,
         exit_code=result.exit_code,
         signal=result.signal,
+        timeout=effective_timeout,
+        termination=result.termination,
     )
     return DispatchResult(
         run_id=run_id,
@@ -254,6 +301,7 @@ def dispatch(
         args=list(tool.args),
         result=result,
         artifact=artifact,
+        timeout=effective_timeout,
     )
 
 
@@ -289,6 +337,7 @@ def launch_from_role(
     model: str,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
+    timeout: Optional[float] = None,
 ) -> RoleOutcome:
     """Launch ``role``'s tool, or record in place when the role has none.
 
@@ -299,6 +348,10 @@ def launch_from_role(
       the command);
     * a role without a ``ToolSpec`` → :class:`InPlaceRecord`, an explicit "ran
       in place" fact.
+
+    ``timeout`` is the DECLARED cap passed through to the launch (criterion 5);
+    ``None`` resolves to the documented default at the seam. An in-place run has
+    no launch and therefore carries no cap.
 
     Nothing here branches on the tool name, the launch command, the arguments,
     or the work: only on whether a tool is present at all, which is the one
@@ -316,6 +369,7 @@ def launch_from_role(
         model=model,
         created_at=created_at,
         cwd=cwd,
+        timeout=timeout,
     )
     if isinstance(outcome, DispatchFailure):
         outcome.role = role
