@@ -37,6 +37,7 @@ class SynthesisResult:
     content: str            # markdown or JSON
     format: str             # "markdown" or "json"
     elapsed_ms: float
+    chairman_answering_model: str | None = None  # the model that actually wrote the synthesis
 
 
 @dataclass 
@@ -49,6 +50,9 @@ class CouncilResult:
     aggregate_rankings: dict[str, float] = field(default_factory=dict)  # label → avg rank
     label_to_model: dict[str, str] = field(default_factory=dict)  # label → model_id
     total_elapsed_ms: float = 0.0
+    degraded: bool = False                 # True when fewer distinct models answered than seats requested
+    seats_requested: int = 0               # seats the config asked for
+    models_distinct: int = 0               # distinct answering models that actually responded
 
 
 @dataclass
@@ -123,6 +127,9 @@ class CouncilEngine:
         if config.mode in ("quick", "standard", "full"):
             result.stage1 = await self._stage1_opinions(query, config, result.search_context)
             result.label_to_model = self._build_label_map(config.models)
+            result.seats_requested = len(config.models)
+            result.models_distinct = len({r.answering_model or r.model_id for r in result.stage1})
+            result.degraded = result.models_distinct < result.seats_requested
 
         # Stage 2: Peer Review (anonymized, structured JSON)
         if config.mode in ("standard", "full") and len(result.stage1) >= 2:
@@ -248,11 +255,13 @@ class CouncilEngine:
                 self.provider.query(config.chairman, messages, 0.4),
                 timeout=config.timeout_per_model * 2
             )
+            chairman_answering_model = getattr(content, "answering_model", None)
             return SynthesisResult(
                 chairman_model=config.chairman,
                 content=content,
                 format=config.output_format,
-                elapsed_ms=(time.monotonic() - t0) * 1000
+                elapsed_ms=(time.monotonic() - t0) * 1000,
+                chairman_answering_model=chairman_answering_model,
             )
         except Exception as e:
             return SynthesisResult(
