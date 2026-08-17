@@ -9,9 +9,8 @@ name: Release Tag Validate
 # sagt — `check` vergleicht Orte untereinander, dieser Drift faellt erst beim
 # Tag-Vergleich auf).
 #
-# version-sync.py wird hier NICHT vendort (PRD SW-CI-002-G, AK: "version-sync.py
-# ist nicht vendort"). Es ist kanonisch in lvc-ops/main und wird zur Laufzeit
-# beschafft; `check-tag` liest dieselbe .version.yaml wie das Bump-Werkzeug.
+# version-sync.py wird hier NICHT vendort (PRD SW-CI-002-G). Es ist kanonisch in
+# ops-engine (OSS, oeffentlich gespiegelt) und wird zur Laufzeit beschafft; `check-tag` liest dieselbe .version.yaml wie das Bump-Werkzeug.
 #
 # Der capabilities:-Block der Bundle-capability.yaml ist ein MANIFEST, kein
 # Versionsort (Fall 4). Den prueft das eigenstaendige check-manifest.py — ohne
@@ -31,13 +30,25 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Fetch version-sync.py (canonical, lvc-ops/main)
+      - name: Fetch version-sync.py (canonical, ops-engine)
         run: |
-          # Runtime-beschafft, nicht vendort (SW-CI-002-G AK). liegt im
-          # RUNNER_TEMP, nicht im Repo — kein repo-owned literal invocation.
+          # Generic tooling lives in the open base (LVC-221). ops-engine is
+          # OSS and publicly mirrored, so this needs no credential and works
+          # identically from every org — the private lvc-ops URL did not.
           curl -fsSL \
-            "https://git.langevc.com/langevc/lvc-ops/raw/branch/main/scripts/version-sync.py" \
+            "https://raw.githubusercontent.com/LangeVC/ops-engine/master/scripts/version-sync.py" \
             -o "$RUNNER_TEMP/version-sync.py"
+
+          # Prove what arrived. Without this the step reports success even
+          # when it fetched an HTML login page: a private raw URL answers 303
+          # to /user/login, curl -L follows, the login page returns 200, and
+          # -f never triggers. That is how the first live run of this gate
+          # died three steps later on "SyntaxError: <!DOCTYPE html>".
+          python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" \
+            "$RUNNER_TEMP/version-sync.py" \
+            || { echo "fetched file is not Python — first three lines:"; \
+                 head -3 "$RUNNER_TEMP/version-sync.py"; exit 1; }
+
           echo "VERSION_SYNC=$RUNNER_TEMP/version-sync.py" >> "$GITHUB_ENV"
 
       - name: Gate — locations (a/b) and tag == source_of_truth (c)
