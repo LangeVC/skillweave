@@ -313,6 +313,19 @@ class RoutingProfile:
         if not name:
             raise RoutingProfileError("profile requires a 'name'")
 
+        # Harness and profile stay separate (SW-RT-003 AK 3). A profile that
+        # declares a ``harness`` field is refused with the field named, because
+        # writing the harness into the profile turns the cross-product into the
+        # maintenance surface: four harnesses times three profiles is twelve
+        # declarations to keep in step instead of three profiles plus one
+        # mapping. One profile may be referenced by several harnesses, so the
+        # relationship lives in the harness's own mapping, never here.
+        if "harness" in data:
+            raise RoutingProfileError(
+                "profile must not declare a 'harness' field: a harness maps to "
+                "profiles, not the other way around (see harness.HarnessProfileMap)"
+            )
+
         tier = data.get("tier", TIER_BALANCED)
         limits = Limits.from_dict(data.get("limits", {}))
         roles = builtin_roles()

@@ -150,3 +150,20 @@ def test_harness_map_roundtrips_to_data():
 def test_harness_map_rejects_non_string_names():
     with pytest.raises(HarnessError):
         HarnessProfileMap.from_dict({123: ["default"]})
+
+
+# ── Criterion 3: a profile carrying a harness is refused ────────────────
+
+
+def test_profile_declaring_harness_is_refused_with_field_named():
+    from skillweave.routing.profile import RoutingProfile, RoutingProfileError
+
+    with pytest.raises(RoutingProfileError, match="'harness'"):
+        RoutingProfile.from_dict(
+            {
+                "name": "bad",
+                "tier": "balanced",
+                "harness": "opencode",
+                "roles": {"ops": {"model": "sonnet"}},
+            }
+        )
