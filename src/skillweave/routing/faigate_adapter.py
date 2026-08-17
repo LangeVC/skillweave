@@ -445,12 +445,14 @@ def list_detected_providers() -> dict[str, str]:
 
 
 def known_model_ids() -> frozenset[str]:
-    """Return every model id Faigate can resolve, across all router presets.
+    """Return every model id the council casts, across all router presets.
 
-    This is the deterministic "is a model available" surface: it is derived
-    from ``ROUTER_PROFILES``, not from a live provider probe, so it never does
-    network I/O and never flakes. A model id outside this set cannot be resolved
-    by Faigate and must be reported, not silently ignored (AK 10).
+    This is the council's casting surface, derived from ``ROUTER_PROFILES``, not
+    a live provider probe: every model any preset casts for a council seat. It
+    is NOT the availability gate — availability is resolved against what Faigate
+    actually serves (see :func:`_check_unavailable_models`). A model id may be
+    absent here and still be a real, resolvable Faigate model (e.g. a pinned id
+    not cast by any preset).
     """
     ids = {model for preset in ROUTER_PROFILES.values() for model in preset["models"]}
     return frozenset(ids)
@@ -466,9 +468,17 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     ``pinned`` so a later run can tell the difference between "what was
     requested" and "what really ran".
 
-    A role that declares a ``model`` (or ``pin``) id Faigate cannot resolve is
-    refused here with an error naming BOTH the profile and the role — no silent
-    fallback (AK 10).
+    Availability of a pinned or declared model is resolved against what Faigate
+    can *actually serve* (the live ``/v1/models`` roster), not against
+    ``ROUTER_PROFILES``. ``ROUTER_PROFILES`` keep their own job — casting the
+    council (chairman + model pool + mode) per tier — and are not repurposed as
+    an availability registry.
+
+    The availability outcome is one of three: a model Faigate confirms it
+    serves proceeds; a model Faigate confirms it does NOT serve is refused
+    (naming the profile and the role); and when no authoritative source is
+    reachable, the model is left UNVERIFIED rather than refused, and the
+    resolution does not claim Faigate cannot resolve it.
 
     Returns a :class:`~skillweave.routing.profile.ResolutionRecord` carrying the
     requested tier, the router preset name, the council mode, the resolved model
@@ -494,23 +504,64 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
 
 
 def _check_unavailable_models(profile: "RoutingProfile") -> None:
-    """Refuse roles whose declared model or pin Faigate cannot resolve.
+    """Refuse a declared model or pin only when Faigate confirms it cannot serve.
 
-    A role's ``model`` and ``pin`` name a concrete model id. If that id is not
-    in any router preset, Faigate cannot supply it, so we fail loudly — naming
-    the profile and the role — instead of silently substituting another model.
+    A role's ``model`` and ``pin`` name a concrete model id. ``ROUTER_PROFILES``
+    (``known_model_ids()``) keep their own job — casting the council's seats — so
+    a cast id is admitted as-is and is never live-gated: ``sonnet``, ``gpt-4o``,
+    ``opus``, ``deepseek-v4`` and the rest are council aliases, not a claim about
+    Faigate's live roster.
+
+    Every id outside that cast is an explicit override (for example
+    ``deepseek-v4-pro``), and its availability is resolved against what Faigate
+    actually serves, with three outcomes:
+
+    * in the live roster    -> proceed;
+    * confirmed not served  -> refuse, naming the profile, the role, and the id;
+    * unreachable           -> UNVERIFIED: do NOT refuse, and do not claim
+      Faigate cannot resolve the id (the source that would have proved that is
+      not reachable).
+
+    ``known_model_ids()`` is therefore no longer the availability gate: it can
+    never refuse, only short-circuit the council's own seats.
     """
     from .profile import RoutingProfileError
 
-    available = known_model_ids()
-    for key, role in profile.roles.items():
-        for field, value in (("model", role.model), ("pin", role.pin)):
-            if value is not None and value not in available:
-                raise RoutingProfileError(
-                    f"profile '{profile.name}' role '{key}' names {field} "
-                    f"'{value}' which Faigate cannot resolve "
-                    f"(available: {sorted(available)})"
-                )
+    cast = known_model_ids()
+    declared = [
+        (key, field, value)
+        for key, role in profile.roles.items()
+        for field, value in (("model", role.model), ("pin", role.pin))
+        if value is not None and value not in cast
+    ]
+    if not declared:
+        return
+
+    provider = detect_providers().get("faigate")
+    if provider is None or not isinstance(provider, FaigateProvider):
+        # No authoritative source is reachable: the model cannot be verified,
+        # but there is no proof it is unavailable, so it is left UNVERIFIED and
+        # the resolution proceeds rather than refusing on a static guess.
+        return
+
+    models = [value for _, _, value in declared]
+
+    # check_availability is async (it drives a network probe). In the
+    # resolution path we need its result synchronously; run the probe on a
+    # short-lived loop. A network failure or unreachable endpoint surfaces as
+    # fail-open availability (every model reported True), which is exactly the
+    # UNVERIFIED outcome: no refusal, and no false "cannot resolve" claim.
+    availability = asyncio.run(provider.check_availability(models))
+
+    for key, field, value in declared:
+        if value not in availability:
+            # The probe returned no verdict for this id: treat as UNVERIFIED.
+            continue
+        if not availability[value]:
+            raise RoutingProfileError(
+                f"profile '{profile.name}' role '{key}' names {field} "
+                f"'{value}' which Faigate reports unavailable"
+            )
 
 
 def _profile_pin(profile: "RoutingProfile") -> Optional[str]:
