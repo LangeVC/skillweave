@@ -37,6 +37,38 @@ class ModelInfo:
     cost_per_1k: float = 0.0
 
 
+class AttributedResponse(str):
+    """A ``str`` that also carries which model actually answered.
+
+    The council engine reads ``query()`` as a plain string, so this stays a
+    real ``str`` subclass — f-strings, truthiness and slicing all behave like
+    ``str``. It adds two attributes so the run record can see, per seat, which
+    model was requested and which one actually answered.
+
+    The provider decides nothing about whether the two differ. That judgement
+    belongs to the council; the transport just returns what came back.
+    """
+
+    def __new__(cls, content: str, *, requested_model: str, answering_model: str) -> "AttributedResponse":
+        obj = super().__new__(cls, content)
+        obj.requested_model = requested_model
+        obj.answering_model = answering_model
+        return obj
+
+
+def _extract_answer(envelope: dict, requested_model: str) -> AttributedResponse:
+    """Read the answer content and the actual answering model from a response.
+
+    ``answering_model`` is read from the envelope's ``model`` field, never
+    inferred from the request. When a router omits the field, we fall back to
+    the requested model and keep the record cheap — but we never fabricate a
+    model that did not answer.
+    """
+    content = envelope["choices"][0]["message"]["content"]
+    answering_model = envelope.get("model") or requested_model
+    return AttributedResponse(content, requested_model=requested_model, answering_model=answering_model)
+
+
 class CouncilProvider:
     """Abstract base: all providers implement query + availability."""
 
@@ -251,7 +283,7 @@ class FaigateProvider(CouncilProvider):
         result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", "POST", body))
         if result.get("error"):
             raise RuntimeError(f"Faigate query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        return _extract_answer(result, clean_model)
 
     def provider_name(self) -> str:
         return "faigate"
@@ -294,7 +326,7 @@ class OpenRouterProvider(CouncilProvider):
         result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", body))
         if result.get("error"):
             raise RuntimeError(f"OpenRouter query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        return _extract_answer(result, model)
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         """OpenRouter: check model availability via /models endpoint."""
@@ -344,7 +376,7 @@ class GenericRouterProvider(CouncilProvider):
         result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", body))
         if result.get("error"):
             raise RuntimeError(f"Router query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        return _extract_answer(result, model)
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         """Try /models endpoint, fall back to assuming all available."""
@@ -415,7 +447,9 @@ class SingleModelProvider(CouncilProvider):
         result = await loop.run_in_executor(None, lambda: self._req(body))
         if result.get("error"):
             raise RuntimeError(f"Model query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        # SingleModelProvider always names itself; still read the envelope so
+        # any router in front of it (custom OPENAI_BASE_URL) is attributed too.
+        return _extract_answer(result, self.model)
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         return {m: True for m in models}
