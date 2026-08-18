@@ -1,0 +1,38 @@
+{
+  "_note": "A verbatim record of one run on one machine, kept as evidence rather than as guidance. The launch command is that machine's absolute path; profiles/example-standard.yaml declares the portable form.",
+  "artifact": {
+    "byte_length": 6,
+    "id": "dispatch-sw-rt-007-dispatch2",
+    "sha256": "ed1a545bb85e55816bbf9566b028b2a0bc456b88f49f6f266c0401048824194b",
+    "type": "artifact"
+  },
+  "declared_timeout_seconds": 60.0,
+  "default_timeout_seconds": 900.0,
+  "dispatch": "2",
+  "exit_code": 0,
+  "harness": "opencode",
+  "harness_evidence": {
+    "via": "caller"
+  },
+  "harness_source": "declared",
+  "lane": "SW-RT-007",
+  "launch_args": [],
+  "launch_command": "/opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -",
+  "message": "",
+  "proven": true,
+  "reported_at_utc": "2026-08-17T23:15:21.780697+00:00",
+  "resolved_model": "faigate/deepseek-v4-pro",
+  "signal": null,
+  "stderr_byte_length": 17064,
+  "stderr_sha256": "f0f275892a3a0b9659f9436e264c2c3f174fe5ef5d8224432794e23405f06424",
+  "stdout": "ready\n",
+  "subject_commit": "b486dc8799fa3406d76d4331e00c580f7d315a78",
+  "succeeded": true,
+  "termination": "exited",
+  "tool": "opencode",
+  "unproven_harnesses": [
+    "claude-code",
+    "codex",
+    "antigravity"
+  ]
+}

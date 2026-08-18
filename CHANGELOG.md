@@ -1,5 +1,62 @@
 # Changelog
 
+## 1.3.6 — The seam closes, and the council learns who answered
+
+1.3.5 shipped every part of a dispatch except the seam that joins them: a
+profile could name a target tool and its launch command, and nothing started
+it. This release closes that seam, and a second one nobody had looked for —
+whether the model that answered is the model you asked for.
+
+### The seam
+
+- **`launch_command` is read and the tool is started.** A role with a
+  `ToolSpec` is launched, the work is handed over on standard input, and the
+  result comes back as an `ArtifactReceipt` rather than as free text. The
+  adapter branches on no tool name.
+- **A role without a `ToolSpec` runs in place and is recorded as such.**
+  Staying in the current harness is a declared configuration, distinguishable
+  afterwards from a dispatch that silently did not happen.
+- **A profile ships as data**, `profiles/example-standard.yaml`, as a worked
+  example to copy and adapt rather than a default that loads itself.
+- **A timeout can be set and is reported as itself.** `dispatch()` and
+  `launch_from_role()` take one, defaulting to `DEFAULT_DISPATCH_TIMEOUT`
+  (900s). The record keeps *declared* apart from *terminated*.
+- **The executing harness is declared, never guessed.** `determine_harness`
+  reads `SKILLWEAVE_HARNESS`; absent data never reads as a caller's statement.
+  Harness and profile stay separate.
+
+### The council
+
+Faigate substitutes silently: an unknown model id returns HTTP 200, a
+well-formed completion and no error field, answered by a different model. All
+nine ids in `ROUTER_PROFILES` were substituted when measured — `gemini-pro`
+included, which *is* in `/v1/models`. A four-seat run had three seats answered
+by one model, the chairman among them, and stage 2 had that model rank its own
+three anonymised answers.
+
+- The answering model is read from the response envelope, never inferred.
+- `min_models_required` counts **distinct** answering models.
+- A substitution is surfaced per seat; a self-ranked stage 2 is visible in the
+  record; the chairman's own substitution is recorded.
+
+### Repairs
+
+- **Availability was checked against the council's casting**, so a profile
+  pinning a served model was refused with a false claim.
+- **A hardcoded ten-second socket timeout** made `timeout_per_model` inert.
+- **A degraded council named who, never why.**
+- **An empty completion counted as an answer**; one guard now covers all four
+  providers.
+- **`dispatch` was both a module and a re-exported function.** The module keeps
+  its name; the function is `dispatch_role`.
+
+### Compatibility
+
+The thirteen bundled skills stay at 1.3.0 — none changed. Two behaviours move
+toward the documented contract: an empty completion raises, and a collapsed
+council fails its minimum. Code importing `dispatch` from the package root must
+use `dispatch_role`.
+
 ## 1.3.5 — Contracts worth trusting, and a dispatcher on top
 
 Ten runtime contracts existed since 1.3.0 but did not hold what they promised.

@@ -22,8 +22,19 @@ import json
 import os
 import urllib.request
 import urllib.error
+import socket
 from dataclasses import dataclass
 from typing import Optional
+
+
+def _describe_error(exc: Exception, url: str) -> str:
+    """Return a human-readable cause for a transport failure, naming timeouts."""
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else None
+    if reason is not None and (isinstance(reason, (TimeoutError, socket.timeout)) or "timed out" in str(reason)):
+        return f"timeout at {url}"
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"HTTP {exc.code} at {url}"
+    return f"{exc} (at {url})"
 
 
 @dataclass
@@ -37,10 +48,47 @@ class ModelInfo:
     cost_per_1k: float = 0.0
 
 
+class AttributedResponse(str):
+    """A ``str`` that also carries which model actually answered.
+
+    The council engine reads ``query()`` as a plain string, so this stays a
+    real ``str`` subclass — f-strings, truthiness and slicing all behave like
+    ``str``. It adds two attributes so the run record can see, per seat, which
+    model was requested and which one actually answered.
+
+    The provider decides nothing about whether the two differ. That judgement
+    belongs to the council; the transport just returns what came back.
+    """
+
+    def __new__(cls, content: str, *, requested_model: str, answering_model: str) -> "AttributedResponse":
+        obj = super().__new__(cls, content)
+        obj.requested_model = requested_model
+        obj.answering_model = answering_model
+        return obj
+
+
+def _extract_answer(envelope: dict, requested_model: str) -> AttributedResponse:
+    """Read the answer content and the actual answering model from a response.
+
+    ``answering_model`` is read from the envelope's ``model`` field, never
+    inferred from the request. When a router omits the field, we fall back to
+    the requested model and keep the record cheap — but we never fabricate a
+    model that did not answer.
+    """
+    content = envelope["choices"][0]["message"]["content"]
+    if not content:
+        # A reasoning model that spent its budget on reasoning returns an empty
+        # completion. That is a failure, not an answer. One guard here rather
+        # than one per provider, because four copies is how one of them drifts.
+        raise RuntimeError("model returned an empty completion")
+    answering_model = envelope.get("model") or requested_model
+    return AttributedResponse(content, requested_model=requested_model, answering_model=answering_model)
+
+
 class CouncilProvider:
     """Abstract base: all providers implement query + availability."""
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         raise NotImplementedError
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
@@ -196,7 +244,7 @@ class FaigateProvider(CouncilProvider):
                 except Exception:
                     pass
 
-    def _req(self, path: str, method: str = "GET", body: dict | None = None) -> dict:
+    def _req(self, path: str, method: str = "GET", body: dict | None = None, timeout: float | None = None) -> dict:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body else None
         headers = {"Content-Type": "application/json"}
@@ -204,7 +252,7 @@ class FaigateProvider(CouncilProvider):
             headers["Authorization"] = f"Bearer {self.api_key}"
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             error_body = ""
@@ -214,6 +262,8 @@ class FaigateProvider(CouncilProvider):
                 pass
             return {"error": f"HTTP {e.code} at {url}: {error_body}"}
         except urllib.error.URLError as e:
+            if isinstance(e.reason, (TimeoutError, socket.timeout)) or "timed out" in str(e.reason):
+                return {"error": f"timeout at {url}"}
             return {"error": f"URL Error at {url}: {e.reason}"}
         except Exception as e:
             return {"error": f"{str(e)} (at {url})"}
@@ -244,14 +294,15 @@ class FaigateProvider(CouncilProvider):
     async def check_credits(self, model: str) -> float:
         return -1.0  # Faigate doesn't expose credit checking — defer to availability
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         clean_model = model.replace("faigate:", "")
         body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", "POST", body))
+        result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", "POST", body) if timeout is None
+                     else self._req("/chat/completions", "POST", body, timeout)))
         if result.get("error"):
             raise RuntimeError(f"Faigate query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        return _extract_answer(result, clean_model)
 
     def provider_name(self) -> str:
         return "faigate"
@@ -269,7 +320,7 @@ class OpenRouterProvider(CouncilProvider):
         if self.api_key is None:
             raise ValueError("OPENROUTER_API_KEY not set")
 
-    def _req(self, path: str, body: dict | None = None, method: str = "POST") -> dict:
+    def _req(self, path: str, body: dict | None = None, method: str = "POST", timeout: float | None = None) -> dict:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body else None
         headers = {
@@ -280,21 +331,23 @@ class OpenRouterProvider(CouncilProvider):
         }
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read())
                 if "error" in result:
                     return {"error": result["error"].get("message", json.dumps(result["error"]))}
                 return result
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _describe_error(e, url)}
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         body = {"model": model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", body))
+        result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", body) if timeout is None
+                     else self._req("/chat/completions", body, timeout=timeout)))
         if result.get("error"):
             raise RuntimeError(f"OpenRouter query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        return _extract_answer(result, model)
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         """OpenRouter: check model availability via /models endpoint."""
@@ -322,7 +375,7 @@ class GenericRouterProvider(CouncilProvider):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
 
-    def _req(self, path: str, body: dict | None = None, method: str = "POST") -> dict:
+    def _req(self, path: str, body: dict | None = None, method: str = "POST", timeout: float | None = None) -> dict:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body else None
         headers = {"Content-Type": "application/json"}
@@ -330,21 +383,23 @@ class GenericRouterProvider(CouncilProvider):
             headers["Authorization"] = f"Bearer {self.api_key}"
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read())
                 if "error" in result:
                     return {"error": result["error"].get("message", str(result["error"]))}
                 return result
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _describe_error(e, url)}
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         body = {"model": model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", body))
+        result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", body) if timeout is None
+                     else self._req("/chat/completions", body, timeout=timeout)))
         if result.get("error"):
             raise RuntimeError(f"Router query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        return _extract_answer(result, model)
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         """Try /models endpoint, fall back to assuming all available."""
@@ -393,7 +448,7 @@ class SingleModelProvider(CouncilProvider):
         )
         self._single_model_mode = True
 
-    def _req(self, body: dict) -> dict:
+    def _req(self, body: dict, timeout: float | None = None) -> dict:
         url = f"{self.base_url}/chat/completions"
         data = json.dumps(body).encode()
         headers = {"Content-Type": "application/json"}
@@ -401,21 +456,24 @@ class SingleModelProvider(CouncilProvider):
             headers["Authorization"] = f"Bearer {self.api_key}"
         req = urllib.request.Request(url, data=data, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read())
                 if "error" in result:
                     return {"error": result["error"].get("message", str(result["error"]))}
                 return result
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _describe_error(e, url)}
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         body = {"model": self.model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req(body))
+        result = await loop.run_in_executor(None, lambda: self._req(body, timeout))
         if result.get("error"):
             raise RuntimeError(f"Model query failed: {result['error']}")
-        return result["choices"][0]["message"]["content"]
+        # SingleModelProvider always names itself; still read the envelope so
+        # any router in front of it (custom OPENAI_BASE_URL) is attributed too.
+        return _extract_answer(result, self.model)
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         return {m: True for m in models}
@@ -445,12 +503,14 @@ def list_detected_providers() -> dict[str, str]:
 
 
 def known_model_ids() -> frozenset[str]:
-    """Return every model id Faigate can resolve, across all router presets.
+    """Return every model id the council casts, across all router presets.
 
-    This is the deterministic "is a model available" surface: it is derived
-    from ``ROUTER_PROFILES``, not from a live provider probe, so it never does
-    network I/O and never flakes. A model id outside this set cannot be resolved
-    by Faigate and must be reported, not silently ignored (AK 10).
+    This is the council's casting surface, derived from ``ROUTER_PROFILES``, not
+    a live provider probe: every model any preset casts for a council seat. It
+    is NOT the availability gate — availability is resolved against what Faigate
+    actually serves (see :func:`_check_unavailable_models`). A model id may be
+    absent here and still be a real, resolvable Faigate model (e.g. a pinned id
+    not cast by any preset).
     """
     ids = {model for preset in ROUTER_PROFILES.values() for model in preset["models"]}
     return frozenset(ids)
@@ -466,9 +526,21 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     ``pinned`` so a later run can tell the difference between "what was
     requested" and "what really ran".
 
-    A role that declares a ``model`` (or ``pin``) id Faigate cannot resolve is
-    refused here with an error naming BOTH the profile and the role — no silent
-    fallback (AK 10).
+    Availability of a pinned or declared model is resolved against the live
+    ``/v1/models`` roster, not against ``ROUTER_PROFILES``. ``ROUTER_PROFILES``
+    keep their own job — casting the council (chairman + model pool + mode) per
+    tier — and are not repurposed as an availability registry. The roster is
+    the best reachable availability signal but is not proof of what Faigate
+    actually answers: measured, a listed id (``gemini-pro``) is still silently
+    substituted for ``deepseek-v4-flash``. Judging an answer against the
+    requested model is therefore out of scope here (SW-COUNCIL-001); this gate
+    only refuses an id whose absence Faigate itself reports via the roster.
+
+    The availability outcome is one of three: a model Faigate confirms it
+    serves proceeds; a model Faigate confirms it does NOT serve is refused
+    (naming the profile and the role); and when no authoritative source is
+    reachable, the model is left UNVERIFIED rather than refused, and the
+    resolution does not claim Faigate cannot resolve it.
 
     Returns a :class:`~skillweave.routing.profile.ResolutionRecord` carrying the
     requested tier, the router preset name, the council mode, the resolved model
@@ -494,23 +566,64 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
 
 
 def _check_unavailable_models(profile: "RoutingProfile") -> None:
-    """Refuse roles whose declared model or pin Faigate cannot resolve.
+    """Refuse a declared model or pin only when Faigate confirms it cannot serve.
 
-    A role's ``model`` and ``pin`` name a concrete model id. If that id is not
-    in any router preset, Faigate cannot supply it, so we fail loudly — naming
-    the profile and the role — instead of silently substituting another model.
+    A role's ``model`` and ``pin`` name a concrete model id. ``ROUTER_PROFILES``
+    (``known_model_ids()``) keep their own job — casting the council's seats — so
+    a cast id is admitted as-is and is never live-gated: ``sonnet``, ``gpt-4o``,
+    ``opus``, ``deepseek-v4`` and the rest are council aliases, not a claim about
+    Faigate's live roster.
+
+    Every id outside that cast is an explicit override (for example
+    ``deepseek-v4-pro``), and its availability is resolved against what Faigate
+    actually serves, with three outcomes:
+
+    * in the live roster    -> proceed;
+    * confirmed not served  -> refuse, naming the profile, the role, and the id;
+    * unreachable           -> UNVERIFIED: do NOT refuse, and do not claim
+      Faigate cannot resolve the id (the source that would have proved that is
+      not reachable).
+
+    ``known_model_ids()`` is therefore no longer the availability gate: it can
+    never refuse, only short-circuit the council's own seats.
     """
     from .profile import RoutingProfileError
 
-    available = known_model_ids()
-    for key, role in profile.roles.items():
-        for field, value in (("model", role.model), ("pin", role.pin)):
-            if value is not None and value not in available:
-                raise RoutingProfileError(
-                    f"profile '{profile.name}' role '{key}' names {field} "
-                    f"'{value}' which Faigate cannot resolve "
-                    f"(available: {sorted(available)})"
-                )
+    cast = known_model_ids()
+    declared = [
+        (key, field, value)
+        for key, role in profile.roles.items()
+        for field, value in (("model", role.model), ("pin", role.pin))
+        if value is not None and value not in cast
+    ]
+    if not declared:
+        return
+
+    provider = detect_providers().get("faigate")
+    if provider is None or not isinstance(provider, FaigateProvider):
+        # No authoritative source is reachable: the model cannot be verified,
+        # but there is no proof it is unavailable, so it is left UNVERIFIED and
+        # the resolution proceeds rather than refusing on a static guess.
+        return
+
+    models = [value for _, _, value in declared]
+
+    # check_availability is async (it drives a network probe). In the
+    # resolution path we need its result synchronously; run the probe on a
+    # short-lived loop. A network failure or unreachable endpoint surfaces as
+    # fail-open availability (every model reported True), which is exactly the
+    # UNVERIFIED outcome: no refusal, and no false "cannot resolve" claim.
+    availability = asyncio.run(provider.check_availability(models))
+
+    for key, field, value in declared:
+        if value not in availability:
+            # The probe returned no verdict for this id: treat as UNVERIFIED.
+            continue
+        if not availability[value]:
+            raise RoutingProfileError(
+                f"profile '{profile.name}' role '{key}' names {field} "
+                f"'{value}' which Faigate reports unavailable"
+            )
 
 
 def _profile_pin(profile: "RoutingProfile") -> Optional[str]:
