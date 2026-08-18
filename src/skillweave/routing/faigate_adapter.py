@@ -20,10 +20,21 @@ Architecture:
 import asyncio
 import json
 import os
+import socket
 import urllib.request
 import urllib.error
 from dataclasses import dataclass
 from typing import Optional
+
+
+def _describe_error(exc: Exception, url: str) -> str:
+    """Return a human-readable cause for a transport failure, naming timeouts."""
+    reason = exc.reason if isinstance(exc, urllib.error.URLError) else None
+    if reason is not None and (isinstance(reason, (TimeoutError, socket.timeout)) or "timed out" in str(reason)):
+        return f"timeout at {url}"
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"HTTP {exc.code} at {url}"
+    return f"{exc} (at {url})"
 
 
 @dataclass
@@ -79,7 +90,7 @@ def _extract_answer(envelope: dict, requested_model: str) -> AttributedResponse:
 class CouncilProvider:
     """Abstract base: all providers implement query + availability."""
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         raise NotImplementedError
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
@@ -235,7 +246,7 @@ class FaigateProvider(CouncilProvider):
                 except Exception:
                     pass
 
-    def _req(self, path: str, method: str = "GET", body: dict | None = None) -> dict:
+    def _req(self, path: str, method: str = "GET", body: dict | None = None, timeout: float | None = None) -> dict:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body else None
         headers = {"Content-Type": "application/json"}
@@ -243,7 +254,7 @@ class FaigateProvider(CouncilProvider):
             headers["Authorization"] = f"Bearer {self.api_key}"
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
             error_body = ""
@@ -253,6 +264,8 @@ class FaigateProvider(CouncilProvider):
                 pass
             return {"error": f"HTTP {e.code} at {url}: {error_body}"}
         except urllib.error.URLError as e:
+            if isinstance(e.reason, (TimeoutError, socket.timeout)) or "timed out" in str(e.reason):
+                return {"error": f"timeout at {url}"}
             return {"error": f"URL Error at {url}: {e.reason}"}
         except Exception as e:
             return {"error": f"{str(e)} (at {url})"}
@@ -283,11 +296,12 @@ class FaigateProvider(CouncilProvider):
     async def check_credits(self, model: str) -> float:
         return -1.0  # Faigate doesn't expose credit checking — defer to availability
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         clean_model = model.replace("faigate:", "")
         body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", "POST", body))
+        request = lambda: self._req("/chat/completions", "POST", body) if timeout is None else self._req("/chat/completions", "POST", body, timeout)
+        result = await loop.run_in_executor(None, request)
         if result.get("error"):
             raise RuntimeError(f"Faigate query failed: {result['error']}")
         return _extract_answer(result, clean_model)
@@ -308,7 +322,7 @@ class OpenRouterProvider(CouncilProvider):
         if self.api_key is None:
             raise ValueError("OPENROUTER_API_KEY not set")
 
-    def _req(self, path: str, body: dict | None = None, method: str = "POST") -> dict:
+    def _req(self, path: str, body: dict | None = None, method: str = "POST", timeout: float | None = None) -> dict:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body else None
         headers = {
@@ -319,18 +333,19 @@ class OpenRouterProvider(CouncilProvider):
         }
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read())
                 if "error" in result:
                     return {"error": result["error"].get("message", json.dumps(result["error"]))}
                 return result
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _describe_error(e, url)}
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         body = {"model": model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", body))
+        request = lambda: self._req("/chat/completions", body) if timeout is None else self._req("/chat/completions", body, timeout=timeout)
+        result = await loop.run_in_executor(None, request)
         if result.get("error"):
             raise RuntimeError(f"OpenRouter query failed: {result['error']}")
         return _extract_answer(result, model)
@@ -361,7 +376,7 @@ class GenericRouterProvider(CouncilProvider):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
 
-    def _req(self, path: str, body: dict | None = None, method: str = "POST") -> dict:
+    def _req(self, path: str, body: dict | None = None, method: str = "POST", timeout: float | None = None) -> dict:
         url = f"{self.base_url}{path}"
         data = json.dumps(body).encode() if body else None
         headers = {"Content-Type": "application/json"}
@@ -369,18 +384,19 @@ class GenericRouterProvider(CouncilProvider):
             headers["Authorization"] = f"Bearer {self.api_key}"
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read())
                 if "error" in result:
                     return {"error": result["error"].get("message", str(result["error"]))}
                 return result
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _describe_error(e, url)}
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         body = {"model": model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req("/chat/completions", body))
+        request = lambda: self._req("/chat/completions", body) if timeout is None else self._req("/chat/completions", body, timeout=timeout)
+        result = await loop.run_in_executor(None, request)
         if result.get("error"):
             raise RuntimeError(f"Router query failed: {result['error']}")
         return _extract_answer(result, model)
@@ -432,7 +448,7 @@ class SingleModelProvider(CouncilProvider):
         )
         self._single_model_mode = True
 
-    def _req(self, body: dict) -> dict:
+    def _req(self, body: dict, timeout: float | None = None) -> dict:
         url = f"{self.base_url}/chat/completions"
         data = json.dumps(body).encode()
         headers = {"Content-Type": "application/json"}
@@ -440,18 +456,18 @@ class SingleModelProvider(CouncilProvider):
             headers["Authorization"] = f"Bearer {self.api_key}"
         req = urllib.request.Request(url, data=data, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read())
                 if "error" in result:
                     return {"error": result["error"].get("message", str(result["error"]))}
                 return result
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": _describe_error(e, url)}
 
-    async def query(self, model: str, messages: list[dict], temperature: float = 0.5) -> str:
+    async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         body = {"model": self.model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: self._req(body))
+        result = await loop.run_in_executor(None, lambda: self._req(body, timeout))
         if result.get("error"):
             raise RuntimeError(f"Model query failed: {result['error']}")
         # SingleModelProvider always names itself; still read the envelope so
