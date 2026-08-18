@@ -58,11 +58,16 @@ from .dispatch import (  # noqa: F401
     DispatchResult,
     InPlaceRecord,
     RoleOutcome,
-    dispatch,
     launch_from_role,
     run_in_place,
     tokenize_launch,
 )
+# Re-exported under a distinct name. `dispatch` is also the module, and a
+# re-export of the function under that name shadows it: `from skillweave.routing
+# import dispatch` would hand back the function while the module of the same
+# name stays out of reach. The module keeps its name; the function gets a
+# qualified one.
+from .dispatch import dispatch as dispatch_role  # noqa: F401
 
 __all__ = [
     "RoleDefinition",
@@ -107,7 +112,7 @@ __all__ = [
     "DispatchResult",
     "InPlaceRecord",
     "RoleOutcome",
-    "dispatch",
+    "dispatch_role",
     "launch_from_role",
     "run_in_place",
     "tokenize_launch",

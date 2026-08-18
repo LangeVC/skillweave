@@ -1,3 +1,4 @@
+import inspect
 """Tests that the routing package exports every module in its surface (SW-RT-005).
 
 The gap this closes: four lanes and a gate passed without anything checking the
@@ -51,7 +52,6 @@ def test_dispatch_module_is_re_exported():
         "DispatchResult",
         "InPlaceRecord",
         "RoleOutcome",
-        "dispatch",
         "launch_from_role",
         "run_in_place",
         "tokenize_launch",
@@ -61,6 +61,18 @@ def test_dispatch_module_is_re_exported():
             sys.modules["skillweave.routing.dispatch"], name
         )
 
+
+    # dispatch_role is the function; the module of the same name must stay
+    # reachable. Re-exporting the function as `dispatch` shadowed the module —
+    # `from skillweave.routing import dispatch` handed back the function and the
+    # module could only be reached through importlib. This pins both.
+    import skillweave.routing.dispatch as dispatch_module
+
+    assert routing.dispatch_role is dispatch_module.dispatch
+    assert "dispatch_role" in routing.__all__
+    assert inspect.ismodule(routing.dispatch), (
+        "routing.dispatch must be the module, not a shadowing re-export"
+    )
 
 def test_harness_module_remains_re_exported():
     # The harness block must stay as it was; this guards that the dispatch
