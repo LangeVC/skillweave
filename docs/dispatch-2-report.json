@@ -1,4 +1,5 @@
 {
+  "_note": "A verbatim record of one run on one machine, kept as evidence rather than as guidance. The launch command is that machine's absolute path; profiles/example-standard.yaml declares the portable form.",
   "artifact": {
     "byte_length": 6,
     "id": "dispatch-sw-rt-007-dispatch2",

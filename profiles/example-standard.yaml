@@ -1,20 +1,23 @@
-# SkillWeave routing profile: the operator's standard case.
+# SkillWeave routing profile: a worked EXAMPLE, not a shipped default.
 #
 # This file is DATA, loaded through skillweave.routing.harness.load_profiles_from_location.
 # It is looked up at, and only at, the location the caller passes to that function.
 # There is no repository-wide default directory: a caller names the path, and this
-# file lives here under profiles/langevc-standard.yaml so the operator has a stable,
-# documented place to point at. To load it:
+# file lives here as an EXAMPLE to copy and adapt. Nothing loads it on its own.
+#
+# Adapt before use: the launch command below assumes `opencode` is on PATH, and
+# the model id is the one this example was proven against. Both are yours to
+# change — the seam reads whatever the profile declares. To load a profile:
 #
 #     from skillweave.routing.harness import load_profiles_from_location
-#     profiles = load_profiles_from_location("profiles/langevc-standard.yaml")
+#     profiles = load_profiles_from_location("profiles/example-standard.yaml")
 #
 # A harness name is deliberately ABSENT from this file. A profile is referenced by
 # any number of harnesses, so the harness -> profile relationship lives in the
 # harness's own mapping (HarnessProfileMap), never in the profile. Four harnesses on
 # three profiles stay three profiles plus one mapping, not twelve entries.
 
-name: langevc-standard
+name: example-standard
 tier: balanced
 limits:
   timeout: 60.0
@@ -32,13 +35,13 @@ roles:
     model: faigate/deepseek-v4-pro
     tool:
       name: opencode
-      launch_command: /opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -
+      launch_command: opencode run --model faigate/deepseek-v4-pro -
     capabilities:
       can_mutate_run_state: true
   reviewer:
     model: faigate/deepseek-v4-pro
     tool:
       name: opencode
-      launch_command: /opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -
+      launch_command: opencode run --model faigate/deepseek-v4-pro -
     capabilities:
       can_approve_gate: true

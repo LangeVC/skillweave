@@ -29,7 +29,7 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 _REPO = Path(__file__).resolve().parent.parent.parent
-_PROFILE_PATH = _REPO / "profiles" / "langevc-standard.yaml"
+_PROFILE_PATH = _REPO / "profiles" / "example-standard.yaml"
 
 
 def test_profile_file_exists_in_repository():
@@ -40,8 +40,8 @@ def test_profile_file_exists_in_repository():
 def test_standard_case_loads_from_declared_path():
     # Criterion 1: load from the declared path, not a dict handed in.
     profiles = load_profiles_from_location(_PROFILE_PATH)
-    assert "langevc-standard" in profiles
-    profile = profiles["langevc-standard"]
+    assert "example-standard" in profiles
+    profile = profiles["example-standard"]
 
     # observer is in place: a real role, wired as observer, carrying no tool.
     observer = profile.role("observer")
@@ -59,18 +59,18 @@ def test_standard_case_loads_from_declared_path():
     ops_tool = profile.tool_for("ops")
     assert ops_tool is not None
     assert ops_tool.name == "opencode"
-    assert ops_tool.launch_command == "/opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -"
+    assert ops_tool.launch_command == "opencode run --model faigate/deepseek-v4-pro -"
 
     reviewer_tool = profile.tool_for("reviewer")
     assert reviewer_tool is not None
     assert reviewer_tool.name == "opencode"
-    assert reviewer_tool.launch_command == "/opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -"
+    assert reviewer_tool.launch_command == "opencode run --model faigate/deepseek-v4-pro -"
 
 
 def test_observer_in_place_keeps_self_approval_split():
     # The standard case keeps the ops/reviewer separation intact: ops mutates
     # run state, reviewer approves the gate, neither holds both.
-    profile = load_profiles_from_location(_PROFILE_PATH)["langevc-standard"]
+    profile = load_profiles_from_location(_PROFILE_PATH)["example-standard"]
     assert profile.role_can("ops", "can_mutate_run_state") is True
     assert profile.role_can("ops", "can_approve_gate") is False
     assert profile.role_can("reviewer", "can_approve_gate") is True
@@ -104,7 +104,7 @@ def test_one_mapping_stays_profiles_plus_mapping_not_cross_product():
     # so four harnesses referencing it map to that one profile via a table — the
     # cross-product is never materialised into the file.
     profiles = load_profiles_from_location(_PROFILE_PATH)
-    assert set(profiles) == {"langevc-standard"}
+    assert set(profiles) == {"example-standard"}
 
 
 def test_location_is_documented_in_the_file():
@@ -112,7 +112,7 @@ def test_location_is_documented_in_the_file():
     # where the file is read from without reading library code.
     text = _PROFILE_PATH.read_text(encoding="utf-8")
     assert "load_profiles_from_location" in text
-    assert "profiles/langevc-standard.yaml" in text
+    assert "profiles/example-standard.yaml" in text
 
 
 if __name__ == "__main__":
