@@ -63,8 +63,15 @@ def _extract_answer(envelope: dict, requested_model: str) -> AttributedResponse:
     inferred from the request. When a router omits the field, we fall back to
     the requested model and keep the record cheap — but we never fabricate a
     model that did not answer.
+
+    An empty completion is a failure, not an answer: a reasoning model whose
+    budget went to reasoning yields ``choices[0].message.content == ""``. That
+    raises here — in the one place every provider funnels through — instead of
+    being passed on as a valid answer.
     """
     content = envelope["choices"][0]["message"]["content"]
+    if not content:
+        raise RuntimeError("model returned an empty completion")
     answering_model = envelope.get("model") or requested_model
     return AttributedResponse(content, requested_model=requested_model, answering_model=answering_model)
 
