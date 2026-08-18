@@ -15,6 +15,7 @@ strategy.md
 
 # Session state file (worktree-local, never committed)
 .swci-state.md
+.swroute-state.md
 
 # Debug/exploration scripts and generated artifacts
 *.debug*

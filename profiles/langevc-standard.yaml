@@ -1,0 +1,44 @@
+# SkillWeave routing profile: the operator's standard case.
+#
+# This file is DATA, loaded through skillweave.routing.harness.load_profiles_from_location.
+# It is looked up at, and only at, the location the caller passes to that function.
+# There is no repository-wide default directory: a caller names the path, and this
+# file lives here under profiles/langevc-standard.yaml so the operator has a stable,
+# documented place to point at. To load it:
+#
+#     from skillweave.routing.harness import load_profiles_from_location
+#     profiles = load_profiles_from_location("profiles/langevc-standard.yaml")
+#
+# A harness name is deliberately ABSENT from this file. A profile is referenced by
+# any number of harnesses, so the harness -> profile relationship lives in the
+# harness's own mapping (HarnessProfileMap), never in the profile. Four harnesses on
+# three profiles stay three profiles plus one mapping, not twelve entries.
+
+name: langevc-standard
+tier: balanced
+limits:
+  timeout: 60.0
+  max_retries: 1
+  min_models_required: 2
+  on_model_failure: skip
+roles:
+  observer:
+    # In place: no tool spec, so this role runs in the current harness and is
+    # recorded as an InPlaceRecord, never launched.
+    observer: true
+    capabilities:
+      can_observe_run: true
+  ops:
+    model: faigate/deepseek-v4-pro
+    tool:
+      name: opencode
+      launch_command: /opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -
+    capabilities:
+      can_mutate_run_state: true
+  reviewer:
+    model: faigate/deepseek-v4-pro
+    tool:
+      name: opencode
+      launch_command: /opt/homebrew/bin/opencode run --model faigate/deepseek-v4-pro -
+    capabilities:
+      can_approve_gate: true
