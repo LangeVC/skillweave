@@ -233,7 +233,9 @@ class SQLiteRunStore(RunStore):
                 run_id TEXT NOT NULL,
                 resolved_path TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                released_at TEXT
+                released_at TEXT,
+                lease_until TEXT,
+                heartbeat_at TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_write_scope_claims_run
                 ON write_scope_claims(run_id);
@@ -602,13 +604,16 @@ class SQLiteRunStore(RunStore):
         run_id: str,
         scope_paths: list[str],
         claim_id: Optional[str] = None,
+        ttl_seconds: int = 300,
     ) -> list["WriteScopeClaim"]:
-        """Claim a set of write scopes on behalf of a run, atomically.
+        """Claim a set of write scopes on behalf of a run, atomically, with a lease.
 
-        All scopes are resolved first (same resolution as 004), then every held
-        claim is checked for overlap. If ANY scope overlaps an existing held
-        claim, the whole claim operation fails and nothing is persisted. On
-        success the claims are committed in a single transaction.
+        All scopes are resolved first (same resolution as 004), then every HELD,
+        UNEXPIRED claim is checked for overlap. An EXPIRED claim is not a
+        conflict: it has been vacated by time and a new claimant may take the
+        scope over. If ANY scope overlaps a live claim, the whole operation
+        fails and nothing is persisted. On success the claims carry a lease
+        deadline (``lease_until``) and an initial heartbeat.
         """
         import uuid
 
@@ -617,6 +622,7 @@ class SQLiteRunStore(RunStore):
             ScopeConflictError,
             resolve_scope_path,
             paths_overlap,
+            default_lease_until,
         )
 
         resolved = [resolve_scope_path(p) for p in scope_paths]
@@ -624,18 +630,22 @@ class SQLiteRunStore(RunStore):
             return []
 
         now = datetime.now(timezone.utc).isoformat()
+        lease_until = default_lease_until(now, ttl_seconds)
 
         # Single transaction: check-then-insert is atomic, so two concurrent
         # claimers cannot both succeed on an overlapping scope.
         self._conn.execute("BEGIN IMMEDIATE")
         try:
             held_rows = self._conn.execute(
-                "SELECT claim_id, run_id, resolved_path FROM write_scope_claims "
+                "SELECT claim_id, run_id, resolved_path, lease_until FROM write_scope_claims "
                 "WHERE released_at IS NULL"
             ).fetchall()
 
             for new_path in resolved:
                 for row in held_rows:
+                    # An expired lease does not block a takeover.
+                    if row["lease_until"] is not None and row["lease_until"] <= now:
+                        continue
                     if paths_overlap(new_path, row["resolved_path"]):
                         raise ScopeConflictError(run_id, row["run_id"], new_path)
 
@@ -647,9 +657,10 @@ class SQLiteRunStore(RunStore):
                     cid = claim_id + "::" + str(i) if claim_id else str(uuid.uuid4())
                 self._conn.execute(
                     "INSERT INTO write_scope_claims "
-                    "(claim_id, run_id, resolved_path, created_at, released_at) "
-                    "VALUES (?, ?, ?, ?, NULL)",
-                    (cid, run_id, new_path, now),
+                    "(claim_id, run_id, resolved_path, created_at, released_at, "
+                    " lease_until, heartbeat_at) "
+                    "VALUES (?, ?, ?, ?, NULL, ?, ?)",
+                    (cid, run_id, new_path, now, lease_until, now),
                 )
                 claims.append(WriteScopeClaim(
                     claim_id=cid,
@@ -657,6 +668,8 @@ class SQLiteRunStore(RunStore):
                     resolved_path=new_path,
                     created_at=now,
                     released_at=None,
+                    lease_until=lease_until,
+                    heartbeat_at=now,
                 ))
 
             self._conn.commit()
@@ -665,6 +678,60 @@ class SQLiteRunStore(RunStore):
             raise
 
         return claims
+
+    def heartbeat_claim(self, claim_id: str, ttl_seconds: int = 300) -> bool:
+        """Renew a held claim's lease from now; fails if the claim is gone/released.
+
+        Returns True on renewal, False when the claim no longer exists or is
+        already released (a coordinator that lost its claim cannot renew it).
+        """
+        from .write_scope import default_lease_until
+        now = datetime.now(timezone.utc).isoformat()
+        lease_until = default_lease_until(now, ttl_seconds)
+        cur = self._conn.execute(
+            "UPDATE write_scope_claims SET heartbeat_at = ?, lease_until = ? "
+            "WHERE claim_id = ? AND released_at IS NULL",
+            (now, lease_until, claim_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def try_takeover(self, claim_id: str, new_run_id: str, ttl_seconds: int = 300) -> bool:
+        """Take over a claim whose lease expired or is already released.
+
+        Succeeds only when the claim is void (released) or its lease has
+        expired; a live claim is never silently stolen. On success the claim is
+        re-bound to ``new_run_id`` with a fresh lease. Returns True on takeover.
+        """
+        from .write_scope import default_lease_until
+        now = datetime.now(timezone.utc).isoformat()
+        lease_until = default_lease_until(now, ttl_seconds)
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._conn.execute(
+                "SELECT run_id, lease_until, released_at FROM write_scope_claims "
+                "WHERE claim_id = ?", (claim_id,)
+            ).fetchone()
+            if row is None:
+                self._conn.rollback()
+                return False
+            live = row["released_at"] is None and (
+                row["lease_until"] is None or row["lease_until"] > now
+            )
+            if live:
+                self._conn.rollback()
+                return False
+            self._conn.execute(
+                "UPDATE write_scope_claims SET run_id = ?, released_at = NULL, "
+                "created_at = ?, lease_until = ?, heartbeat_at = ? "
+                "WHERE claim_id = ?",
+                (new_run_id, now, lease_until, now, claim_id),
+            )
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        return True
 
     def release_write_scope(self, claim_id: str) -> bool:
         """Release a held (claim_id, run_id) claim; idempotent.
@@ -708,6 +775,8 @@ class SQLiteRunStore(RunStore):
                 resolved_path=r["resolved_path"],
                 created_at=r["created_at"],
                 released_at=r["released_at"],
+                lease_until=r["lease_until"],
+                heartbeat_at=r["heartbeat_at"],
             )
             for r in rows
         ]

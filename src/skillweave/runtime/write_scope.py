@@ -73,10 +73,18 @@ class WriteScopeClaim:
     resolved_path: str
     created_at: str
     released_at: Optional[str] = None
+    lease_until: Optional[str] = None
+    heartbeat_at: Optional[str] = None
 
     @property
     def held(self) -> bool:
         return self.released_at is None
+
+    def is_expired(self, now: str) -> bool:
+        """A held claim is expired when its lease has a deadline in the past."""
+        if self.released_at is not None or self.lease_until is None:
+            return False
+        return now >= self.lease_until
 
     def to_dict(self) -> dict:
         return {
@@ -85,4 +93,13 @@ class WriteScopeClaim:
             "resolved_path": self.resolved_path,
             "created_at": self.created_at,
             "released_at": self.released_at,
+            "lease_until": self.lease_until,
+            "heartbeat_at": self.heartbeat_at,
         }
+
+
+def default_lease_until(now: str, ttl_seconds: int = 300) -> str:
+    """Compute a lease deadline ``ttl_seconds`` after ``now`` (ISO timestamps)."""
+    from datetime import datetime, timedelta
+    dt = datetime.fromisoformat(now)
+    return (dt + timedelta(seconds=ttl_seconds)).isoformat()
