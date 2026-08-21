@@ -24,6 +24,7 @@ class SessionEnvelope:
     allowed_write_scopes: list[str]
     state_vocabulary: list[str]
     forbidden_transitions: list[str]
+    pin_sha: str = ""
     pinned_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self):
@@ -38,6 +39,7 @@ class SessionEnvelope:
             "allowed_write_scopes": self.allowed_write_scopes,
             "state_vocabulary": self.state_vocabulary,
             "forbidden_transitions": self.forbidden_transitions,
+            "pin_sha": self.pin_sha,
             "pinned_at": self.pinned_at,
         }
 
@@ -60,8 +62,28 @@ class SessionEnvelope:
         return False
 
     def is_read_only_operation(self, action: str) -> bool:
-        read_only_prefixes = ("get_", "list_", "read_", "search_", "analyze_", "diagnose_", "check_")
+        read_only_prefixes = ("get_", "list_", "read_", "search_", "diagnose_", "check_")
+        # Mutating verbs always win over any read-looking prefix. In particular
+        # ``analyze_and_delete`` (or any ``*_delete``/``*_write``/``*_mutate``)
+        # must NEVER be released as read-only merely because it also matches a
+        # benign prefix. The name does not decide authorization.
+        mutating_markers = ("delete", "write", "mutate", "commit", "push", "merge", "release", "purge", "truncate")
+        lowered = action.lower()
+        if any(m in lowered for m in mutating_markers):
+            return False
         return any(action.startswith(p) for p in read_only_prefixes)
+
+    def mutation_requires_capability(self, action: str) -> bool:
+        """Return True when ``action`` is a destructive/mutating operation that
+        must fail closed unless an explicit capability grants it.
+
+        ``analyze_and_delete`` is the canonical case: the ``analyze_`` prefix
+        looks read-only, but the ``_delete`` suffix is destructive. It is never
+        released by name; only an explicit ``allowed_actions`` grant passes.
+        """
+        lowered = action.lower()
+        return "_delete" in lowered or lowered.endswith("delete") or lowered in ("purge", "truncate")
+
 
 
 @dataclass
@@ -85,6 +107,10 @@ def run_preflight(
     actual_repo: str,
     actual_branch: str,
     actual_product: Optional[str] = None,
+    actual_worktree: Optional[str] = None,
+    actual_sha: Optional[str] = None,
+    actual_role: Optional[str] = None,
+    actual_scope: Optional[str] = None,
 ) -> PreflightResult:
     mismatches = []
     warnings = []
@@ -135,6 +161,36 @@ def run_preflight(
             "field": "branch",
             "expected": envelope.branch,
             "actual": actual_branch,
+        })
+
+    # Worktree / SHA / role are compared when the caller supplies the actual
+    # value; a mismatch is release-blocking, exactly like repo and branch.
+    if actual_worktree is not None and envelope.worktree and actual_worktree != envelope.worktree:
+        mismatches.append({
+            "field": "worktree",
+            "expected": envelope.worktree,
+            "actual": actual_worktree,
+        })
+
+    if actual_sha is not None and envelope.pin_sha and actual_sha != envelope.pin_sha:
+        mismatches.append({
+            "field": "sha",
+            "expected": envelope.pin_sha,
+            "actual": actual_sha,
+        })
+
+    if actual_role is not None and envelope.role and actual_role != envelope.role:
+        mismatches.append({
+            "field": "role",
+            "expected": envelope.role,
+            "actual": actual_role,
+        })
+
+    if actual_scope is not None and not envelope.validate_write_scope(actual_scope):
+        mismatches.append({
+            "field": "scope",
+            "expected": "within allowed_write_scopes",
+            "actual": actual_scope,
         })
 
     if mismatches:
