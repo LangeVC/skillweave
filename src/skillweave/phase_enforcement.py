@@ -5,16 +5,13 @@ from typing import Optional
 from datetime import datetime
 
 from .phase_detection import detect_phase
+from .lifecycle import skill_membership
 
-PHASE_MEMBERSHIP: dict[str, list[str]] = {
-    "skillweave-blueprint": ["discovery", "blueprint"],
-    "skillweave-promptchain-generate": ["blueprint", "design"],
-    "skillweave-promptchain-validate": ["blueprint", "design", "build"],
-    "skillweave-promptchain-execute": ["build", "release"],
-    "skillweave-releasechain": ["build", "release", "launch"],
-    "frontend-design": ["design", "build"],
-    "last30days": ["discovery"],
-}
+# The skill→phase mapping is the canonical lifecycle source; it is derived here,
+# not hardcoded (SW-LC-001). ``last30days`` no longer appears because it is not a
+# shipped skill. The ``PHASE_MEMBERSHIP`` name is kept so existing callers of the
+# module keep working against the same surface.
+PHASE_MEMBERSHIP: dict[str, list[str]] = skill_membership()
 
 
 def check_phase(skill_name: str, project_root: str = ".", override: bool = False) -> dict:

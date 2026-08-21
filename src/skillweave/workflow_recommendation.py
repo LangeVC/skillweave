@@ -1,35 +1,16 @@
 from typing import Optional
 
 from .phase_detection import detect_phase, detect_phase_with_detail
+from .lifecycle import bundle_map
 
-BUNDLE_MAP = {
-    "full-lifecycle": {
-        "name": "Full Lifecycle",
-        "phases": ["discovery", "blueprint", "design", "build", "release", "launch", "post-release"],
-        "entry_requires": "A project idea or problem statement",
-    },
-    "discovery-to-blueprint": {
-        "name": "Discovery to Blueprint",
-        "phases": ["discovery", "blueprint"],
-        "entry_requires": "A problem or opportunity to explore",
-    },
-    "design-and-build": {
-        "name": "Design and Build",
-        "phases": ["design", "build"],
-        "entry_requires": "Valid PRD or clear requirements + architecture decisions",
-    },
-    "release-and-launch": {
-        "name": "Release and Launch",
-        "phases": ["release", "launch"],
-        "entry_requires": "Working code in releasable state + passing tests",
-    },
-    "post-release-improvement": {
-        "name": "Post-Release Improvement",
-        "phases": ["post-release", "blueprint", "build"],
-        "entry_requires": "Live production system + feedback or metrics available",
-    },
-}
+# The bundle definitions are the canonical lifecycle source; they are imported,
+# not duplicated here (SW-LC-001).
+BUNDLE_MAP = bundle_map()
 
+# The phase→bundle resolution is recommendation POLICY (which bundle to offer for
+# a detected phase), not a declaration of the lifecycle. It stays explicit so the
+# recommender's ordering — the first candidate wins — is not silently reordered
+# by the canonical bundle list.
 DETECTED_PHASE_TO_BUNDLE: dict[str, list[str]] = {
     "discovery": ["discovery-to-blueprint", "full-lifecycle"],
     "blueprint": ["design-and-build", "full-lifecycle"],

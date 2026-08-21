@@ -160,17 +160,17 @@ class TestIntegration:
 
 class TestBundleYAML:
     def test_bundles_yaml_exists(self):
-        assert os.path.exists(".skillweave/lifecycle/bundles.yaml")
+        assert os.path.exists(".skillweave/bundles.yaml")
 
     def test_phases_yaml_exists(self):
-        assert os.path.exists(".skillweave/lifecycle/phases.yaml")
+        assert os.path.exists(".skillweave/phases.yaml")
 
     def test_phases_yaml_has_7_phases(self):
-        with open(".skillweave/lifecycle/phases.yaml") as f:
+        with open(".skillweave/phases.yaml") as f:
             data = yaml.safe_load(f)
         assert len(data["phases"]) == 7
 
     def test_bundles_yaml_has_5_bundles(self):
-        with open(".skillweave/lifecycle/bundles.yaml") as f:
+        with open(".skillweave/bundles.yaml") as f:
             data = yaml.safe_load(f)
         assert len(data["bundles"]) == 5
