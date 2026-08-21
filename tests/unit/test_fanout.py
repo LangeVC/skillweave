@@ -120,14 +120,35 @@ def test_per_child_models_resolve_distinctly():
 
     assert len(result.children) == 2
     assert result.children[0].model == "faigate/deepseek-v4-pro"
-    assert result.children[1].model == "coding-fast"
+    assert result.children[1].model == "faigate:coding-fast"
     assert result.children[0].model != result.children[1].model
     # The resolved model travels into each child's own process result/evidence,
     # not the shared parent model.
     assert result.children[0].result.model == "faigate/deepseek-v4-pro"
-    assert result.children[1].result.model == "coding-fast"
+    assert result.children[1].result.model == "faigate:coding-fast"
     assert result.children[0].result.metadata["model"] == "faigate/deepseek-v4-pro"
-    assert result.children[1].result.metadata["model"] == "coding-fast"
+    assert result.children[1].result.metadata["model"] == "faigate:coding-fast"
+
+
+def test_per_child_different_routers_do_not_collapse():
+    # Two children delegated to DIFFERENT routers with the SAME scenario must
+    # resolve to distinct model ids; a bare-scenario resolution would collapse
+    # them into one model.
+    cmd = [sys.executable, "-c", "print('child')"]
+    result = fan_out_dispatch(
+        [cmd, cmd],
+        run_id="run-fanout-router-collapse",
+        subject_repo="skillweave",
+        subject_commit="abc123",
+        tool="opencode",
+        models=[
+            delegated("faigate", "auto"),
+            delegated("omniroute", "auto"),
+        ],
+        created_at="2026-08-19T00:00:00Z",
+    )
+    assert len(result.children) == 2
+    assert result.children[0].model != result.children[1].model
 
 
 def test_single_model_backward_compatible_lifts_to_concrete():
@@ -171,6 +192,7 @@ def _run_all() -> int:
         test_child_runs_and_raw_artifacts_stay_separate,
         test_failing_child_is_a_failure_not_a_silent_success,
         test_per_child_models_resolve_distinctly,
+        test_per_child_different_routers_do_not_collapse,
         test_single_model_backward_compatible_lifts_to_concrete,
     ]
     failed = 0

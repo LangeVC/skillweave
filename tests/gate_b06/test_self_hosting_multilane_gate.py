@@ -136,7 +136,7 @@ def _fixture_per_child_model() -> bool:
         return False
     return (
         result.children[0].model == "faigate/deepseek-v4-pro"
-        and result.children[1].model == "auto"
+        and result.children[1].model == "faigate:auto"
         and result.children[0].model != result.children[1].model
     )
 

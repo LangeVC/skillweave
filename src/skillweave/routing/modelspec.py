@@ -65,7 +65,12 @@ def concrete(model: str) -> ModelSpec:
     """
     if not model or not model.strip():
         raise ModelSpecError("concrete model spec requires a non-empty model id")
-    return ModelSpec(kind="concrete", model=model.strip())
+    body = model.strip()
+    if body.startswith("/") or body.endswith("/"):
+        raise ModelSpecError(
+            "concrete model spec requires a model body on both sides of a router delimiter"
+        )
+    return ModelSpec(kind="concrete", model=body)
 
 
 def delegated(router: str, scenario: str) -> ModelSpec:

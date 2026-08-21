@@ -548,12 +548,12 @@ def resolve_model_spec(spec: "object") -> str:
       documented in ``~/.config/opencode/opencode.json``. Delegation to faigate is
       done via those headers; a scenario like ``"auto"`` names the routing mode,
       while a scenario like ``"coding-fast"`` names a provider/header preference.
-      For faigate the resolved concrete id is the scenario string (the router keys
-      on it); the header mapping lives at the transport, not in this pure function.
-    * any other router (omniroute etc.) — reuse ``GenericRouterProvider``'s
-      base_url/api-key form via ``detect_providers()``/``get_best_provider()``;
-      the resolved id is ``<router>:<scenario>`` so the concrete provider path is
-      named and deterministic.
+      The header mapping lives at the transport, not in this pure function.
+    * any router — the resolved id is ``<router>:<scenario>`` so the concrete
+      provider path is named and deterministic. The router prefix preserves the
+      delegation identity: ``delegated('faigate','auto')`` and
+      ``delegated('omniroute','auto')`` never collapse to the same resolved
+      string, even though their scenarios match.
 
     The function is pure and deterministic given the spec + the provider list: no
     network call, no wall-clock, no global mutable state. It records what it
@@ -567,14 +567,12 @@ def resolve_model_spec(spec: "object") -> str:
     if kind == "delegated":
         router = spec.router
         scenario = spec.scenario
-        providers = detect_providers()
-        if router == "faigate" or router in providers:
-            # Faigate (or a router we can hand the scenario to directly): the
-            # concrete header the router uses IS the scenario — e.g. "auto" mode.
-            # It is deterministic and carries no invented provider.
-            return scenario
-        # A delegated, but not directly-served router still resolves deterministically
-        # to its base_url/api-key form via GenericRouterProvider's shape.
+        # Resolve to a router-scoped id that never collapses distinct
+        # (router, scenario) pairs. Two fan-out children delegated to different
+        # routers with the same scenario must yield different resolved ids; a
+        # bare scenario would collapse them. The adapter re-reads the router
+        # prefix at the transport (the header/mode mapping lives there), so the
+        # identity is preserved end to end.
         return f"{router}:{scenario}"
     raise ValueError(f"cannot resolve model spec of unknown kind {kind!r}")
 

@@ -42,6 +42,18 @@ def test_concrete_rejects_empty_or_whitespace():
             raise AssertionError(f"concrete({bad!r}) did not raise ModelSpecError")
 
 
+def test_concrete_rejects_router_delimiter_without_model_body():
+    # A value carrying the "/" router delimiter but no model body on either side
+    # is not a valid concrete id and must fall closed, matching the docstring.
+    for bad in ("faigate/", "/deepseek", "faigate:/", "/"):
+        try:
+            concrete(bad)
+        except ModelSpecError:
+            pass
+        else:
+            raise AssertionError(f"concrete({bad!r}) did not raise ModelSpecError")
+
+
 def test_delegated_rejects_empty_router_or_scenario():
     for router, scenario in (("", "auto"), ("faigate", ""), ("   ", "x"), ("x", "   ")):
         try:
@@ -89,30 +101,45 @@ def test_resolve_model_spec_is_deterministic():
     c = concrete("faigate/deepseek-v4-flash")
     assert resolve_model_spec(c) == "faigate/deepseek-v4-flash"
     assert resolve_model_spec(c) == resolve_model_spec(c)
-    # delegated faigate -> scenario (auto), deterministic across calls
+    # delegated -> "<router>:<scenario>", deterministic across calls, no network;
+    # the router prefix never collapses two differing routers to one id.
     d = delegated("faigate", "auto")
-    assert resolve_model_spec(d) == "auto"
+    assert resolve_model_spec(d) == "faigate:auto"
     assert resolve_model_spec(d) == resolve_model_spec(d)
-    # delegated non-faigate, non-detected -> "<router>:<scenario>", deterministic,
-    # no network. (A detected router hands the scenario through directly.)
     e = delegated("nonesuch-router", "coding-fast")
     assert resolve_model_spec(e) == "nonesuch-router:coding-fast"
 
 
+def test_resolve_model_spec_preserves_router_identity():
+    # Two fan-out children with the same scenario but different routers must
+    # resolve to DIFFERENT ids; a bare scenario would collapse them.
+    assert resolve_model_spec(delegated("omniroute", "auto")) != resolve_model_spec(
+        delegated("faigate", "auto")
+    )
+    assert resolve_model_spec(delegated("openrouter", "pro")) != resolve_model_spec(
+        delegated("omniroute", "pro")
+    )
+    # An unresolved router still surfaces deterministically (no fall-back to a
+    # wrong model).
+    assert resolve_model_spec(delegated("nonesuch", "coding-fast")) == "nonesuch:coding-fast"
+
+
 def test_resolve_model_spec_record_keeps_requested_and_resolved():
     record = resolve_model_spec_record(delegated("faigate", "auto"))
-    assert record.resolved == "auto"
+    assert record.resolved == "faigate:auto"
     assert record.requested.kind == "delegated"
 
 
 def _run_all() -> int:
     tests = [
         test_concrete_rejects_empty_or_whitespace,
+        test_concrete_rejects_router_delimiter_without_model_body,
         test_delegated_rejects_empty_router_or_scenario,
         test_concrete_and_delegated_are_distinct_variants,
         test_to_dict_round_trip_does_not_collapse_variants,
         test_from_value_lifts_a_string_and_passes_a_spec,
         test_resolve_model_spec_is_deterministic,
+        test_resolve_model_spec_preserves_router_identity,
         test_resolve_model_spec_record_keeps_requested_and_resolved,
     ]
     failed = 0
