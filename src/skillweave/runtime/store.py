@@ -10,6 +10,7 @@ from .registry import ArtifactReceipt, EvidenceQuality
 from .handoff import ColdStartBundle, HandoffOffer
 
 import sqlite3
+import json
 
 
 class RunStateModel(str, Enum):
@@ -230,6 +231,17 @@ class SQLiteRunStore(RunStore):
                 ON write_scope_claims(run_id);
             CREATE INDEX IF NOT EXISTS idx_write_scope_claims_path
                 ON write_scope_claims(resolved_path);
+            CREATE TABLE IF NOT EXISTS outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT,
+                created_at TEXT NOT NULL,
+                delivered_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_outbox_run
+                ON outbox(run_id, id);
         """)
         self._conn.commit()
         self._migrate_legacy_states()
@@ -323,6 +335,66 @@ class SQLiteRunStore(RunStore):
         role: Optional[str] = None,
         stop_reason: Optional[str] = None,
     ) -> RunRecord:
+        return self._transition_impl(
+            run_id=run_id,
+            target_state=target_state,
+            expected_state=expected_state,
+            expected_version=expected_version,
+            reason=reason,
+            role=role,
+            stop_reason=stop_reason,
+            event_type=None,
+            event_payload=None,
+            idempotency_key=None,
+        )
+
+    def transition_with_event(
+        self,
+        run_id: str,
+        target_state: str,
+        expected_state: str,
+        expected_version: int,
+        event_type: str,
+        event_payload: Optional[dict] = None,
+        reason: str = "",
+        role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> RunRecord:
+        """Atomically transition a run AND enqueue one journal outbox event.
+
+        The run-state update, its ``transitions_log`` row, and the pending
+        journal event (written to the ``outbox`` table) commit in a single
+        ``BEGIN IMMEDIATE`` transaction. A crash before commit rolls back all
+        three; after commit all three are durably present. This is the
+        unit-of-work/outbox contract: state and event never diverge.
+        """
+        return self._transition_impl(
+            run_id=run_id,
+            target_state=target_state,
+            expected_state=expected_state,
+            expected_version=expected_version,
+            reason=reason,
+            role=role,
+            stop_reason=stop_reason,
+            event_type=event_type,
+            event_payload=event_payload,
+            idempotency_key=idempotency_key,
+        )
+
+    def _transition_impl(
+        self,
+        run_id: str,
+        target_state: str,
+        expected_state: Optional[str],
+        expected_version: Optional[int],
+        reason: str = "",
+        role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
+        event_type: Optional[str] = None,
+        event_payload: Optional[dict] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> RunRecord:
         existing = self.get_run(run_id)
         if existing is None:
             raise InvalidTransitionError(
@@ -373,28 +445,83 @@ class SQLiteRunStore(RunStore):
         if stop_reason is not None:
             merged_metadata["stop_reason"] = stop_reason
 
-        cur = self._conn.execute(
-            """UPDATE runs SET state = ?, version = ?, updated_at = ?, ended_at = ?,
-               role = COALESCE(?, role), metadata = ?
-               WHERE run_id = ? AND version = ?""",
-            (
-                target_state, new_version, now, ended_at, role,
-                json.dumps(merged_metadata), run_id, expected_version,
-            ),
-        )
+        # One transaction: the run-state UPDATE, its transitions_log row, and
+        # (when requested) a pending outbox event commit together. A crash at
+        # any point rolls all of them back, so state and journal event never
+        # diverge (SW-UOW-001).
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = self._conn.execute(
+                """UPDATE runs SET state = ?, version = ?, updated_at = ?, ended_at = ?,
+                   role = COALESCE(?, role), metadata = ?
+                   WHERE run_id = ? AND version = ?""",
+                (
+                    target_state, new_version, now, ended_at, role,
+                    json.dumps(merged_metadata), run_id, expected_version,
+                ),
+            )
+            if cur.rowcount == 0:
+                raise VersionConflictError(run_id, expected_version, existing.version)
 
-        if cur.rowcount == 0:
-            raise VersionConflictError(run_id, expected_version, existing.version)
+            self._conn.execute(
+                """INSERT INTO transitions_log
+                   (run_id, from_state, to_state, reason, version, timestamp, role)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (run_id, existing.state, target_state, reason, new_version, now, role or existing.role),
+            )
 
-        self._conn.execute(
-            """INSERT INTO transitions_log
-               (run_id, from_state, to_state, reason, version, timestamp, role)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (run_id, existing.state, target_state, reason, new_version, now, role or existing.role),
-        )
-        self._conn.commit()
+            if event_type is not None:
+                self._conn.execute(
+                    """INSERT INTO outbox
+                       (run_id, event_type, payload, idempotency_key, created_at, delivered_at)
+                       VALUES (?, ?, ?, ?, ?, NULL)""",
+                    (run_id, event_type, json.dumps(event_payload or {}), idempotency_key, now),
+                )
+
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
 
         return self.get_run(run_id)
+
+    # ---- Outbox (unit-of-work delivery) ----
+
+    def list_outbox(self, run_id: Optional[str] = None, include_delivered: bool = False) -> list[dict]:
+        """List outbox events queued by atomic transitions.
+
+        By default returns only UNDELIVERED events (``delivered_at IS NULL``).
+        Used by the journal's dispatcher to consume what the UOW produced.
+        """
+        sql = "SELECT * FROM outbox"
+        clauses = []
+        params: list = []
+        if run_id is not None:
+            clauses.append("run_id = ?")
+            params.append(run_id)
+        if not include_delivered:
+            clauses.append("delivered_at IS NULL")
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY id"
+        rows = self._conn.execute(sql, params).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            if isinstance(d.get("payload"), str):
+                d["payload"] = json.loads(d["payload"])
+            out.append(d)
+        return out
+
+    def mark_outbox_delivered(self, outbox_id: int) -> bool:
+        """Mark one outbox event as delivered; idempotent."""
+        now = datetime.now(timezone.utc).isoformat()
+        cur = self._conn.execute(
+            "UPDATE outbox SET delivered_at = ? WHERE id = ?",
+            (now, outbox_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
 
     def list_runs(self, state: Optional[str] = None, limit: int = 100) -> list[RunRecord]:
         if state:
