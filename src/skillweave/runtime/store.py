@@ -203,8 +203,12 @@ class SQLiteRunStore(RunStore):
                 transformation_history TEXT NOT NULL DEFAULT '[]',
                 quality TEXT NOT NULL DEFAULT '{}',
                 supersedes TEXT,
-                metadata TEXT NOT NULL DEFAULT '{}'
+                metadata TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_evidence_idempotency
+                ON evidence(idempotency_key)
+                WHERE idempotency_key IS NOT NULL;
             CREATE TABLE IF NOT EXISTS handoffs (
                 handoff_id TEXT PRIMARY KEY,
                 from_role TEXT NOT NULL,
@@ -218,8 +222,12 @@ class SQLiteRunStore(RunStore):
                 offered_at TEXT NOT NULL,
                 accepted_at TEXT,
                 completed_at TEXT,
-                metadata TEXT NOT NULL DEFAULT '{}'
+                metadata TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_handoffs_idempotency
+                ON handoffs(idempotency_key)
+                WHERE idempotency_key IS NOT NULL;
             CREATE TABLE IF NOT EXISTS write_scope_claims (
                 claim_id TEXT PRIMARY KEY,
                 run_id TEXT NOT NULL,
@@ -728,47 +736,65 @@ class SQLiteRunStore(RunStore):
 
     # ---- Evidence persistence ----
 
-    def save_evidence(self, receipt: ArtifactReceipt) -> ArtifactReceipt:
+    def save_evidence(self, receipt: ArtifactReceipt, idempotency_key: Optional[str] = None) -> ArtifactReceipt:
         import json
         if receipt.created_at is None:
             receipt.created_at = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            """INSERT OR REPLACE INTO evidence
-               (artifact_id, sha256, schema_version, producer_command,
-                subject_repo, subject_commit, created_at, evidence_type, purpose,
-                method, system_source, sensitivity, retention,
-                transformation_history, quality, supersedes, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                receipt.artifact_id,
-                receipt.sha256,
-                receipt.schema_version,
-                receipt.producer_command,
-                receipt.subject_repo,
-                receipt.subject_commit,
-                receipt.created_at,
-                receipt.evidence_type,
-                receipt.purpose,
-                receipt.method,
-                receipt.system_source,
-                receipt.sensitivity,
-                receipt.retention,
-                json.dumps(receipt.transformation_history),
-                json.dumps(receipt.quality.to_dict()),
-                receipt.supersedes,
-                json.dumps(receipt.metadata),
-            ),
-        )
-        self._conn.commit()
+        # Content-addressing is the default idempotency: identical bytes share
+        # one canonical receipt regardless of how many writers raced.
+        key = idempotency_key if idempotency_key is not None else f"sha256:{receipt.sha256}"
+        try:
+            self._conn.execute(
+                """INSERT INTO evidence
+                   (artifact_id, sha256, schema_version, producer_command,
+                    subject_repo, subject_commit, created_at, evidence_type, purpose,
+                    method, system_source, sensitivity, retention,
+                    transformation_history, quality, supersedes, metadata,
+                    idempotency_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    receipt.artifact_id,
+                    receipt.sha256,
+                    receipt.schema_version,
+                    receipt.producer_command,
+                    receipt.subject_repo,
+                    receipt.subject_commit,
+                    receipt.created_at,
+                    receipt.evidence_type,
+                    receipt.purpose,
+                    receipt.method,
+                    receipt.system_source,
+                    receipt.sensitivity,
+                    receipt.retention,
+                    json.dumps(receipt.transformation_history),
+                    json.dumps(receipt.quality.to_dict()),
+                    receipt.supersedes,
+                    json.dumps(receipt.metadata),
+                    key,
+                ),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            # A concurrent writer recorded the same key; resolve to the winner.
+            self._conn.rollback()
+            row = self._conn.execute(
+                "SELECT * FROM evidence WHERE idempotency_key = ?", (key,)
+            ).fetchone()
+            if row is None:
+                raise
+            return self._row_to_evidence(row)
         return receipt
 
     def get_evidence(self, artifact_id: str) -> Optional[ArtifactReceipt]:
-        import json
         row = self._conn.execute(
             "SELECT * FROM evidence WHERE artifact_id = ?", (artifact_id,)
         ).fetchone()
         if row is None:
             return None
+        return self._row_to_evidence(row)
+
+    def _row_to_evidence(self, row) -> ArtifactReceipt:
+        import json
         history = json.loads(row["transformation_history"]) if row["transformation_history"] else []
         quality = json.loads(row["quality"]) if row["quality"] else {}
         meta = json.loads(row["metadata"]) if row["metadata"] else {}
@@ -801,42 +827,56 @@ class SQLiteRunStore(RunStore):
 
     # ---- Handoff persistence ----
 
-    def save_handoff(self, offer: HandoffOffer) -> HandoffOffer:
+    def save_handoff(self, offer: HandoffOffer, idempotency_key: Optional[str] = None) -> HandoffOffer:
         import json
         if offer.offered_at is None:
             offer.offered_at = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            """INSERT OR REPLACE INTO handoffs
-               (handoff_id, from_role, to_role, scope, cold_start_bundle,
-                allowed_actions, input_digests, state, owner, offered_at,
-                accepted_at, completed_at, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                offer.handoff_id,
-                offer.from_role,
-                offer.to_role,
-                offer.scope,
-                json.dumps(offer.cold_start_bundle.to_dict()),
-                json.dumps(offer.allowed_actions),
-                json.dumps(offer.input_digests),
-                offer.state,
-                offer.owner,
-                offer.offered_at,
-                offer.accepted_at,
-                offer.completed_at,
-                json.dumps(offer.metadata),
-            ),
-        )
-        self._conn.commit()
+        key = idempotency_key if idempotency_key is not None else f"handoff:{offer.handoff_id}"
+        try:
+            self._conn.execute(
+                """INSERT INTO handoffs
+                   (handoff_id, from_role, to_role, scope, cold_start_bundle,
+                    allowed_actions, input_digests, state, owner, offered_at,
+                    accepted_at, completed_at, metadata, idempotency_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    offer.handoff_id,
+                    offer.from_role,
+                    offer.to_role,
+                    offer.scope,
+                    json.dumps(offer.cold_start_bundle.to_dict()),
+                    json.dumps(offer.allowed_actions),
+                    json.dumps(offer.input_digests),
+                    offer.state,
+                    offer.owner,
+                    offer.offered_at,
+                    offer.accepted_at,
+                    offer.completed_at,
+                    json.dumps(offer.metadata),
+                    key,
+                ),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            self._conn.rollback()
+            row = self._conn.execute(
+                "SELECT * FROM handoffs WHERE idempotency_key = ?", (key,)
+            ).fetchone()
+            if row is None:
+                raise
+            return self._row_to_handoff(row)
         return offer
 
     def get_handoff(self, handoff_id: str) -> Optional[HandoffOffer]:
-        import json
         row = self._conn.execute(
             "SELECT * FROM handoffs WHERE handoff_id = ?", (handoff_id,)
         ).fetchone()
         if row is None:
             return None
+        return self._row_to_handoff(row)
+
+    def _row_to_handoff(self, row) -> HandoffOffer:
+        import json
         bundle = json.loads(row["cold_start_bundle"]) if row["cold_start_bundle"] else {}
         actions = json.loads(row["allowed_actions"]) if row["allowed_actions"] else []
         digests = json.loads(row["input_digests"]) if row["input_digests"] else {}
