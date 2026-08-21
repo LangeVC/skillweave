@@ -330,6 +330,12 @@ class SQLiteRunStore(RunStore):
                 extra={"reason": "run does not exist"},
             )
 
+        # Version is the CAS authority and is checked BEFORE state so that a
+        # stale writer (one whose read-snapshot has been superseded) always
+        # fails with a VersionConflictError, never a misleading transition.
+        if expected_version is not None and existing.version != expected_version:
+            raise VersionConflictError(run_id, expected_version, existing.version)
+
         if expected_state is not None and existing.state != expected_state:
             raise InvalidTransitionError(
                 existing.state, target_state, run_id,
@@ -339,9 +345,6 @@ class SQLiteRunStore(RunStore):
                     "reason": "run is not in the expected state",
                 },
             )
-
-        if expected_version is not None and existing.version != expected_version:
-            raise VersionConflictError(run_id, expected_version, existing.version)
 
         if role and hasattr(self, '_authority_guard') and self._authority_guard is not None:
             from skillweave.runtime.authority import can_mutate_run_state
