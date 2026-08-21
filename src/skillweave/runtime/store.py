@@ -317,31 +317,75 @@ class SQLiteRunStore(RunStore):
         if record.version < 1:
             record.version = 1
 
-        # Version-safe write. The compare-and-swap authority is the persisted
-        # run's version: a stale writer whose snapshot was superseded must NOT
-        # be allowed to silently overwrite a newer committed transition. The
-        # only non-CAS path is the initial create (no persisted row yet), which
-        # has no authority to steal. Once a row exists, ``record.version`` must
-        # match exactly or we raise, so a v1 snapshot cannot revert a v2 row.
-        existing = self.get_run(record.run_id)
-        if existing is not None and existing.version != record.version:
-            raise VersionConflictError(
-                record.run_id, record.version, existing.version
-            )
+        # CAS-safe write with the version guard enforced in SQL, not in a
+        # Python check-then-act. Mirrors ``transition()`` (BEGIN IMMEDIATE +
+        # guarded write + rowcount == 0 -> VersionConflictError), generalized to
+        # cover both the bootstrap create and the overwrite.
+        #
+        # ``record.version`` is the writer's authoritative snapshot:
+        #
+        # * version 1 is the bootstrap CREATE. It is exclusive: the ``run_id``
+        #   PRIMARY KEY means two concurrent first-creates let exactly one
+        #   INSERT succeed and the loser raises via IntegrityError. A second
+        #   writer that finds the run already at version 1 is a duplicate
+        #   bootstrap, not a stale/valid overwrite, so it conflicts.
+        # * version >= 2 is an OVERWRITE. It atomically bumps to
+        #   ``record.version + 1`` under ``WHERE version = ?``; rowcount == 0
+        #   means the persisted version no longer equals the writer's snapshot,
+        #   so exactly one of N concurrent same-snapshot writers wins and the
+        #   other N-1 raise VersionConflictError.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            if record.version <= 1:
+                # Bootstrap create. ``run_id`` is the PRIMARY KEY, so a
+                # concurrent first-create collides here and exactly one wins.
+                try:
+                    self._conn.execute(
+                        """INSERT INTO runs
+                           (run_id, root_run_id, parent_run_id, state, version,
+                            created_at, updated_at, ended_at, role, metadata)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            record.run_id, record.root_run_id, record.parent_run_id,
+                            record.state, 1,
+                            record.created_at, record.updated_at, record.ended_at,
+                            record.role, json.dumps(record.metadata),
+                        ),
+                    )
+                except sqlite3.IntegrityError:
+                    winner = self._conn.execute(
+                        "SELECT version FROM runs WHERE run_id = ?", (record.run_id,)
+                    ).fetchone()
+                    actual = winner["version"] if winner is not None else 1
+                    raise VersionConflictError(record.run_id, 1, actual)
+                new_version = 1
+            else:
+                new_version = record.version + 1
+                cur = self._conn.execute(
+                    """UPDATE runs SET
+                       root_run_id = ?, parent_run_id = ?, state = ?, version = ?,
+                       updated_at = ?, ended_at = ?, role = ?, metadata = ?
+                       WHERE run_id = ? AND version = ?""",
+                    (
+                        record.root_run_id, record.parent_run_id, record.state,
+                        new_version, record.updated_at, record.ended_at,
+                        record.role, json.dumps(record.metadata),
+                        record.run_id, record.version,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    persisted = self._conn.execute(
+                        "SELECT version FROM runs WHERE run_id = ?", (record.run_id,)
+                    ).fetchone()
+                    actual = persisted["version"] if persisted is not None else record.version
+                    raise VersionConflictError(record.run_id, record.version, actual)
 
-        self._conn.execute(
-            """INSERT OR REPLACE INTO runs
-               (run_id, root_run_id, parent_run_id, state, version,
-                created_at, updated_at, ended_at, role, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                record.run_id, record.root_run_id, record.parent_run_id,
-                record.state, record.version,
-                record.created_at, record.updated_at, record.ended_at,
-                record.role, json.dumps(record.metadata),
-            ),
-        )
-        self._conn.commit()
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
+
+        record.version = new_version
         return record
 
     def set_authority_guard(self, guard) -> None:
