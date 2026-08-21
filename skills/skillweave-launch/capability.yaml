@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-launch
-version: 1.3.0
+version: 1.3.6
 description: Coordinate pre-launch checks, environment deployment, communication, verification, and launch metrics.
 author: SkillWeave Team
 license: Apache-2.0
