@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
+import hashlib
 import json
 import uuid
 
@@ -25,6 +26,9 @@ class ColdStartBundle:
     branch: str
     target_role: str
     sequence_id: str
+    base_sha: str = ""
+    remote_sha: str = ""
+    fingerprint: Optional[dict[str, Any]] = None
 
     def to_dict(self):
         return {
@@ -37,6 +41,9 @@ class ColdStartBundle:
             "branch": self.branch,
             "target_role": self.target_role,
             "sequence_id": self.sequence_id,
+            "base_sha": self.base_sha,
+            "remote_sha": self.remote_sha,
+            "fingerprint": self.fingerprint,
         }
 
     def validate_digests(self, prd_digest: str, chain_digest: str) -> list[str]:
@@ -46,6 +53,40 @@ class ColdStartBundle:
         if self.chain_digest != chain_digest:
             errors.append(f"Chain digest mismatch: expected {self.chain_digest}, got {chain_digest}")
         return errors
+
+    def integrity_bytes(self) -> bytes:
+        """Canonical byte encoding of every released field. The self-integrity
+        digest covers base/remote SHA and the environment fingerprint, so a
+        bundle whose recorded SHA or fingerprint was edited no longer matches
+        its own digest.
+
+        NOTE: this digest is *not* the adversarial manipulation defence of
+        SW-RESUME-001. It pins the bundle's own fields to each other so a
+        fresh session can detect an internally inconsistent (edited) bundle.
+        The real reject/reconstruct guarantee lives in ``resume.manager``,
+        where the digest is re-derived from raw PRD/chain bytes and git
+        identity instead of trusting the serialized fields."""
+        payload = json.dumps(
+            {
+                "prd_uri": self.prd_uri,
+                "prd_digest": self.prd_digest,
+                "chain_uri": self.chain_uri,
+                "chain_digest": self.chain_digest,
+                "repo_uri": self.repo_uri,
+                "worktree_path": self.worktree_path,
+                "branch": self.branch,
+                "target_role": self.target_role,
+                "sequence_id": self.sequence_id,
+                "base_sha": self.base_sha,
+                "remote_sha": self.remote_sha,
+                "fingerprint": self.fingerprint,
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+        return payload
+
+    def integrity_digest(self) -> str:
+        return hashlib.sha256(self.integrity_bytes()).hexdigest()
 
 
 @dataclass
