@@ -38,11 +38,19 @@ _DEFAULT_EXECUTOR: Optional[Callable[..., Any]] = None
 
 @dataclass
 class LaneSpec:
-    """One ops lane: identity, command, and the role that may run it."""
+    """One ops lane: identity, command, and the role that may run it.
+
+    ``model`` is the lane's own ``ModelSpec`` — a concrete model (default
+    ``faigate/deepseek-v4-pro`` for Ops) or a delegated router+scenario for a
+    lane that declares an adversarial/review scenario. It is declaration data,
+    so the runner threads it into the fan-out without branching on which lane
+    uses which model.
+    """
 
     lane_id: str
     role: str = "ops"
     payload: str = ""
+    model: str = "faigate/deepseek-v4-pro"
 
 
 @dataclass
@@ -80,6 +88,7 @@ class SelfHostResult:
     committed_nodes: List[str]
     overlapped: bool
     reviews: List[ReviewRun] = field(default_factory=list)
+    lane_models: Dict[str, str] = field(default_factory=dict)
 
     @property
     def succeeded(self) -> bool:
@@ -121,6 +130,7 @@ class SelfHostRunner:
         #    worktree/session control: the executor starts and reaps them all.
         run = executor or self._real_fan_out
         lane_ids = [lane.lane_id for lane in fixture.ops_lanes]
+        lane_models = self._lane_model_map(fixture)
         committed = run(fixture, lane_ids)
 
         # 2. Commit each ops lane to the root DAG under the coordinator role.
@@ -165,29 +175,64 @@ class SelfHostRunner:
             committed_nodes=list(cursor.committed_nodes) if cursor else list(_completed),
             overlapped=bool(len(lane_ids) > 1),
             reviews=reviews,
+            lane_models=lane_models,
         )
+
+    def _lane_model_map(self, fixture: SelfHostFixture) -> Dict[str, str]:
+        """Resolve each ops lane's ``ModelSpec`` to its concrete model id.
+
+        The declaration is data: a lane's ``model`` string is lifted to a
+        ``concrete`` spec (Ops lanes), or a lane may carry a delegated value. The
+        resolved id is recorded per lane so the result is reviewable — which
+        model answered which lane is a fact, not a guess.
+        """
+        from skillweave.routing.modelspec import ModelSpec, from_value
+        from skillweave.routing.faigate_adapter import resolve_model_spec
+
+        out: Dict[str, str] = {}
+        for lane in fixture.ops_lanes:
+            value = lane.model if lane.model else "faigate/deepseek-v4-pro"
+            if isinstance(value, ModelSpec):
+                spec = value
+            elif isinstance(value, str):
+                spec = from_value(value)
+            else:
+                spec = from_value(value)
+            out[lane.lane_id] = resolve_model_spec(spec)
+        return out
 
     def _real_fan_out(self, fixture: SelfHostFixture, lane_ids: Sequence[str]) -> List[str]:
         """The real canonical fan-out seam for two ops lanes.
 
         Uses ``skillweave.fanout.fan_out_dispatch`` with two real subprocesses
         that each produce output, so overlap and per-child separation are
-        measured facts rather than claims.
+        measured facts rather than claims. Each lane resolves its own model
+        spec (a concrete ``faigate/deepseek-v4-pro`` for Ops lanes; a
+        fixture-declared adversarial/review lane may use ``deepseek-v4-flash``
+        or a delegated ``faigate/auto`` scenario) rather than a hard-coded
+        shared model.
         """
         import sys
         from skillweave.fanout import fan_out_dispatch
+        from skillweave.routing.modelspec import ModelSpec, from_value
 
         commands = [
             [sys.executable, "-c", f"print('selfhost-lane-{lid}')"]
             for lid in lane_ids
         ]
+        lane_by_id = {lane.lane_id: lane for lane in fixture.ops_lanes}
+        specs = []
+        for lid in lane_ids:
+            lane = lane_by_id.get(lid)
+            value = lane.model if lane is not None and lane.model else "faigate/deepseek-v4-pro"
+            specs.append(value if isinstance(value, ModelSpec) else from_value(value))
         result = fan_out_dispatch(
             commands,
             run_id=f"{fixture.sequence_id}-ops",
             subject_repo="skillweave",
             subject_commit=fixture.base_sha,
             tool="opencode",
-            model="faigate/deepseek-v4-pro",
+            models=specs,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         if not result.succeeded:

@@ -115,11 +115,44 @@ def test_review_release_fails_on_sha_mismatch_and_blocks_dependent_lane():
         store.close()
 
 
+def test_flash_and_pro_lanes_resolve_distinct_models():
+    # A fixture with a flash (adversarial/review) lane and a pro lane -> the
+    # per-lane resolved models differ, proving the lane model is threaded into
+    # the fan-out as data rather than a hard-coded shared model.
+    with tempfile.TemporaryDirectory() as tmp:
+        store = SQLiteRunStore(str(Path(tmp) / "store.db"))
+        runner = SelfHostRunner(Coordinator(store), ReviewGate())
+
+        fixture = SelfHostFixture(
+            sequence_id="selfhost-modelspec",
+            wave="W4",
+            base_sha=FULL_A,
+            ops_lanes=[
+                LaneSpec(lane_id="L-pro", model="faigate/deepseek-v4-pro"),
+                LaneSpec(lane_id="L-flash", model="faigate/deepseek-v4-flash"),
+            ],
+            reviews=[
+                ReviewSpec(review_id="R1", pinned_remote_sha=FULL_A, subject_lane="L-pro"),
+                ReviewSpec(review_id="R2", pinned_remote_sha=FULL_A, subject_lane="L-flash"),
+            ],
+            dependent_lane=LaneSpec(lane_id="LD"),
+        )
+
+        result = runner.execute(fixture)
+
+        assert result.succeeded is True
+        assert result.lane_models["L-pro"] == "faigate/deepseek-v4-pro"
+        assert result.lane_models["L-flash"] == "faigate/deepseek-v4-flash"
+        assert result.lane_models["L-pro"] != result.lane_models["L-flash"]
+        store.close()
+
+
 def _run_all() -> int:
     tests = [
         test_two_ops_lanes_two_reviews_and_dependent_lane_run_without_manual_control,
         test_real_fan_out_produces_measured_overlap_and_true_success,
         test_review_release_fails_on_sha_mismatch_and_blocks_dependent_lane,
+        test_flash_and_pro_lanes_resolve_distinct_models,
     ]
     failed = 0
     for t in tests:

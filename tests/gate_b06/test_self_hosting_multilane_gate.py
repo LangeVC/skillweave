@@ -42,6 +42,7 @@ from skillweave.runtime.store import SQLiteRunStore  # noqa: E402
 from skillweave.runtime.authority import AuthorityGuard  # noqa: E402
 from skillweave.review import ReviewGate, ReviewGateError  # noqa: E402
 from skillweave.coordinator import Coordinator  # noqa: E402
+from skillweave.routing.modelspec import concrete, delegated  # noqa: E402
 
 GATE_TOKEN = "SELF_HOSTING_MULTI_LANE_PASS"
 
@@ -121,6 +122,25 @@ def _fixture_review() -> bool:
     return True
 
 
+def _fixture_per_child_model() -> bool:
+    # SW-FANOUT-001-MODELSPEC: each fan-out child resolves its own model, and the
+    # child carries which model actually answered (not a shared parent model).
+    cmd = [sys.executable, "-c", "print('child')"]
+    result = fan_out_dispatch(
+        [cmd, cmd], run_id="gate-model", subject_repo="skillweave",
+        subject_commit=FULL_A, tool="opencode",
+        models=[concrete("faigate/deepseek-v4-pro"), delegated("faigate", "auto")],
+        created_at="2026-08-22T00:00:00Z",
+    )
+    if not result.succeeded or len(result.children) != 2:
+        return False
+    return (
+        result.children[0].model == "faigate/deepseek-v4-pro"
+        and result.children[1].model == "auto"
+        and result.children[0].model != result.children[1].model
+    )
+
+
 def _fixture_coordinator_kill() -> bool:
     with tempfile.TemporaryDirectory() as tmp:
         db = str(Path(tmp) / "store.db")
@@ -151,6 +171,7 @@ _FIXTURES = [
     ("sha", _fixture_sha),
     ("review", _fixture_review),
     ("coordinator-kill", _fixture_coordinator_kill),
+    ("per-child-model", _fixture_per_child_model),
 ]
 
 

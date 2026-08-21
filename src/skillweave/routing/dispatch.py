@@ -68,6 +68,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Union
 
 from skillweave.routing.profile import ToolSpec
+from skillweave.routing.modelspec import ModelSpec
 from skillweave.runtime.runner_adapter import ProcessResult, run_command
 from skillweave.runtime.registry import (
     ArtifactReceipt,
@@ -382,7 +383,8 @@ def fan_out(
     run_id: str,
     subject_repo: str,
     subject_commit: str,
-    model: str,
+    model: Optional[str] = None,
+    models: Optional[Sequence[ModelSpec]] = None,
     tool: str,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
@@ -392,8 +394,14 @@ def fan_out(
     This is the dispatch-surface seam for dependency-ready fan-out. It delegates
     the process concerns to ``skillweave.fanout.fan_out_dispatch``, which starts
     every command as a real process before reaping any, so two workers overlap
-    in time. Nothing here branches on the tool, the launch command, the
-    arguments, or the work: it passes all of them through to the same path.
+    in time.
+
+    Per-child model freedom (SW-FANOUT-001-MODELSPEC): ``models`` is an optional
+    list of ``ModelSpec`` aligned to ``commands`` — one concrete id or delegated
+    router+scenario per child. When absent, the single ``model`` (backward
+    compatible) is lifted to ``concrete(model)`` for every child. Nothing here
+    branches on the tool, the launch command, the arguments, or the work: it
+    passes all of them through to the same path.
     """
     from skillweave.fanout import fan_out_dispatch
 
@@ -404,6 +412,7 @@ def fan_out(
         subject_commit=subject_commit,
         tool=tool,
         model=model,
+        models=models,
         created_at=created_at,
         cwd=cwd,
     )

@@ -24,6 +24,7 @@ if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
 from skillweave.fanout import FanOutResult, fan_out_dispatch  # noqa: E402
+from skillweave.routing.modelspec import concrete, delegated  # noqa: E402
 
 
 def _overlap_cmd(marker_dir: str, name: str, sleep_s: str) -> list[str]:
@@ -98,6 +99,53 @@ def test_child_runs_and_raw_artifacts_stay_separate():
     assert a1.metadata["run_id"] == result.children[1].child_run_id
 
 
+def test_per_child_models_resolve_distinctly():
+    # Two children with DIFFERENT models -> each FanOutChild.model is distinct
+    # and correct; a delegated spec resolves. This is the per-child model freedom
+    # (SW-FANOUT-001-MODELSPEC): no shared parent model collapses two lanes into
+    # one.
+    cmd = [sys.executable, "-c", "print('child')"]
+    result = fan_out_dispatch(
+        [cmd, cmd],
+        run_id="run-fanout-modelspec",
+        subject_repo="skillweave",
+        subject_commit="abc123",
+        tool="opencode",
+        models=[
+            concrete("faigate/deepseek-v4-pro"),
+            delegated("faigate", "coding-fast"),
+        ],
+        created_at="2026-08-19T00:00:00Z",
+    )
+
+    assert len(result.children) == 2
+    assert result.children[0].model == "faigate/deepseek-v4-pro"
+    assert result.children[1].model == "coding-fast"
+    assert result.children[0].model != result.children[1].model
+    # The resolved model travels into each child's own process result/evidence,
+    # not the shared parent model.
+    assert result.children[0].result.model == "faigate/deepseek-v4-pro"
+    assert result.children[1].result.model == "coding-fast"
+    assert result.children[0].result.metadata["model"] == "faigate/deepseek-v4-pro"
+    assert result.children[1].result.metadata["model"] == "coding-fast"
+
+
+def test_single_model_backward_compatible_lifts_to_concrete():
+    # A single `model: str` still works unchanged and is applied to every child.
+    cmd = [sys.executable, "-c", "print('child')"]
+    result = fan_out_dispatch(
+        [cmd, cmd],
+        run_id="run-fanout-bw",
+        subject_repo="skillweave",
+        subject_commit="abc123",
+        tool="opencode",
+        model="model-xyz-7",
+        created_at="2026-08-19T00:00:00Z",
+    )
+    assert len(result.children) == 2
+    assert all(c.model == "model-xyz-7" for c in result.children)
+
+
 def test_failing_child_is_a_failure_not_a_silent_success():
     ok = [sys.executable, "-c", "print('ok')"]
     bad = [sys.executable, "-c", "import sys; sys.exit(5)"]
@@ -122,6 +170,8 @@ def _run_all() -> int:
         test_two_processes_overlap_in_time,
         test_child_runs_and_raw_artifacts_stay_separate,
         test_failing_child_is_a_failure_not_a_silent_success,
+        test_per_child_models_resolve_distinctly,
+        test_single_model_backward_compatible_lifts_to_concrete,
     ]
     failed = 0
     for t in tests:

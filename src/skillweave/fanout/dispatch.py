@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional, Sequence, Tuple
 
 from skillweave.runtime.runner_adapter import start_process, ProcessResult, RunningProcess
+from skillweave.routing.modelspec import ModelSpec, from_value
 
 
 @dataclass
@@ -30,13 +31,18 @@ class FanOutChild:
 
     ``child_run_id`` is distinct per child (never the parent's). ``artifact`` is
     the child's own ``ArtifactReceipt`` over its captured stdout, so two
-    children never share a raw artifact. The raw bytes are kept here so overlap
-    (and separation) can be asserted without a second re-run.
+    children never share a raw artifact. ``model`` is the child's own resolved
+    model string (never the shared parent model): each child may answer from a
+    different model, and the child carries which one it actually used.
+
+    The raw bytes are kept here so overlap (and separation) can be asserted
+    without a second re-run.
     """
 
     child_run_id: str
     command: List[str]
     result: ProcessResult
+    model: str
     raw_bytes: bytes = b""
 
     @property
@@ -69,7 +75,8 @@ def fan_out_dispatch(
     subject_repo: str,
     subject_commit: str,
     tool: str,
-    model: str,
+    model: Optional[str] = None,
+    models: Optional[Sequence[ModelSpec]] = None,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
 ) -> FanOutResult:
@@ -79,15 +86,38 @@ def fan_out_dispatch(
     Each worker runs under ``<run_id>-<index>`` (a distinct child run identity)
     and produces its own raw artifact; nothing is shared between children.
 
-    ``tool`` and ``model`` are required and carry no default (same contract as
-    ``runner_adapter``). A worker that dies without a result is a failure with a
-    message, never a silent success — the child's ``ProcessResult.succeeded``
-    carries that fact.
+    Each child resolves its own model:
+
+    * ``models`` (optional) is a list of ``ModelSpec`` aligned to ``commands`` —
+      one concrete id or delegated router+scenario per child. Each child's spec
+      is resolved to a concrete model string and threaded into that child's own
+      ``start_process`` call, so two children may answer from different models.
+    * ``model`` (optional) is the backward-compatible single model: it is lifted
+      to ``concrete(model)`` for *every* child, preserving the prior contract
+      that a single ``model`` applies to all. It is ignored when ``models`` is
+      given.
+
+    At least one of ``model`` / ``models`` must be supplied. A worker that dies
+    without a result is a failure with a message, never a silent success — the
+    child's ``ProcessResult.succeeded`` carries that fact.
     """
     created_at = created_at or datetime.now(timezone.utc).isoformat()
 
     if not commands:
         return FanOutResult(children=[], overlapped=False)
+
+    if models is not None:
+        if len(models) != len(commands):
+            raise ValueError(
+                f"per-child model spec count {len(models)} != command count {len(commands)}"
+            )
+        specs = list(models)
+    else:
+        if model is None:
+            raise ValueError("fan_out_dispatch requires 'model' or 'models'")
+        specs = [from_value(model) for _ in commands]
+
+    resolved_models = [_resolve_spec(spec) for spec in specs]
 
     handles: List[Tuple[int, RunningProcess, List[str]]] = []
     for index, argv in enumerate(commands):
@@ -98,7 +128,7 @@ def fan_out_dispatch(
             subject_repo=subject_repo,
             subject_commit=subject_commit,
             tool=tool,
-            model=model,
+            model=resolved_models[index],
             created_at=created_at,
             cwd=cwd,
         )
@@ -114,6 +144,7 @@ def fan_out_dispatch(
                 child_run_id=f"{run_id}-{index}",
                 command=argv,
                 result=result,
+                model=resolved_models[index],
                 raw_bytes=result.stdout or b"",
             )
         )
@@ -123,3 +154,10 @@ def fan_out_dispatch(
     overlapped = len(commands) > 1
 
     return FanOutResult(children=children, overlapped=overlapped)
+
+
+def _resolve_spec(spec: ModelSpec) -> str:
+    """Resolve a child's ``ModelSpec`` to its concrete model string."""
+    from skillweave.routing.faigate_adapter import resolve_model_spec
+
+    return resolve_model_spec(spec)

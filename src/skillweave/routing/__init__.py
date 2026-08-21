@@ -40,6 +40,7 @@ from .faigate_adapter import (  # noqa: F401
     CouncilProvider,
     FaigateProvider,
     ModelInfo,
+    ModelResolution,
     ROUTER_PROFILES,
     detect_providers,
     get_best_provider,
@@ -47,7 +48,20 @@ from .faigate_adapter import (  # noqa: F401
     list_detected_providers,
     list_profiles,
     known_model_ids,
+    resolve_model_spec,
+    resolve_model_spec_record,
     resolve_tier,
+)
+
+# The per-child model specification type (SW-FANOUT-001-MODELSPEC): a fan-out
+# child may resolve its own model — either a concrete id or a delegated
+# router + scenario — instead of sharing one parent model.
+from .modelspec import (  # noqa: F401
+    ModelSpec,
+    ModelSpecError,
+    concrete,
+    delegated,
+    from_value,
 )
 
 # The tool-agnostic dispatch seam (SW-RT-001): a role's tool is launched, the
@@ -107,6 +121,14 @@ __all__ = [
     "list_detected_providers",
     "list_profiles",
     "known_model_ids",
+    "resolve_model_spec",
+    "resolve_model_spec_record",
+    "ModelResolution",
+    "ModelSpec",
+    "ModelSpecError",
+    "concrete",
+    "delegated",
+    "from_value",
     "resolve_tier",
     "DispatchFailure",
     "DispatchResult",
