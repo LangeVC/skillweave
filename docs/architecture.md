@@ -1,55 +1,91 @@
 # Architecture
 
-## Core Concepts
+SkillWeave 1.3.7 — self-hosting, multi-lane runtime.
 
-### Ralph Loop State Machine
-SkillWeave v0.4.4+ implements a 9-state execution flow:
-1. **Preflight**: Validate sequence, check prerequisites
-2. **Batch Selection**: Group steps into executable batches
-3. **Lane Plan**: Identify critical path vs sidecar lanes
-4. **Implement**: Execute steps with parallelization where safe
-5. **Verify**: Run verification (tests, linting, type checking)
-6. **Review Gate**: Binary gate decision (continue/fix/retry)
-7. **Fix/Retry**: Address issues with retry budget
-8. **Integrate**: Merge parallel lanes, resolve conflicts
-9. **Advance/Stop**: Move to next batch or complete execution
+This document describes the canonical run path and the skill layer as they are
+in this release. It is a pointer, not evidence: every claim here is backed by a
+machine check (see `tests/unit/test_doc_arch.py`), which scans this file for
+stale statements and verifies the diagram matches the call graph.
 
-### Write-Scope Based Parallelization
-- **Write Scope**: Explicit definition of which files/directories a step modifies
-- **Disjoint Scopes**: Parallel execution only allowed for steps with disjoint write scopes
-- **Single-Owner Surfaces**: Critical files (package.json, config files) owned by critical path
-- **Sidecar Lanes**: Parallelizable work (tests, docs, research) with independent write scopes
+## Canonical run path
 
-### Two-Axis Model
-- **Sequence Type**: `plan` (analysis only), `build` (implementation), `mixed` (both)
-- **Execution Mode**: `rex` (simple Plan→Implement→Review), `ralph_attended` (standard with human checkpoints), `ralph_overnight` (autonomous batch execution)
+A run flows through one authoritative integration path, never a hand-rolled
+sequence of primitive calls:
 
-### Binary Gate Policy
-Only accepts hard completion signals:
-- `tests passed`: All tests pass
-- `verifier passed`: Linting, type checking, static analysis pass
-- `continue`: Explicit human approval to proceed
-Soft signals like "looks good" are rejected.
-
-## Skill Layer Architecture
-
-### Five Integrated Skills
-1. **Blueprint Skill**: PRD creation with complexity analysis
-2. **PromptChain Generate**: Two-axis sequence generation
-3. **PromptChain Validate**: Parallelization readiness validation
-4. **PromptChain Execute**: Ralph Loop state machine execution
-5. **ReleaseChain Skill**: Ralph Loop-powered development pipeline
-
-### Execution Flow
 ```
-Blueprint → Generate → Validate → Execute → ReleaseChain
-    ↓           ↓          ↓          ↓           ↓
-  PRD      Sequence   Validated   Executed    Production
-           with type   sequence    results    ready code
-           & mode
+  Run → Journal → Raw Artifact → Receipt → Verification → Gate
 ```
 
-### Agent-Agnostic Design
-- **Capability-based routing**: Tasks assigned to agents based on declared capabilities
-- **Multi-agent installation**: Single installer supports 9+ AI coding agents
-- **Format adaptation**: Correct file/directory formats for each agent type
+Each stage is a distinct, addressable record kind, and none is synthesized:
+
+1. **Run** — a persisted `RunRecord` in the CAS-backed run store, with a
+   compare-and-set version so two writers on the same version cannot both win.
+2. **Journal** — ordered, gap-free journal events bound to the run.
+3. **Raw Artifact** — content-addressed worker bytes, resolvable back to exact
+   bytes.
+4. **Receipt** — the `ArtifactReceipt` bound to the run and the raw digest.
+5. **Verification** — a separate verifier's verdict, provenance-bound to the
+   subject receipt (never the producer's self-claim).
+6. **Gate** — the completion-contract state derived from the verified outcome;
+   exit 0 with empty output is `inconclusive`, never a gate pass.
+
+The Run Application Service (`skillweave/runsvc`) is the single seam a caller
+drives end to end. It does not import or invoke any simulated executor: the
+canonical path runs real subprocesses, and any `simulate_*` placeholder is
+quarantined behind `skillweave/legacy`.
+
+## Multi-lane control plane
+
+The control plane is a set of cooperating written surfaces, each with a single
+owner:
+
+* **Coordinator** (`skillweave/coordinator`) — the sole writer of the root DAG
+  cursor. Workers and reviewers may read it but cannot mutate it; a fresh
+  coordinator resumes the persisted cursor.
+* **Workspace** (`skillweave/workspace`) — exclusive worktrees/branches
+  materialised from a full base SHA, with attestation and deterministic cleanup.
+* **Fan-out** (`skillweave/fanout`) — dependency-ready fan-out: independent
+  workers start before any is reaped, so overlap is a measured fact.
+* **Review** (`skillweave/review`) — a review child-run starts only after
+  push/fetch against a pinned full remote SHA; a SHA mismatch or a write attempt
+  blocks it before it starts.
+* **Self-hosting** (`skillweave/selfhost`) — SkillWeave drives its own small
+  sequence (two ops lanes, two reviews, one dependent lane) with no manual
+  worktree or session control.
+
+## Execution flow
+
+```
+ Blueprint → Generate → Validate → Execute → ReleaseChain
+     ↓          ↓          ↓          ↓          ↓
+   PRD      Sequence   Validated   Executed    Production
+            with type   sequence    results    ready code
+            & mode
+```
+
+## Skill layer
+
+Thirteen skills ship as `skillweave-*` packages:
+
+1. `skillweave-blueprint`
+2. `skillweave-council`
+3. `skillweave-design`
+4. `skillweave-discovery`
+5. `skillweave-launch`
+6. `skillweave-lifecycle`
+7. `skillweave-observe`
+8. `skillweave-post-release`
+9. `skillweave-promptchain-execute`
+10. `skillweave-promptchain-generate`
+11. `skillweave-promptchain-validate`
+12. `skillweave-releasechain`
+13. `skillweave-repo-health`
+
+## Agent-agnostic design
+
+* **Capability-based routing**: tasks are assigned by declared capability, never
+  by a hard-coded harness name or a name-prefix rule.
+* **Read-only review**: the reviewer role is technically read-only; mutation
+  attempts are blocked before execution.
+* **Model independence is not claimed**: Ops and Review run under one routed
+  model; the split is a cost/routing choice, not an independence statement.
