@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-promptchain-execute
-version: 1.3.0
+version: 1.3.6
 description: Execute SkillWeave sequences with dependency-aware batches, controlled parallelism, retries, evidence, and binary gates.
 author: SkillWeave Team
 license: Apache-2.0
