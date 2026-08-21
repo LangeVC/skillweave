@@ -103,8 +103,8 @@ ROLE_CAPABILITY_MATRIX = {
         "can_release": False,
         "can_tag": False,
         "can_delegate": False,
-        "is_read_only": False,
-        "forbidden_transitions": ["release", "tag", "merge"],
+        "is_read_only": True,
+        "forbidden_transitions": ["release", "tag", "merge", "write", "commit", "push"],
     },
     Role.OBSERVER.value: {
         "can_mutate_run_state": False,
@@ -214,7 +214,10 @@ class AuthorityGuard:
     def can_perform(self, role: str, action: str) -> bool:
         caps = self._capability_matrix.get(role, {})
         if caps.get("is_read_only", False):
-            if action in ("approve_gate", "mutate_run_state", "tag", "release", "merge"):
+            if action in (
+                "mutate_run_state", "tag", "release", "merge",
+                "write", "commit", "push",
+            ):
                 return False
         if action == "approve_gate":
             return caps.get("can_approve_gate", False)
@@ -228,7 +231,24 @@ class AuthorityGuard:
             return caps.get("can_release", False)
         if action == "delegate":
             return caps.get("can_delegate", False)
+        # Any write/commit/push action is denied unless the role is explicitly
+        # non-read-only AND carries the matching capability. Reviewers fail
+        # closed here: they are read-only and never granted these.
+        if action == "write":
+            return (not caps.get("is_read_only", False)) and caps.get("can_mutate_run_state", False)
+        if action == "commit":
+            return (not caps.get("is_read_only", False)) and caps.get("can_mutate_run_state", False)
+        if action == "push":
+            return (not caps.get("is_read_only", False)) and caps.get("can_mutate_run_state", False)
         return False
+
+    def assert_can_write(self, role: str, action: str = "write") -> None:
+        """Raise AuthorityError unless ``role`` may perform ``action``.
+
+        Used at the seam before any reviewer write/commit/push/mutation is
+        attempted, so the block happens BEFORE execution, not after."""
+        if not self.can_perform(role, action):
+            raise AuthorityError(role, action, f"Role '{role}' is read-only or lacks '{action}'")
 
     def approve(
         self,
