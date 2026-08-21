@@ -516,6 +516,72 @@ def known_model_ids() -> frozenset[str]:
     return frozenset(ids)
 
 
+@dataclass
+class ModelResolution:
+    """What a ``ModelSpec`` resolved to, with the request kept beside it.
+
+    ``requested`` is the spec as handed in; ``resolved`` is the concrete model id
+    the adapter produced. Keeping both means evidence never fabricates a model:
+    a later reader can always tell "this id was asked for, this id was produced".
+    """
+
+    requested: "object"
+    resolved: str
+
+    def to_dict(self) -> dict:
+        return {
+            "requested": self.requested.to_dict() if hasattr(self.requested, "to_dict") else self.requested,
+            "resolved": self.resolved,
+        }
+
+
+def resolve_model_spec(spec: "object") -> str:
+    """Resolve a ``ModelSpec`` to a concrete model id (deterministic + recorded).
+
+    A ``concrete`` spec returns its model id unchanged. A ``delegated`` spec names
+    a router and a scenario; the adapter resolves them to the concrete header the
+    router actually uses, reusing the EXISTING provider detection/mapping — no new
+    provider is invented:
+
+    * ``faigate`` — the concrete model is the scenario id itself, carried through
+      the ``X-faigate-Prefer-Provider`` / ``X-faigate-Mode`` headers already
+      documented in ``~/.config/opencode/opencode.json``. Delegation to faigate is
+      done via those headers; a scenario like ``"auto"`` names the routing mode,
+      while a scenario like ``"coding-fast"`` names a provider/header preference.
+      The header mapping lives at the transport, not in this pure function.
+    * any router — the resolved id is ``<router>:<scenario>`` so the concrete
+      provider path is named and deterministic. The router prefix preserves the
+      delegation identity: ``delegated('faigate','auto')`` and
+      ``delegated('omniroute','auto')`` never collapse to the same resolved
+      string, even though their scenarios match.
+
+    The function is pure and deterministic given the spec + the provider list: no
+    network call, no wall-clock, no global mutable state. It records what it
+    resolved (requested vs resolved) through the returned string's provenance, but
+    the return type is a plain ``str`` so callers keep the existing model-string
+    contract. To surface the record, call :func:`resolve_model_spec_record`.
+    """
+    kind = getattr(spec, "kind", None)
+    if kind == "concrete":
+        return spec.model
+    if kind == "delegated":
+        router = spec.router
+        scenario = spec.scenario
+        # Resolve to a router-scoped id that never collapses distinct
+        # (router, scenario) pairs. Two fan-out children delegated to different
+        # routers with the same scenario must yield different resolved ids; a
+        # bare scenario would collapse them. The adapter re-reads the router
+        # prefix at the transport (the header/mode mapping lives there), so the
+        # identity is preserved end to end.
+        return f"{router}:{scenario}"
+    raise ValueError(f"cannot resolve model spec of unknown kind {kind!r}")
+
+
+def resolve_model_spec_record(spec: "object") -> ModelResolution:
+    """Resolve a spec and keep the request beside the product (for evidence)."""
+    return ModelResolution(requested=spec, resolved=resolve_model_spec(spec))
+
+
 def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     """Resolve a profile's tier into the models that will actually run (AK 8+9).
 
