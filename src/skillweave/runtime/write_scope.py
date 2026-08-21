@@ -103,3 +103,60 @@ def default_lease_until(now: str, ttl_seconds: int = 300) -> str:
     from datetime import datetime, timedelta
     dt = datetime.fromisoformat(now)
     return (dt + timedelta(seconds=ttl_seconds)).isoformat()
+
+
+class WriteSetConflictError(Exception):
+    """Raised when a worker's declared write-set overlaps another worker's.
+
+    The conflict is detected BEFORE the worker starts, so overlapping scopes
+    block startup rather than being discovered mid-flight."""
+    def __init__(self, worker_id: str, conflicting_worker: str, overlapping_path: str):
+        self.worker_id = worker_id
+        self.conflicting_worker = conflicting_worker
+        self.overlapping_path = overlapping_path
+        super().__init__(
+            f"write-set conflict: worker '{worker_id}' path '{overlapping_path}' "
+            f"overlaps worker '{conflicting_worker}'"
+        )
+
+
+class WriteSetManager:
+    """Declared write-sets with a conflict matrix, checked before worker start.
+
+    A worker declares the paths it will write. If any declared path overlaps a
+    path already held by a different in-flight worker, startup is blocked with
+    a :class:`WriteSetConflictError`. This is the pre-start write-set lock:
+    nothing runs with an overlapping scope, instead of failing mid-flight.
+    """
+
+    def __init__(self):
+        self._declared: dict[str, list[str]] = {}
+
+    def declare(self, worker_id: str, scope_paths: list[str]) -> None:
+        resolved = [resolve_scope_path(p) for p in scope_paths]
+        for other_id, other_paths in self._declared.items():
+            for other in other_paths:
+                for new_path in resolved:
+                    if paths_overlap(new_path, other):
+                        raise WriteSetConflictError(worker_id, other_id, new_path)
+        self._declared[worker_id] = resolved
+
+    def release(self, worker_id: str) -> None:
+        self._declared.pop(worker_id, None)
+
+    def conflicts_with(self, worker_id: str, scope_paths: list[str]) -> list[str]:
+        """Return the worker ids that would conflict, without mutating state."""
+        resolved = [resolve_scope_path(p) for p in scope_paths]
+        conflicts = []
+        for other_id, other_paths in self._declared.items():
+            if other_id == worker_id:
+                continue
+            for other in other_paths:
+                for new_path in resolved:
+                    if paths_overlap(new_path, other):
+                        conflicts.append(other_id)
+                        break
+                else:
+                    continue
+                break
+        return conflicts
