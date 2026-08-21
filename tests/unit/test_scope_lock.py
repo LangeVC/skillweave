@@ -47,6 +47,23 @@ def test_release_frees_scope_for_reclaim():
     mgr.declare("worker-b", ["src/a"])
 
 
+def test_declare_merges_prior_paths_not_replaces():
+    """SW-SCOPE-LOCK-001: a second declare must union into the first, not drop it."""
+    mgr = WriteSetManager()
+    mgr.declare("w1", ["src/a"])
+    mgr.declare("w1", ["src/b"])
+    # The worker's declared set must retain BOTH paths.
+    assert "src/a" in str(mgr._declared["w1"])
+    assert "src/b" in str(mgr._declared["w1"])
+    # And src/a is still protected: a second worker cannot claim it.
+    try:
+        mgr.declare("w2", ["src/a"])
+        assert False, "overlapping declaration after merge must still block"
+    except WriteSetConflictError as e:
+        assert e.worker_id == "w2"
+        assert e.conflicting_worker == "w1"
+
+
 if __name__ == "__main__":
     _tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failures = 0

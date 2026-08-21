@@ -126,6 +126,56 @@ def test_stale_writer_cannot_roll_back_a_newer_version():
         store.close()
 
 
+def test_stale_save_run_cannot_roll_back_a_newer_version():
+    """SW-STATE-001: save_run must be version-safe, not a silent INSERT OR REPLACE.
+
+    A stale writer that snapshotted authority at version 1 must not overwrite a
+    version-2 committed row (which would revert the authoritative run to v1 and
+    leave ``transitions_log`` disagreeing with the run row). Instead,
+    ``save_run`` must raise ``VersionConflictError`` and leave the row intact.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = str(Path(tmp) / "store.db")
+        run_id = "run-save-rollback"
+        store = SQLiteRunStore(db_path=db_path)
+        store.save_run(_make_run(run_id))
+        store.transition(
+            run_id=run_id,
+            target_state=RunStateModel.IN_PROGRESS.value,
+            expected_state=RunStateModel.SANDBOX_PREFLIGHT.value,
+            expected_version=1,
+        )
+        assert store.get_run(run_id).version == 2
+
+        # A stale writer still holds the v1 snapshot and calls save_run with it.
+        stale = _make_run(run_id)
+        assert stale.version == 1
+
+        raised = False
+        try:
+            store.save_run(stale)
+        except VersionConflictError:
+            raised = True
+
+        assert raised, (
+            "expected VersionConflictError from save_run, but the stale v1 "
+            "writer silently rolled the authoritative run back"
+        )
+        final = store.get_run(run_id)
+        assert final.version == 2, "authoritative row must be unchanged"
+        assert final.state == RunStateModel.IN_PROGRESS.value
+        store.close()
+
+
+def test_save_run_initial_create_keeps_version_one():
+    """The non-CAS create path is preserved: an absent row saves at version 1."""
+    store = SQLiteRunStore(":memory:")
+    record = _make_run("run-create-001")
+    saved = store.save_run(record)
+    assert saved.version == 1
+    assert store.get_run("run-create-001").version == 1
+
+
 if __name__ == "__main__":
     _tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failures = 0

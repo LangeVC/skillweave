@@ -317,6 +317,18 @@ class SQLiteRunStore(RunStore):
         if record.version < 1:
             record.version = 1
 
+        # Version-safe write. The compare-and-swap authority is the persisted
+        # run's version: a stale writer whose snapshot was superseded must NOT
+        # be allowed to silently overwrite a newer committed transition. The
+        # only non-CAS path is the initial create (no persisted row yet), which
+        # has no authority to steal. Once a row exists, ``record.version`` must
+        # match exactly or we raise, so a v1 snapshot cannot revert a v2 row.
+        existing = self.get_run(record.run_id)
+        if existing is not None and existing.version != record.version:
+            raise VersionConflictError(
+                record.run_id, record.version, existing.version
+            )
+
         self._conn.execute(
             """INSERT OR REPLACE INTO runs
                (run_id, root_run_id, parent_run_id, state, version,

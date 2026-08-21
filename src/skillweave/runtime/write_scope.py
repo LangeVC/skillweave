@@ -135,11 +135,16 @@ class WriteSetManager:
     def declare(self, worker_id: str, scope_paths: list[str]) -> None:
         resolved = [resolve_scope_path(p) for p in scope_paths]
         for other_id, other_paths in self._declared.items():
+            if other_id == worker_id:
+                continue
             for other in other_paths:
                 for new_path in resolved:
                     if paths_overlap(new_path, other):
                         raise WriteSetConflictError(worker_id, other_id, new_path)
-        self._declared[worker_id] = resolved
+        # MERGE into the worker's existing set: a second declaration must not
+        # silently drop previously declared paths. Union, never replace.
+        existing = self._declared.get(worker_id, [])
+        self._declared[worker_id] = list(dict.fromkeys(existing + resolved))
 
     def release(self, worker_id: str) -> None:
         self._declared.pop(worker_id, None)
