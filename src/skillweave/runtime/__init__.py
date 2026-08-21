@@ -10,6 +10,7 @@ from .registry import (
     EvidenceType, EvidenceQualityAxis, EvidenceQuality,
     ArtifactReceipt, EvidenceFinding, EvidenceRegistry,
     MerkleSegment, _compute_merkle_root, _compute_segment_hash,
+    RawArtifactStore, ArtifactIntegrityError,
 )
 from .preflight import SessionEnvelope, PreflightResult, run_preflight
 from .handoff import ColdStartBundle, HandoffBroker, HandoffOffer, HandoffError
@@ -60,6 +61,8 @@ __all__ = [
     "MerkleSegment",
     "_compute_merkle_root",
     "_compute_segment_hash",
+    "RawArtifactStore",
+    "ArtifactIntegrityError",
     "SessionEnvelope",
     "PreflightResult",
     "run_preflight",
