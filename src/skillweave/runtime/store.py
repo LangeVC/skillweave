@@ -13,6 +13,23 @@ import sqlite3
 
 
 class RunStateModel(str, Enum):
+    """Canonical lowercase state vocabulary shared by code and schema.
+
+    Every persisted state value is lowercase. The enum member NAMES are
+    irrelevant to the vocabulary (they never persist); the VALUES are the
+    canonical form. Formerly the vocabulary mixed snake_case lane states with
+    UPPERCASE sandbox sub-states (``SANDBOX_PREFLIGHT``, ``IN_PROGRESS``, ...)
+    and carried a legacy placeholder ``STOPPED_BEFORE_B06``. Both defects are
+    resolved here: values are lowercase-only, and ``STOPPED_BEFORE_B06`` is
+    gone — a run that halts before a gate records the *reason* in
+    ``metadata["stop_reason"]`` while entering a terminal state, never a
+    bespoke vocabulary value.
+
+    Terminal states are explicit via :meth:`terminal_values` and carry no
+    outgoing transitions. A run reaches a terminal state either by completing
+    the lane loop (``advance_or_stop``) or by failing (``failed``).
+    """
+
     PREFLIGHT = "preflight"
     BATCH_SELECTION = "batch_selection"
     LANE_PLAN = "lane_plan"
@@ -22,13 +39,21 @@ class RunStateModel(str, Enum):
     FIX_RETRY = "fix_retry"
     INTEGRATE = "integrate"
     ADVANCE_OR_STOP = "advance_or_stop"
-    SANDBOX_PREFLIGHT = "SANDBOX_PREFLIGHT"
-    IN_PROGRESS = "IN_PROGRESS"
-    PREFLIGHT_COMPLETE = "PREFLIGHT_COMPLETE"
-    BLOCKED_WAITING_FOR_GATE = "BLOCKED_WAITING_FOR_GATE"
-    REVIEW_REQUIRED = "REVIEW_REQUIRED"
-    FAILED = "FAILED"
-    STOPPED_BEFORE_B06 = "STOPPED_BEFORE_B06"
+    SANDBOX_PREFLIGHT = "sandbox_preflight"
+    IN_PROGRESS = "in_progress"
+    PREFLIGHT_COMPLETE = "preflight_complete"
+    BLOCKED_WAITING_FOR_GATE = "blocked_waiting_for_gate"
+    REVIEW_REQUIRED = "review_required"
+    FAILED = "failed"
+
+    @classmethod
+    def terminal_values(cls) -> frozenset[str]:
+        """Return the canonical values of every terminal (non-forward) state."""
+        return frozenset({cls.ADVANCE_OR_STOP.value, cls.FAILED.value})
+
+    @classmethod
+    def is_terminal(cls, value: str) -> bool:
+        return value in cls.terminal_values()
 
     @classmethod
     def legal_transitions(cls, from_state):
@@ -47,11 +72,27 @@ class RunStateModel(str, Enum):
             cls.PREFLIGHT_COMPLETE: [cls.IN_PROGRESS, cls.REVIEW_REQUIRED, cls.FAILED],
             cls.BLOCKED_WAITING_FOR_GATE: [cls.IN_PROGRESS, cls.REVIEW_REQUIRED, cls.FAILED],
             cls.REVIEW_REQUIRED: [cls.IN_PROGRESS, cls.FAILED],
-            cls.FAILED: [cls.SANDBOX_PREFLIGHT],
-            cls.STOPPED_BEFORE_B06: [cls.IN_PROGRESS],
+            cls.FAILED: [],
         }
         from_state = cls(from_state) if isinstance(from_state, str) else from_state
         return transition_map.get(from_state, [])
+
+
+#: Persistent stop reasons (recorded in ``metadata["stop_reason"]``, never as
+#: a dedicated state) that explain why a run entered a terminal state.
+STOP_REASONS: tuple[str, ...] = ("before_gate", "operator_halt", "dependency_failed")
+
+#: Legacy uppercase values that used to be persisted as states. Accepted during
+#: migration only, never produced as new vocabulary.
+LEGACY_STATE_ALIASES: dict[str, str] = {
+    "SANDBOX_PREFLIGHT": "sandbox_preflight",
+    "IN_PROGRESS": "in_progress",
+    "PREFLIGHT_COMPLETE": "preflight_complete",
+    "BLOCKED_WAITING_FOR_GATE": "blocked_waiting_for_gate",
+    "REVIEW_REQUIRED": "review_required",
+    "FAILED": "failed",
+    "STOPPED_BEFORE_B06": "advance_or_stop",
+}
 
 
 @dataclass
@@ -89,6 +130,7 @@ class RunStore(ABC):
         expected_version: int,
         reason: str = "",
         role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
     ) -> RunRecord:
         ...
 
@@ -190,6 +232,37 @@ class SQLiteRunStore(RunStore):
                 ON write_scope_claims(resolved_path);
         """)
         self._conn.commit()
+        self._migrate_legacy_states()
+
+    def _migrate_legacy_states(self) -> None:
+        """Migrate persisted legacy uppercase state values to canonical lowercase.
+
+        Idempotent and destructive in exactly one direction: any row whose
+        ``state`` is a legacy uppercase value (or which carries the removed
+        ``STOPPED_BEFORE_B06`` placeholder) is rewritten to the canonical
+        lowercase value. ``STOPPED_BEFORE_B06`` maps to the terminal
+        ``advance_or_stop`` state with ``metadata["stop_reason"] =
+        "before_gate"`` recorded, so the stop reason survives as data rather
+        than a bespoke vocabulary value. Runs already on canonical values are
+        left untouched. Called once per store open, before any caller reads.
+        """
+        import json
+        aliases = LEGACY_STATE_ALIASES
+        rows = self._conn.execute("SELECT run_id, state, metadata FROM runs").fetchall()
+        for row in rows:
+            legacy = row["state"]
+            if legacy not in aliases:
+                continue
+            canonical = aliases[legacy]
+            meta = json.loads(row["metadata"]) if row["metadata"] else {}
+            if legacy == "STOPPED_BEFORE_B06":
+                meta["stop_reason"] = "before_gate"
+            self._conn.execute(
+                "UPDATE runs SET state = ?, metadata = ? WHERE run_id = ?",
+                (canonical, json.dumps(meta), row["run_id"]),
+            )
+        if rows:
+            self._conn.commit()
 
     def _row_to_record(self, row) -> RunRecord:
         import json
@@ -248,6 +321,7 @@ class SQLiteRunStore(RunStore):
         expected_version: int,
         reason: str = "",
         role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
     ) -> RunRecord:
         existing = self.get_run(run_id)
         if existing is None:
@@ -286,14 +360,24 @@ class SQLiteRunStore(RunStore):
         now = datetime.now(timezone.utc).isoformat()
         new_version = existing.version + 1
         ended_at = existing.ended_at
-        if target_state in ("advance_or_stop", "FAILED"):
+        if RunStateModel.is_terminal(target_state):
             ended_at = now
+
+        # A terminal transition may carry a persistent stop reason. Record it
+        # in metadata (the vocabulary itself stays flat; the reason is data).
+        import json
+        merged_metadata = dict(existing.metadata or {})
+        if stop_reason is not None:
+            merged_metadata["stop_reason"] = stop_reason
 
         cur = self._conn.execute(
             """UPDATE runs SET state = ?, version = ?, updated_at = ?, ended_at = ?,
-               role = COALESCE(?, role)
+               role = COALESCE(?, role), metadata = ?
                WHERE run_id = ? AND version = ?""",
-            (target_state, new_version, now, ended_at, role, run_id, expected_version),
+            (
+                target_state, new_version, now, ended_at, role,
+                json.dumps(merged_metadata), run_id, expected_version,
+            ),
         )
 
         if cur.rowcount == 0:

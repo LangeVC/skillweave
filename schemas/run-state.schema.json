@@ -20,7 +20,7 @@
     },
     "state": {
       "type": "string",
-      "description": "Current state from the versioned status vocabulary. The enum mirrors RunStateModel exactly: any model state with a legal transition (e.g. STOPPED_BEFORE_B06) must be present here.",
+      "description": "Current state from the canonical lowercase status vocabulary. The enum mirrors RunStateModel exactly.",
       "enum": [
         "preflight",
         "batch_selection",
@@ -31,13 +31,12 @@
         "fix_retry",
         "integrate",
         "advance_or_stop",
-        "SANDBOX_PREFLIGHT",
-        "IN_PROGRESS",
-        "PREFLIGHT_COMPLETE",
-        "BLOCKED_WAITING_FOR_GATE",
-        "REVIEW_REQUIRED",
-        "FAILED",
-        "STOPPED_BEFORE_B06"
+        "sandbox_preflight",
+        "in_progress",
+        "preflight_complete",
+        "blocked_waiting_for_gate",
+        "review_required",
+        "failed"
       ]
     },
     "version": {

@@ -88,7 +88,7 @@ class TestSQLiteRunStore:
             expected_version=1,
             reason="preflight complete",
         )
-        assert result.state == "IN_PROGRESS"
+        assert result.state == "in_progress"
         assert result.version == 2
 
     def test_illegal_transition_raises(self):
@@ -263,7 +263,7 @@ class TestRunStateMachine:
             expected_version=1,
             reason="starting",
         )
-        assert result.state == "IN_PROGRESS"
+        assert result.state == "in_progress"
         assert result.version == 2
 
     def test_transition_with_implicit_expected(self):
@@ -279,7 +279,7 @@ class TestRunStateMachine:
             target_state=RunStateModel.PREFLIGHT_COMPLETE.value,
             reason="step 2",
         )
-        assert result.state == "PREFLIGHT_COMPLETE"
+        assert result.state == "preflight_complete"
         assert result.version == 3
 
     def test_illegal_transition_no_side_effect(self):
@@ -297,7 +297,7 @@ class TestRunStateMachine:
                 reason="illegal rewind",
             )
         record = sm.get_run("run-001")
-        assert record.state == "IN_PROGRESS"
+        assert record.state == "in_progress"
 
     def test_is_terminal(self):
         sm = RunStateMachine(SQLiteRunStore(":memory:"))
@@ -342,15 +342,15 @@ class TestRunStateMachine:
 
         terminated = sm.get_run("run-001")
         assert terminated.ended_at is not None
-        assert terminated.state == "FAILED"
+        assert terminated.state == "failed"
 
 
 class TestStatusVocabulary:
     def test_base_schema_accepts_valid_states(self):
         from skillweave.runtime.schema.vocabulary import get_vocabulary, validate_status
-        assert validate_status("IN_PROGRESS")
-        assert validate_status("SANDBOX_PREFLIGHT")
-        assert validate_status("FAILED")
+        assert validate_status("in_progress")
+        assert validate_status("sandbox_preflight")
+        assert validate_status("failed")
 
     def test_base_schema_rejects_drift_values(self):
         from skillweave.runtime.schema.vocabulary import get_vocabulary, validate_status, StatusRejectedError
@@ -389,7 +389,7 @@ class TestStatusVocabulary:
         from skillweave.runtime.schema.vocabulary import StatusVocabulary
         vocab = StatusVocabulary()
         try:
-            vocab.amend("IN_PROGRESS", "already exists", "ops")
+            vocab.amend("in_progress", "already exists", "ops")
             assert False, "Should reject existing value"
         except ValueError:
             pass
