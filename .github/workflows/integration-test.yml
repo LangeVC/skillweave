@@ -62,7 +62,7 @@ jobs:
           tagger = AutoTagger()
           version = tagger.get_current_version()
           assert version, 'Should detect version'
-          result = tagger.analyze(existing_tags=['v0.5.0', 'v0.5.5'])
+          result = tagger.analyze(existing_tags=['v1.3.5'])
           assert result.current_version == version
           print(f'AUTOTAG: version={version}, should_release={result.should_release} — OK')
           "
@@ -76,7 +76,9 @@ jobs:
           python3 -c "
           import sys
           sys.path.insert(0, 'src')
+          from skillweave.github_integration.autotag import AutoTagger
           from skillweave.github_integration.changelog import ChangelogGenerator
+          VERSION = AutoTagger().get_current_version()
           gen = ChangelogGenerator()
           entry = gen.parse_commit('feat: add new feature', 'abc1234')
           assert entry is not None
@@ -86,7 +88,7 @@ jobs:
           assert entry2 is not None
           assert entry2.scope == 'scope'
           entries = gen.parse_commits([('abc1234', 'feat: add feature'), ('def5678', 'fix: fix bug')])
-          result = gen.generate(entries, version='0.6.0')
+          result = gen.generate(entries, version=VERSION)
           assert result.total_commits == 2
           md = gen.generate_markdown(result)
           assert 'Features' in md
@@ -145,9 +147,11 @@ jobs:
           python3 -c "
           import sys
           sys.path.insert(0, 'src')
+          from skillweave.github_integration.autotag import AutoTagger
           from skillweave.github_integration.release_gate import ReleaseReadinessGate
+          VERSION = AutoTagger().get_current_version()
           gate = ReleaseReadinessGate()
-          result = gate.evaluate(current_version='0.6.0', latest_tag='v0.5.5')
+          result = gate.evaluate(current_version=VERSION, latest_tag='v1.3.5')
           assert len(result.checks) > 5
           v_check = next(c for c in result.checks if c.id == 'version-bump')
           assert v_check.passed == True
@@ -163,10 +167,12 @@ jobs:
           python3 -c "
           import sys
           sys.path.insert(0, 'src')
+          from skillweave.github_integration.autotag import AutoTagger
           from skillweave.github_integration.release_notes import ReleaseNotesGenerator
+          VERSION = AutoTagger().get_current_version()
           gen = ReleaseNotesGenerator()
-          notes = gen.generate(version='0.6.0')
-          assert 'SkillWeave v0.6.0' in notes or 'SkillWeave' in notes
+          notes = gen.generate(version=VERSION)
+          assert 'SkillWeave v' + VERSION in notes or 'SkillWeave' in notes
           print(f'RELEASE NOTES: generated — OK')
           "
 

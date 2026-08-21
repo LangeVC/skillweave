@@ -470,12 +470,38 @@ def test_pin_roundtrip_preserved():
 
 # ── Criterion 10: red proof — unavailable model fails loud ───────────────
 
+def _refusing_faigate():
+    """A deterministic Faigate whose roster contains nothing the caller asks for.
+
+    The unit suite is hermetic (tests/unit/conftest.py blocks every socket and
+    clears provider env vars), so a test that needs a live availability verdict
+    must inject a provider. This mirrors tests/unit/test_model_availability.py:
+    ``detect_providers`` is patched, never a live probe. Real availability and
+    refusal behaviour against a live Faigate belongs to the live-gate suite
+    (tests/gate_b06/live_provider_proof.py).
+    """
+    from unittest import mock
+
+    from skillweave.routing import faigate_adapter as adapter
+
+    class _Refusing(adapter.FaigateProvider):
+        def __init__(self):
+            self.base_url = "http://127.0.0.1:9/v1"
+            self.api_key = None
+
+        async def check_availability(self, models):
+            return {m: False for m in models}
+
+    return mock.patch.object(adapter, "detect_providers", return_value={"faigate": _Refusing()})
+
+
 def test_unavailable_model_names_profile_and_role():
     # A role declaring a model Faigate cannot resolve is refused, and the error
     # names BOTH the profile and the role — no silent fallback to another model.
     profile = _profile(roles={"ops": {"model": "turbo-9000"}})
-    with pytest.raises(RoutingProfileError) as exc:
-        resolve_tier(profile)
+    with _refusing_faigate():
+        with pytest.raises(RoutingProfileError) as exc:
+            resolve_tier(profile)
     message = str(exc.value)
     assert "sw135" in message
     assert "ops" in message
@@ -486,8 +512,9 @@ def test_unavailable_pin_names_profile_and_role():
     # The same loudness applies to a pin: it is a concrete model id, so an
     # unresolvable pin fails naming profile and role rather than being dropped.
     profile = _profile(roles={"worker": {"pin": "claude-nonexistent"}})
-    with pytest.raises(RoutingProfileError) as exc:
-        resolve_tier(profile)
+    with _refusing_faigate():
+        with pytest.raises(RoutingProfileError) as exc:
+            resolve_tier(profile)
     message = str(exc.value)
     assert "sw135" in message
     assert "worker" in message
