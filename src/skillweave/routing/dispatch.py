@@ -374,3 +374,36 @@ def launch_from_role(
     if isinstance(outcome, DispatchFailure):
         outcome.role = role
     return outcome
+
+
+def fan_out(
+    commands: Sequence[Sequence[str]],
+    *,
+    run_id: str,
+    subject_repo: str,
+    subject_commit: str,
+    model: str,
+    tool: str,
+    created_at: Optional[str] = None,
+    cwd: Optional[str] = None,
+):
+    """Fan out independent commands as overlapping real processes (SW-FANOUT-001).
+
+    This is the dispatch-surface seam for dependency-ready fan-out. It delegates
+    the process concerns to ``skillweave.fanout.fan_out_dispatch``, which starts
+    every command as a real process before reaping any, so two workers overlap
+    in time. Nothing here branches on the tool, the launch command, the
+    arguments, or the work: it passes all of them through to the same path.
+    """
+    from skillweave.fanout import fan_out_dispatch
+
+    return fan_out_dispatch(
+        commands,
+        run_id=run_id,
+        subject_repo=subject_repo,
+        subject_commit=subject_commit,
+        tool=tool,
+        model=model,
+        created_at=created_at,
+        cwd=cwd,
+    )
