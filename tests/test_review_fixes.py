@@ -242,16 +242,17 @@ class TestVerifiedContext:
 
 
 class TestVocabularyAmendment:
-    def test_stopped_before_b06_is_valid_state(self):
-        from skillweave.runtime.store import RunStateModel
-        assert RunStateModel.STOPPED_BEFORE_B06.value == "STOPPED_BEFORE_B06"
+    def test_stopped_before_b06_is_no_longer_a_state(self):
+        from skillweave.runtime.store import RunStateModel, LEGACY_STATE_ALIASES
+        assert not hasattr(RunStateModel, "STOPPED_BEFORE_B06")
+        assert "STOPPED_BEFORE_B06" not in {m.value for m in RunStateModel}
+        # The legacy placeholder is migrated to a terminal state with a reason.
+        assert LEGACY_STATE_ALIASES["STOPPED_BEFORE_B06"] == "advance_or_stop"
 
-    def test_stopped_before_b06_in_legal_transitions(self):
+    def test_terminal_states_have_no_outgoing_transitions(self):
         from skillweave.runtime.store import RunStateModel
-        allowed = RunStateModel.legal_transitions(
-            RunStateModel.STOPPED_BEFORE_B06
-        )
-        assert RunStateModel.IN_PROGRESS in allowed
+        for terminal in RunStateModel.terminal_values():
+            assert RunStateModel.legal_transitions(terminal) == []
 
     def test_coverage_status_externally_satisfied(self):
         from skillweave.runtime.schema.vocabulary import RUN_STATE_COVERAGE_STATUSES

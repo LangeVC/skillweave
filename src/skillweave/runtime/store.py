@@ -10,9 +10,27 @@ from .registry import ArtifactReceipt, EvidenceQuality
 from .handoff import ColdStartBundle, HandoffOffer
 
 import sqlite3
+import json
 
 
 class RunStateModel(str, Enum):
+    """Canonical lowercase state vocabulary shared by code and schema.
+
+    Every persisted state value is lowercase. The enum member NAMES are
+    irrelevant to the vocabulary (they never persist); the VALUES are the
+    canonical form. Formerly the vocabulary mixed snake_case lane states with
+    UPPERCASE sandbox sub-states (``SANDBOX_PREFLIGHT``, ``IN_PROGRESS``, ...)
+    and carried a legacy placeholder ``STOPPED_BEFORE_B06``. Both defects are
+    resolved here: values are lowercase-only, and ``STOPPED_BEFORE_B06`` is
+    gone — a run that halts before a gate records the *reason* in
+    ``metadata["stop_reason"]`` while entering a terminal state, never a
+    bespoke vocabulary value.
+
+    Terminal states are explicit via :meth:`terminal_values` and carry no
+    outgoing transitions. A run reaches a terminal state either by completing
+    the lane loop (``advance_or_stop``) or by failing (``failed``).
+    """
+
     PREFLIGHT = "preflight"
     BATCH_SELECTION = "batch_selection"
     LANE_PLAN = "lane_plan"
@@ -22,13 +40,21 @@ class RunStateModel(str, Enum):
     FIX_RETRY = "fix_retry"
     INTEGRATE = "integrate"
     ADVANCE_OR_STOP = "advance_or_stop"
-    SANDBOX_PREFLIGHT = "SANDBOX_PREFLIGHT"
-    IN_PROGRESS = "IN_PROGRESS"
-    PREFLIGHT_COMPLETE = "PREFLIGHT_COMPLETE"
-    BLOCKED_WAITING_FOR_GATE = "BLOCKED_WAITING_FOR_GATE"
-    REVIEW_REQUIRED = "REVIEW_REQUIRED"
-    FAILED = "FAILED"
-    STOPPED_BEFORE_B06 = "STOPPED_BEFORE_B06"
+    SANDBOX_PREFLIGHT = "sandbox_preflight"
+    IN_PROGRESS = "in_progress"
+    PREFLIGHT_COMPLETE = "preflight_complete"
+    BLOCKED_WAITING_FOR_GATE = "blocked_waiting_for_gate"
+    REVIEW_REQUIRED = "review_required"
+    FAILED = "failed"
+
+    @classmethod
+    def terminal_values(cls) -> frozenset[str]:
+        """Return the canonical values of every terminal (non-forward) state."""
+        return frozenset({cls.ADVANCE_OR_STOP.value, cls.FAILED.value})
+
+    @classmethod
+    def is_terminal(cls, value: str) -> bool:
+        return value in cls.terminal_values()
 
     @classmethod
     def legal_transitions(cls, from_state):
@@ -47,11 +73,27 @@ class RunStateModel(str, Enum):
             cls.PREFLIGHT_COMPLETE: [cls.IN_PROGRESS, cls.REVIEW_REQUIRED, cls.FAILED],
             cls.BLOCKED_WAITING_FOR_GATE: [cls.IN_PROGRESS, cls.REVIEW_REQUIRED, cls.FAILED],
             cls.REVIEW_REQUIRED: [cls.IN_PROGRESS, cls.FAILED],
-            cls.FAILED: [cls.SANDBOX_PREFLIGHT],
-            cls.STOPPED_BEFORE_B06: [cls.IN_PROGRESS],
+            cls.FAILED: [],
         }
         from_state = cls(from_state) if isinstance(from_state, str) else from_state
         return transition_map.get(from_state, [])
+
+
+#: Persistent stop reasons (recorded in ``metadata["stop_reason"]``, never as
+#: a dedicated state) that explain why a run entered a terminal state.
+STOP_REASONS: tuple[str, ...] = ("before_gate", "operator_halt", "dependency_failed")
+
+#: Legacy uppercase values that used to be persisted as states. Accepted during
+#: migration only, never produced as new vocabulary.
+LEGACY_STATE_ALIASES: dict[str, str] = {
+    "SANDBOX_PREFLIGHT": "sandbox_preflight",
+    "IN_PROGRESS": "in_progress",
+    "PREFLIGHT_COMPLETE": "preflight_complete",
+    "BLOCKED_WAITING_FOR_GATE": "blocked_waiting_for_gate",
+    "REVIEW_REQUIRED": "review_required",
+    "FAILED": "failed",
+    "STOPPED_BEFORE_B06": "advance_or_stop",
+}
 
 
 @dataclass
@@ -89,6 +131,7 @@ class RunStore(ABC):
         expected_version: int,
         reason: str = "",
         role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
     ) -> RunRecord:
         ...
 
@@ -160,8 +203,12 @@ class SQLiteRunStore(RunStore):
                 transformation_history TEXT NOT NULL DEFAULT '[]',
                 quality TEXT NOT NULL DEFAULT '{}',
                 supersedes TEXT,
-                metadata TEXT NOT NULL DEFAULT '{}'
+                metadata TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_evidence_idempotency
+                ON evidence(idempotency_key)
+                WHERE idempotency_key IS NOT NULL;
             CREATE TABLE IF NOT EXISTS handoffs (
                 handoff_id TEXT PRIMARY KEY,
                 from_role TEXT NOT NULL,
@@ -175,21 +222,69 @@ class SQLiteRunStore(RunStore):
                 offered_at TEXT NOT NULL,
                 accepted_at TEXT,
                 completed_at TEXT,
-                metadata TEXT NOT NULL DEFAULT '{}'
+                metadata TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_handoffs_idempotency
+                ON handoffs(idempotency_key)
+                WHERE idempotency_key IS NOT NULL;
             CREATE TABLE IF NOT EXISTS write_scope_claims (
                 claim_id TEXT PRIMARY KEY,
                 run_id TEXT NOT NULL,
                 resolved_path TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                released_at TEXT
+                released_at TEXT,
+                lease_until TEXT,
+                heartbeat_at TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_write_scope_claims_run
                 ON write_scope_claims(run_id);
             CREATE INDEX IF NOT EXISTS idx_write_scope_claims_path
                 ON write_scope_claims(resolved_path);
+            CREATE TABLE IF NOT EXISTS outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL DEFAULT '{}',
+                idempotency_key TEXT,
+                created_at TEXT NOT NULL,
+                delivered_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_outbox_run
+                ON outbox(run_id, id);
         """)
         self._conn.commit()
+        self._migrate_legacy_states()
+
+    def _migrate_legacy_states(self) -> None:
+        """Migrate persisted legacy uppercase state values to canonical lowercase.
+
+        Idempotent and destructive in exactly one direction: any row whose
+        ``state`` is a legacy uppercase value (or which carries the removed
+        ``STOPPED_BEFORE_B06`` placeholder) is rewritten to the canonical
+        lowercase value. ``STOPPED_BEFORE_B06`` maps to the terminal
+        ``advance_or_stop`` state with ``metadata["stop_reason"] =
+        "before_gate"`` recorded, so the stop reason survives as data rather
+        than a bespoke vocabulary value. Runs already on canonical values are
+        left untouched. Called once per store open, before any caller reads.
+        """
+        import json
+        aliases = LEGACY_STATE_ALIASES
+        rows = self._conn.execute("SELECT run_id, state, metadata FROM runs").fetchall()
+        for row in rows:
+            legacy = row["state"]
+            if legacy not in aliases:
+                continue
+            canonical = aliases[legacy]
+            meta = json.loads(row["metadata"]) if row["metadata"] else {}
+            if legacy == "STOPPED_BEFORE_B06":
+                meta["stop_reason"] = "before_gate"
+            self._conn.execute(
+                "UPDATE runs SET state = ?, metadata = ? WHERE run_id = ?",
+                (canonical, json.dumps(meta), row["run_id"]),
+            )
+        if rows:
+            self._conn.commit()
 
     def _row_to_record(self, row) -> RunRecord:
         import json
@@ -222,19 +317,75 @@ class SQLiteRunStore(RunStore):
         if record.version < 1:
             record.version = 1
 
-        self._conn.execute(
-            """INSERT OR REPLACE INTO runs
-               (run_id, root_run_id, parent_run_id, state, version,
-                created_at, updated_at, ended_at, role, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                record.run_id, record.root_run_id, record.parent_run_id,
-                record.state, record.version,
-                record.created_at, record.updated_at, record.ended_at,
-                record.role, json.dumps(record.metadata),
-            ),
-        )
-        self._conn.commit()
+        # CAS-safe write with the version guard enforced in SQL, not in a
+        # Python check-then-act. Mirrors ``transition()`` (BEGIN IMMEDIATE +
+        # guarded write + rowcount == 0 -> VersionConflictError), generalized to
+        # cover both the bootstrap create and the overwrite.
+        #
+        # ``record.version`` is the writer's authoritative snapshot:
+        #
+        # * version 1 is the bootstrap CREATE. It is exclusive: the ``run_id``
+        #   PRIMARY KEY means two concurrent first-creates let exactly one
+        #   INSERT succeed and the loser raises via IntegrityError. A second
+        #   writer that finds the run already at version 1 is a duplicate
+        #   bootstrap, not a stale/valid overwrite, so it conflicts.
+        # * version >= 2 is an OVERWRITE. It atomically bumps to
+        #   ``record.version + 1`` under ``WHERE version = ?``; rowcount == 0
+        #   means the persisted version no longer equals the writer's snapshot,
+        #   so exactly one of N concurrent same-snapshot writers wins and the
+        #   other N-1 raise VersionConflictError.
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            if record.version <= 1:
+                # Bootstrap create. ``run_id`` is the PRIMARY KEY, so a
+                # concurrent first-create collides here and exactly one wins.
+                try:
+                    self._conn.execute(
+                        """INSERT INTO runs
+                           (run_id, root_run_id, parent_run_id, state, version,
+                            created_at, updated_at, ended_at, role, metadata)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            record.run_id, record.root_run_id, record.parent_run_id,
+                            record.state, 1,
+                            record.created_at, record.updated_at, record.ended_at,
+                            record.role, json.dumps(record.metadata),
+                        ),
+                    )
+                except sqlite3.IntegrityError:
+                    winner = self._conn.execute(
+                        "SELECT version FROM runs WHERE run_id = ?", (record.run_id,)
+                    ).fetchone()
+                    actual = winner["version"] if winner is not None else 1
+                    raise VersionConflictError(record.run_id, 1, actual)
+                new_version = 1
+            else:
+                new_version = record.version + 1
+                cur = self._conn.execute(
+                    """UPDATE runs SET
+                       root_run_id = ?, parent_run_id = ?, state = ?, version = ?,
+                       updated_at = ?, ended_at = ?, role = ?, metadata = ?
+                       WHERE run_id = ? AND version = ?""",
+                    (
+                        record.root_run_id, record.parent_run_id, record.state,
+                        new_version, record.updated_at, record.ended_at,
+                        record.role, json.dumps(record.metadata),
+                        record.run_id, record.version,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    persisted = self._conn.execute(
+                        "SELECT version FROM runs WHERE run_id = ?", (record.run_id,)
+                    ).fetchone()
+                    actual = persisted["version"] if persisted is not None else record.version
+                    raise VersionConflictError(record.run_id, record.version, actual)
+
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
+
+        record.version = new_version
         return record
 
     def set_authority_guard(self, guard) -> None:
@@ -248,6 +399,67 @@ class SQLiteRunStore(RunStore):
         expected_version: int,
         reason: str = "",
         role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
+    ) -> RunRecord:
+        return self._transition_impl(
+            run_id=run_id,
+            target_state=target_state,
+            expected_state=expected_state,
+            expected_version=expected_version,
+            reason=reason,
+            role=role,
+            stop_reason=stop_reason,
+            event_type=None,
+            event_payload=None,
+            idempotency_key=None,
+        )
+
+    def transition_with_event(
+        self,
+        run_id: str,
+        target_state: str,
+        expected_state: str,
+        expected_version: int,
+        event_type: str,
+        event_payload: Optional[dict] = None,
+        reason: str = "",
+        role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+    ) -> RunRecord:
+        """Atomically transition a run AND enqueue one journal outbox event.
+
+        The run-state update, its ``transitions_log`` row, and the pending
+        journal event (written to the ``outbox`` table) commit in a single
+        ``BEGIN IMMEDIATE`` transaction. A crash before commit rolls back all
+        three; after commit all three are durably present. This is the
+        unit-of-work/outbox contract: state and event never diverge.
+        """
+        return self._transition_impl(
+            run_id=run_id,
+            target_state=target_state,
+            expected_state=expected_state,
+            expected_version=expected_version,
+            reason=reason,
+            role=role,
+            stop_reason=stop_reason,
+            event_type=event_type,
+            event_payload=event_payload,
+            idempotency_key=idempotency_key,
+        )
+
+    def _transition_impl(
+        self,
+        run_id: str,
+        target_state: str,
+        expected_state: Optional[str],
+        expected_version: Optional[int],
+        reason: str = "",
+        role: Optional[str] = None,
+        stop_reason: Optional[str] = None,
+        event_type: Optional[str] = None,
+        event_payload: Optional[dict] = None,
+        idempotency_key: Optional[str] = None,
     ) -> RunRecord:
         existing = self.get_run(run_id)
         if existing is None:
@@ -255,6 +467,12 @@ class SQLiteRunStore(RunStore):
                 "nonexistent", target_state, run_id,
                 extra={"reason": "run does not exist"},
             )
+
+        # Version is the CAS authority and is checked BEFORE state so that a
+        # stale writer (one whose read-snapshot has been superseded) always
+        # fails with a VersionConflictError, never a misleading transition.
+        if expected_version is not None and existing.version != expected_version:
+            raise VersionConflictError(run_id, expected_version, existing.version)
 
         if expected_state is not None and existing.state != expected_state:
             raise InvalidTransitionError(
@@ -265,9 +483,6 @@ class SQLiteRunStore(RunStore):
                     "reason": "run is not in the expected state",
                 },
             )
-
-        if expected_version is not None and existing.version != expected_version:
-            raise VersionConflictError(run_id, expected_version, existing.version)
 
         if role and hasattr(self, '_authority_guard') and self._authority_guard is not None:
             from skillweave.runtime.authority import can_mutate_run_state
@@ -286,28 +501,93 @@ class SQLiteRunStore(RunStore):
         now = datetime.now(timezone.utc).isoformat()
         new_version = existing.version + 1
         ended_at = existing.ended_at
-        if target_state in ("advance_or_stop", "FAILED"):
+        if RunStateModel.is_terminal(target_state):
             ended_at = now
 
-        cur = self._conn.execute(
-            """UPDATE runs SET state = ?, version = ?, updated_at = ?, ended_at = ?,
-               role = COALESCE(?, role)
-               WHERE run_id = ? AND version = ?""",
-            (target_state, new_version, now, ended_at, role, run_id, expected_version),
-        )
+        # A terminal transition may carry a persistent stop reason. Record it
+        # in metadata (the vocabulary itself stays flat; the reason is data).
+        import json
+        merged_metadata = dict(existing.metadata or {})
+        if stop_reason is not None:
+            merged_metadata["stop_reason"] = stop_reason
 
-        if cur.rowcount == 0:
-            raise VersionConflictError(run_id, expected_version, existing.version)
+        # One transaction: the run-state UPDATE, its transitions_log row, and
+        # (when requested) a pending outbox event commit together. A crash at
+        # any point rolls all of them back, so state and journal event never
+        # diverge (SW-UOW-001).
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            cur = self._conn.execute(
+                """UPDATE runs SET state = ?, version = ?, updated_at = ?, ended_at = ?,
+                   role = COALESCE(?, role), metadata = ?
+                   WHERE run_id = ? AND version = ?""",
+                (
+                    target_state, new_version, now, ended_at, role,
+                    json.dumps(merged_metadata), run_id, expected_version,
+                ),
+            )
+            if cur.rowcount == 0:
+                raise VersionConflictError(run_id, expected_version, existing.version)
 
-        self._conn.execute(
-            """INSERT INTO transitions_log
-               (run_id, from_state, to_state, reason, version, timestamp, role)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (run_id, existing.state, target_state, reason, new_version, now, role or existing.role),
-        )
-        self._conn.commit()
+            self._conn.execute(
+                """INSERT INTO transitions_log
+                   (run_id, from_state, to_state, reason, version, timestamp, role)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (run_id, existing.state, target_state, reason, new_version, now, role or existing.role),
+            )
+
+            if event_type is not None:
+                self._conn.execute(
+                    """INSERT INTO outbox
+                       (run_id, event_type, payload, idempotency_key, created_at, delivered_at)
+                       VALUES (?, ?, ?, ?, ?, NULL)""",
+                    (run_id, event_type, json.dumps(event_payload or {}), idempotency_key, now),
+                )
+
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
 
         return self.get_run(run_id)
+
+    # ---- Outbox (unit-of-work delivery) ----
+
+    def list_outbox(self, run_id: Optional[str] = None, include_delivered: bool = False) -> list[dict]:
+        """List outbox events queued by atomic transitions.
+
+        By default returns only UNDELIVERED events (``delivered_at IS NULL``).
+        Used by the journal's dispatcher to consume what the UOW produced.
+        """
+        sql = "SELECT * FROM outbox"
+        clauses = []
+        params: list = []
+        if run_id is not None:
+            clauses.append("run_id = ?")
+            params.append(run_id)
+        if not include_delivered:
+            clauses.append("delivered_at IS NULL")
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY id"
+        rows = self._conn.execute(sql, params).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            if isinstance(d.get("payload"), str):
+                d["payload"] = json.loads(d["payload"])
+            out.append(d)
+        return out
+
+    def mark_outbox_delivered(self, outbox_id: int) -> bool:
+        """Mark one outbox event as delivered; idempotent."""
+        now = datetime.now(timezone.utc).isoformat()
+        cur = self._conn.execute(
+            "UPDATE outbox SET delivered_at = ? WHERE id = ?",
+            (now, outbox_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
 
     def list_runs(self, state: Optional[str] = None, limit: int = 100) -> list[RunRecord]:
         if state:
@@ -380,13 +660,16 @@ class SQLiteRunStore(RunStore):
         run_id: str,
         scope_paths: list[str],
         claim_id: Optional[str] = None,
+        ttl_seconds: int = 300,
     ) -> list["WriteScopeClaim"]:
-        """Claim a set of write scopes on behalf of a run, atomically.
+        """Claim a set of write scopes on behalf of a run, atomically, with a lease.
 
-        All scopes are resolved first (same resolution as 004), then every held
-        claim is checked for overlap. If ANY scope overlaps an existing held
-        claim, the whole claim operation fails and nothing is persisted. On
-        success the claims are committed in a single transaction.
+        All scopes are resolved first (same resolution as 004), then every HELD,
+        UNEXPIRED claim is checked for overlap. An EXPIRED claim is not a
+        conflict: it has been vacated by time and a new claimant may take the
+        scope over. If ANY scope overlaps a live claim, the whole operation
+        fails and nothing is persisted. On success the claims carry a lease
+        deadline (``lease_until``) and an initial heartbeat.
         """
         import uuid
 
@@ -395,6 +678,7 @@ class SQLiteRunStore(RunStore):
             ScopeConflictError,
             resolve_scope_path,
             paths_overlap,
+            default_lease_until,
         )
 
         resolved = [resolve_scope_path(p) for p in scope_paths]
@@ -402,18 +686,22 @@ class SQLiteRunStore(RunStore):
             return []
 
         now = datetime.now(timezone.utc).isoformat()
+        lease_until = default_lease_until(now, ttl_seconds)
 
         # Single transaction: check-then-insert is atomic, so two concurrent
         # claimers cannot both succeed on an overlapping scope.
         self._conn.execute("BEGIN IMMEDIATE")
         try:
             held_rows = self._conn.execute(
-                "SELECT claim_id, run_id, resolved_path FROM write_scope_claims "
+                "SELECT claim_id, run_id, resolved_path, lease_until FROM write_scope_claims "
                 "WHERE released_at IS NULL"
             ).fetchall()
 
             for new_path in resolved:
                 for row in held_rows:
+                    # An expired lease does not block a takeover.
+                    if row["lease_until"] is not None and row["lease_until"] <= now:
+                        continue
                     if paths_overlap(new_path, row["resolved_path"]):
                         raise ScopeConflictError(run_id, row["run_id"], new_path)
 
@@ -425,9 +713,10 @@ class SQLiteRunStore(RunStore):
                     cid = claim_id + "::" + str(i) if claim_id else str(uuid.uuid4())
                 self._conn.execute(
                     "INSERT INTO write_scope_claims "
-                    "(claim_id, run_id, resolved_path, created_at, released_at) "
-                    "VALUES (?, ?, ?, ?, NULL)",
-                    (cid, run_id, new_path, now),
+                    "(claim_id, run_id, resolved_path, created_at, released_at, "
+                    " lease_until, heartbeat_at) "
+                    "VALUES (?, ?, ?, ?, NULL, ?, ?)",
+                    (cid, run_id, new_path, now, lease_until, now),
                 )
                 claims.append(WriteScopeClaim(
                     claim_id=cid,
@@ -435,6 +724,8 @@ class SQLiteRunStore(RunStore):
                     resolved_path=new_path,
                     created_at=now,
                     released_at=None,
+                    lease_until=lease_until,
+                    heartbeat_at=now,
                 ))
 
             self._conn.commit()
@@ -443,6 +734,60 @@ class SQLiteRunStore(RunStore):
             raise
 
         return claims
+
+    def heartbeat_claim(self, claim_id: str, ttl_seconds: int = 300) -> bool:
+        """Renew a held claim's lease from now; fails if the claim is gone/released.
+
+        Returns True on renewal, False when the claim no longer exists or is
+        already released (a coordinator that lost its claim cannot renew it).
+        """
+        from .write_scope import default_lease_until
+        now = datetime.now(timezone.utc).isoformat()
+        lease_until = default_lease_until(now, ttl_seconds)
+        cur = self._conn.execute(
+            "UPDATE write_scope_claims SET heartbeat_at = ?, lease_until = ? "
+            "WHERE claim_id = ? AND released_at IS NULL",
+            (now, lease_until, claim_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def try_takeover(self, claim_id: str, new_run_id: str, ttl_seconds: int = 300) -> bool:
+        """Take over a claim whose lease expired or is already released.
+
+        Succeeds only when the claim is void (released) or its lease has
+        expired; a live claim is never silently stolen. On success the claim is
+        re-bound to ``new_run_id`` with a fresh lease. Returns True on takeover.
+        """
+        from .write_scope import default_lease_until
+        now = datetime.now(timezone.utc).isoformat()
+        lease_until = default_lease_until(now, ttl_seconds)
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._conn.execute(
+                "SELECT run_id, lease_until, released_at FROM write_scope_claims "
+                "WHERE claim_id = ?", (claim_id,)
+            ).fetchone()
+            if row is None:
+                self._conn.rollback()
+                return False
+            live = row["released_at"] is None and (
+                row["lease_until"] is None or row["lease_until"] > now
+            )
+            if live:
+                self._conn.rollback()
+                return False
+            self._conn.execute(
+                "UPDATE write_scope_claims SET run_id = ?, released_at = NULL, "
+                "created_at = ?, lease_until = ?, heartbeat_at = ? "
+                "WHERE claim_id = ?",
+                (new_run_id, now, lease_until, now, claim_id),
+            )
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        return True
 
     def release_write_scope(self, claim_id: str) -> bool:
         """Release a held (claim_id, run_id) claim; idempotent.
@@ -486,6 +831,8 @@ class SQLiteRunStore(RunStore):
                 resolved_path=r["resolved_path"],
                 created_at=r["created_at"],
                 released_at=r["released_at"],
+                lease_until=r["lease_until"],
+                heartbeat_at=r["heartbeat_at"],
             )
             for r in rows
         ]
@@ -514,47 +861,65 @@ class SQLiteRunStore(RunStore):
 
     # ---- Evidence persistence ----
 
-    def save_evidence(self, receipt: ArtifactReceipt) -> ArtifactReceipt:
+    def save_evidence(self, receipt: ArtifactReceipt, idempotency_key: Optional[str] = None) -> ArtifactReceipt:
         import json
         if receipt.created_at is None:
             receipt.created_at = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            """INSERT OR REPLACE INTO evidence
-               (artifact_id, sha256, schema_version, producer_command,
-                subject_repo, subject_commit, created_at, evidence_type, purpose,
-                method, system_source, sensitivity, retention,
-                transformation_history, quality, supersedes, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                receipt.artifact_id,
-                receipt.sha256,
-                receipt.schema_version,
-                receipt.producer_command,
-                receipt.subject_repo,
-                receipt.subject_commit,
-                receipt.created_at,
-                receipt.evidence_type,
-                receipt.purpose,
-                receipt.method,
-                receipt.system_source,
-                receipt.sensitivity,
-                receipt.retention,
-                json.dumps(receipt.transformation_history),
-                json.dumps(receipt.quality.to_dict()),
-                receipt.supersedes,
-                json.dumps(receipt.metadata),
-            ),
-        )
-        self._conn.commit()
+        # Content-addressing is the default idempotency: identical bytes share
+        # one canonical receipt regardless of how many writers raced.
+        key = idempotency_key if idempotency_key is not None else f"sha256:{receipt.sha256}"
+        try:
+            self._conn.execute(
+                """INSERT INTO evidence
+                   (artifact_id, sha256, schema_version, producer_command,
+                    subject_repo, subject_commit, created_at, evidence_type, purpose,
+                    method, system_source, sensitivity, retention,
+                    transformation_history, quality, supersedes, metadata,
+                    idempotency_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    receipt.artifact_id,
+                    receipt.sha256,
+                    receipt.schema_version,
+                    receipt.producer_command,
+                    receipt.subject_repo,
+                    receipt.subject_commit,
+                    receipt.created_at,
+                    receipt.evidence_type,
+                    receipt.purpose,
+                    receipt.method,
+                    receipt.system_source,
+                    receipt.sensitivity,
+                    receipt.retention,
+                    json.dumps(receipt.transformation_history),
+                    json.dumps(receipt.quality.to_dict()),
+                    receipt.supersedes,
+                    json.dumps(receipt.metadata),
+                    key,
+                ),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            # A concurrent writer recorded the same key; resolve to the winner.
+            self._conn.rollback()
+            row = self._conn.execute(
+                "SELECT * FROM evidence WHERE idempotency_key = ?", (key,)
+            ).fetchone()
+            if row is None:
+                raise
+            return self._row_to_evidence(row)
         return receipt
 
     def get_evidence(self, artifact_id: str) -> Optional[ArtifactReceipt]:
-        import json
         row = self._conn.execute(
             "SELECT * FROM evidence WHERE artifact_id = ?", (artifact_id,)
         ).fetchone()
         if row is None:
             return None
+        return self._row_to_evidence(row)
+
+    def _row_to_evidence(self, row) -> ArtifactReceipt:
+        import json
         history = json.loads(row["transformation_history"]) if row["transformation_history"] else []
         quality = json.loads(row["quality"]) if row["quality"] else {}
         meta = json.loads(row["metadata"]) if row["metadata"] else {}
@@ -587,42 +952,56 @@ class SQLiteRunStore(RunStore):
 
     # ---- Handoff persistence ----
 
-    def save_handoff(self, offer: HandoffOffer) -> HandoffOffer:
+    def save_handoff(self, offer: HandoffOffer, idempotency_key: Optional[str] = None) -> HandoffOffer:
         import json
         if offer.offered_at is None:
             offer.offered_at = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            """INSERT OR REPLACE INTO handoffs
-               (handoff_id, from_role, to_role, scope, cold_start_bundle,
-                allowed_actions, input_digests, state, owner, offered_at,
-                accepted_at, completed_at, metadata)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                offer.handoff_id,
-                offer.from_role,
-                offer.to_role,
-                offer.scope,
-                json.dumps(offer.cold_start_bundle.to_dict()),
-                json.dumps(offer.allowed_actions),
-                json.dumps(offer.input_digests),
-                offer.state,
-                offer.owner,
-                offer.offered_at,
-                offer.accepted_at,
-                offer.completed_at,
-                json.dumps(offer.metadata),
-            ),
-        )
-        self._conn.commit()
+        key = idempotency_key if idempotency_key is not None else f"handoff:{offer.handoff_id}"
+        try:
+            self._conn.execute(
+                """INSERT INTO handoffs
+                   (handoff_id, from_role, to_role, scope, cold_start_bundle,
+                    allowed_actions, input_digests, state, owner, offered_at,
+                    accepted_at, completed_at, metadata, idempotency_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    offer.handoff_id,
+                    offer.from_role,
+                    offer.to_role,
+                    offer.scope,
+                    json.dumps(offer.cold_start_bundle.to_dict()),
+                    json.dumps(offer.allowed_actions),
+                    json.dumps(offer.input_digests),
+                    offer.state,
+                    offer.owner,
+                    offer.offered_at,
+                    offer.accepted_at,
+                    offer.completed_at,
+                    json.dumps(offer.metadata),
+                    key,
+                ),
+            )
+            self._conn.commit()
+        except sqlite3.IntegrityError:
+            self._conn.rollback()
+            row = self._conn.execute(
+                "SELECT * FROM handoffs WHERE idempotency_key = ?", (key,)
+            ).fetchone()
+            if row is None:
+                raise
+            return self._row_to_handoff(row)
         return offer
 
     def get_handoff(self, handoff_id: str) -> Optional[HandoffOffer]:
-        import json
         row = self._conn.execute(
             "SELECT * FROM handoffs WHERE handoff_id = ?", (handoff_id,)
         ).fetchone()
         if row is None:
             return None
+        return self._row_to_handoff(row)
+
+    def _row_to_handoff(self, row) -> HandoffOffer:
+        import json
         bundle = json.loads(row["cold_start_bundle"]) if row["cold_start_bundle"] else {}
         actions = json.loads(row["allowed_actions"]) if row["allowed_actions"] else []
         digests = json.loads(row["input_digests"]) if row["input_digests"] else {}

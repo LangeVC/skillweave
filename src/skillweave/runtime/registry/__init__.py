@@ -134,6 +134,55 @@ def _compute_segment_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+class ArtifactIntegrityError(Exception):
+    """Raised when a raw artifact's stored bytes do not match its digest.
+
+    ``resolve`` fails closed: a missing or mutated artifact never yields bytes
+    and is never silently treated as the addressed content."""
+    pass
+
+
+class RawArtifactStore:
+    """Content-addressed raw byte store with immutable-resolution semantics.
+
+    Bytes are stored under their own sha256 digest. ``resolve`` returns the
+    bytes only if the stored content still hashes to the requested digest;
+    otherwise it raises :class:`ArtifactIntegrityError`. A receipt therefore
+    *resolves* to its raw bytes, and mutation or absence closes the resolution
+    path rather than returning wrong data.
+    """
+
+    def __init__(self):
+        self._blobs: dict[str, bytes] = {}
+
+    def put(self, data: bytes) -> str:
+        digest = _compute_segment_hash(data)
+        self._blobs[digest] = bytes(data)
+        return digest
+
+    def resolve(self, sha256: str) -> bytes:
+        if sha256 not in self._blobs:
+            raise ArtifactIntegrityError(f"artifact '{sha256[:12]}' is missing")
+        data = self._blobs[sha256]
+        if _compute_segment_hash(data) != sha256:
+            raise ArtifactIntegrityError(
+                f"artifact '{sha256[:12]}' failed digest verification (mutated)"
+            )
+        return data
+
+    def resolve_receipt(self, receipt: ArtifactReceipt) -> bytes:
+        return self.resolve(receipt.sha256)
+
+    def mock_mutate(self, sha256: str, replacement: bytes) -> None:
+        """Test seam: corrupt a stored blob without changing its key."""
+        self._blobs[sha256] = bytes(replacement)
+
+    def delete(self, sha256: str) -> None:
+        """Test seam: remove a stored blob, simulating loss."""
+        self._blobs.pop(sha256, None)
+
+
+
 def _compute_merkle_root(segments: list[MerkleSegment]) -> str:
     if not segments:
         return hashlib.sha256(b"").hexdigest()

@@ -176,10 +176,20 @@ class EventJournal:
                     event.idempotency_key, event.timestamp, event.version,
                 ),
             )
-            self._conn.commit()
+        except sqlite3.IntegrityError:
+            # A concurrent writer already recorded this idempotency key. Roll
+            # back the pending insert and resolve to the canonical winner.
+            self._conn.rollback()
+            row = self._conn.execute(
+                "SELECT * FROM events WHERE run_id = ? AND idempotency_key = ?",
+                (run_id, idempotency_key),
+            ).fetchone()
+            return JournalEvent.from_dict(dict(row))
         except BaseException:
             self._conn.rollback()
             raise
+
+        self._conn.commit()
         return event
 
     def append_and_dispatch(

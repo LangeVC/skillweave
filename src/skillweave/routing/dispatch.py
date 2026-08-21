@@ -203,10 +203,10 @@ def _artifact_for(
         method="dispatch",
         system_source="routing.dispatch",
         quality=EvidenceQuality(
-            relevance="high",
-            sufficiency="high",
-            reliability="high",
-            integrity="high",
+            relevance="unassessed",
+            sufficiency="unassessed",
+            reliability="unassessed",
+            integrity="unassessed",
         ),
         metadata={
             "run_id": run_id,

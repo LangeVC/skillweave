@@ -73,10 +73,18 @@ class WriteScopeClaim:
     resolved_path: str
     created_at: str
     released_at: Optional[str] = None
+    lease_until: Optional[str] = None
+    heartbeat_at: Optional[str] = None
 
     @property
     def held(self) -> bool:
         return self.released_at is None
+
+    def is_expired(self, now: str) -> bool:
+        """A held claim is expired when its lease has a deadline in the past."""
+        if self.released_at is not None or self.lease_until is None:
+            return False
+        return now >= self.lease_until
 
     def to_dict(self) -> dict:
         return {
@@ -85,4 +93,75 @@ class WriteScopeClaim:
             "resolved_path": self.resolved_path,
             "created_at": self.created_at,
             "released_at": self.released_at,
+            "lease_until": self.lease_until,
+            "heartbeat_at": self.heartbeat_at,
         }
+
+
+def default_lease_until(now: str, ttl_seconds: int = 300) -> str:
+    """Compute a lease deadline ``ttl_seconds`` after ``now`` (ISO timestamps)."""
+    from datetime import datetime, timedelta
+    dt = datetime.fromisoformat(now)
+    return (dt + timedelta(seconds=ttl_seconds)).isoformat()
+
+
+class WriteSetConflictError(Exception):
+    """Raised when a worker's declared write-set overlaps another worker's.
+
+    The conflict is detected BEFORE the worker starts, so overlapping scopes
+    block startup rather than being discovered mid-flight."""
+    def __init__(self, worker_id: str, conflicting_worker: str, overlapping_path: str):
+        self.worker_id = worker_id
+        self.conflicting_worker = conflicting_worker
+        self.overlapping_path = overlapping_path
+        super().__init__(
+            f"write-set conflict: worker '{worker_id}' path '{overlapping_path}' "
+            f"overlaps worker '{conflicting_worker}'"
+        )
+
+
+class WriteSetManager:
+    """Declared write-sets with a conflict matrix, checked before worker start.
+
+    A worker declares the paths it will write. If any declared path overlaps a
+    path already held by a different in-flight worker, startup is blocked with
+    a :class:`WriteSetConflictError`. This is the pre-start write-set lock:
+    nothing runs with an overlapping scope, instead of failing mid-flight.
+    """
+
+    def __init__(self):
+        self._declared: dict[str, list[str]] = {}
+
+    def declare(self, worker_id: str, scope_paths: list[str]) -> None:
+        resolved = [resolve_scope_path(p) for p in scope_paths]
+        for other_id, other_paths in self._declared.items():
+            if other_id == worker_id:
+                continue
+            for other in other_paths:
+                for new_path in resolved:
+                    if paths_overlap(new_path, other):
+                        raise WriteSetConflictError(worker_id, other_id, new_path)
+        # MERGE into the worker's existing set: a second declaration must not
+        # silently drop previously declared paths. Union, never replace.
+        existing = self._declared.get(worker_id, [])
+        self._declared[worker_id] = list(dict.fromkeys(existing + resolved))
+
+    def release(self, worker_id: str) -> None:
+        self._declared.pop(worker_id, None)
+
+    def conflicts_with(self, worker_id: str, scope_paths: list[str]) -> list[str]:
+        """Return the worker ids that would conflict, without mutating state."""
+        resolved = [resolve_scope_path(p) for p in scope_paths]
+        conflicts = []
+        for other_id, other_paths in self._declared.items():
+            if other_id == worker_id:
+                continue
+            for other in other_paths:
+                for new_path in resolved:
+                    if paths_overlap(new_path, other):
+                        conflicts.append(other_id)
+                        break
+                else:
+                    continue
+                break
+        return conflicts

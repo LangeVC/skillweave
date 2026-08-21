@@ -41,8 +41,15 @@ def assert_write_scope(
     return len(violations) == 0, violations
 
 
-def assert_non_polling() -> bool:
-    return True
+def assert_non_polling(poll_count: int) -> bool:
+    """Fail when ``poll_count`` indicates a polling loop, not a single check.
+
+    ``poll_count`` is the number of identical repeated calls a consumer made to
+    wait on a result. Zero or one is a single check (allowed); two or more is a
+    polling loop and fails the guard. This replaces the former constant-PASS
+    stub: the guard now inspects evidence instead of always returning True.
+    """
+    return poll_count <= 1
 
 
 def assert_no_foreign_repos(remote_url: str, canonical_url: str) -> bool:
