@@ -134,3 +134,23 @@ class Verifier:
             gate_state=gate_state,
             reasons=reasons,
         )
+
+
+def evaluate_empty_state(*, num_runs: int, num_artifacts: int) -> dict[str, Any]:
+    """Deterministically grade an empty run/evidence state.
+
+    An empty state (no runs, no artifacts) is a reproducible negative outcome:
+    it yields ``inconclusive`` — never a gate PASS — and the same result on
+    every call, with no ad-hoc or non-reproducible special status. A
+    non-empty state is graded ``insufficient`` until the completion contract
+    sees actual evidence.
+    """
+    if num_runs == 0 and num_artifacts == 0:
+        return {
+            "gate_state": GateState.INCONCLUSIVE,
+            "reason": "empty run/evidence state",
+        }
+    return {
+        "gate_state": GateState.INCONCLUSIVE,
+        "reason": "insufficient evidence",
+    }
