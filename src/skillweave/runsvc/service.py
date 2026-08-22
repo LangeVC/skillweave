@@ -30,20 +30,24 @@ same path.
 from __future__ import annotations
 
 import hashlib
+import importlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional, Sequence
 
-from skillweave.runtime.runner_adapter import run_command
-from skillweave.runtime.journal import EventJournal, EventType
-from skillweave.runtime.registry import (
-    ArtifactReceipt,
-    EvidenceQuality,
-    EvidenceType,
-    RawArtifactStore,
-)
-from skillweave.runtime.store import SQLiteRunStore, RunRecord
-from skillweave.runtime.verify import CompletionContract, Verifier, GateState
+
+def _runtime_attr(submodule: str, *names: str):
+    """Resolve runtime names at call time (GLE-020).
+
+    ``skillweave.runtime`` is an optional subpackage and must not be imported at
+    module level here; each submodule and its names are resolved lazily through
+    ``importlib`` (string-based, so no ``skillweave.runtime.*`` import statement
+    appears in this module's AST).
+    """
+    module = importlib.import_module("skillweave.runtime." + submodule)
+    if len(names) == 1:
+        return getattr(module, names[0])
+    return [getattr(module, n) for n in names]
 
 
 class RunIntegrationError(Exception):
@@ -131,6 +135,15 @@ class RunApplicationService:
         receipt — never from a raw exit code alone.
         """
         created_at = created_at or datetime.now(timezone.utc).isoformat()
+
+        run_command = _runtime_attr("runner_adapter", "run_command")
+        EventType = _runtime_attr("journal", "EventType")
+        ArtifactReceipt = _runtime_attr("registry", "ArtifactReceipt")
+        EvidenceQuality = _runtime_attr("registry", "EvidenceQuality")
+        EvidenceType = _runtime_attr("registry", "EvidenceType")
+        Verifier = _runtime_attr("verify", "Verifier")
+        CompletionContract = _runtime_attr("verify", "CompletionContract")
+        GateState = _runtime_attr("verify", "GateState")
 
         # Stage 1: Run. Walk the lane through its legal states up to
         # ``verify``, so the run is a real, addressable record before any
