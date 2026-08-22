@@ -22,10 +22,26 @@ EXAMPLE_PROFILE = REPO_ROOT / "profiles" / "example-standard.yaml"
 DISPATCH_DOC = REPO_ROOT / "docs" / "dispatching-from-your-harness.md"
 DISPATCH_REPORT = REPO_ROOT / "docs" / "dispatch-2-report.json"
 
+_src = REPO_ROOT / "src"
+if str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
+
+from skillweave.installer import AGENT_CONFIG  # noqa: E402
+
 
 def _read_text(path: Path) -> str:
     assert path.exists(), f"missing {path}"
     return path.read_text()
+
+
+def _matrix_host_rows() -> list[str]:
+    """Host names from the matrix ``| Host | ... |`` table rows."""
+    text = _read_text(SUPPORT_DOC)
+    return re.findall(r"^\|\s*`([^`]+)`\s*\|", text, re.MULTILINE)
+
+
+def _agent_config_names() -> list[str]:
+    return [target.name for target in AGENT_CONFIG]
 
 
 class TestSupportMatrix:
@@ -61,7 +77,6 @@ class TestOpenCodeNotGeneralSyntax:
         text = _read_text(DISPATCH_REPORT)
         assert "verbatim record of one run on one machine" in text
         assert "evidence rather than as guidance" in text
-
     def test_dispatching_doc_scopes_the_opencode_command_to_one_machine(self):
         text = _read_text(DISPATCH_DOC)
         assert "one machine" in text
@@ -80,3 +95,17 @@ class TestOpenCodeNotGeneralSyntax:
                     f"{md} mentions the OpenCode launch command without scoping "
                     f"it to an example or a single machine"
                 )
+
+
+class TestMatrixHostRowsAnchor:
+    """The matrix host rows are exactly the installer's AGENT_CONFIG names."""
+
+    def test_matrix_host_rows_equal_agent_config_names(self):
+        matrix = _matrix_host_rows()
+        config = _agent_config_names()
+        assert len(matrix) == len(config), (
+            f"matrix has {len(matrix)} host rows but AGENT_CONFIG has {len(config)}"
+        )
+        assert sorted(matrix) == sorted(config), (
+            f"matrix host rows {sorted(matrix)} != AGENT_CONFIG names {sorted(config)}"
+        )
