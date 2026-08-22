@@ -177,7 +177,7 @@ def _scope_conflicts(
 
 def build_lanes(
     tasks: Sequence[Task],
-    held_claims: Sequence[WriteScopeClaim] = (),
+    held_claims: tuple[WriteScopeClaim, ...] = (),
 ) -> List[List[Lane]]:
     """Build write-scope-aware lanes into parallel batches.
 
@@ -278,7 +278,7 @@ class SessionBatch:
 
 def build_sessions(
     sequence: Sequence,
-    held_claims: Sequence[WriteScopeClaim] = (),
+    held_claims: tuple[WriteScopeClaim, ...] = (),
 ) -> List[SessionBatch]:
     """Build session boundary batches from a declared ``Sequence``.
 
@@ -322,7 +322,7 @@ class Schedule:
 
 
 def _split_by_max_parallel(
-    lane_groups: Sequence[Sequence[Lane]],
+    lane_groups: tuple[tuple[Lane, ...], ...],
     max_parallel: int,
 ) -> List[List[Lane]]:
     """Cap the number of lanes per group at ``max_parallel``.
@@ -346,7 +346,7 @@ def build_schedule(
     sequence: Sequence,
     gate_results: Optional[Mapping[str, bool]] = None,
     max_parallel: Optional[int] = None,
-    held_claims: Sequence[WriteScopeClaim] = (),
+    held_claims: tuple[WriteScopeClaim, ...] = (),
 ) -> Schedule:
     """Build a gated, parallel-capped schedule from a ``Sequence``.
 
