@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.3.7 — Self-hosting comes home, and the gate holds it to its word
+
+1.3.6 closed the dispatch seam and taught the council to verify who answered.
+This release closes a different gap: the pipeline that ships SkillWeave could
+not ship itself. The multi-lane self-hosting work makes the release line
+reproducible inside its own machinery, and the ready-to-release amendment ties
+the version and CI net together so a declared release is what the gate checks.
+
+### Self-hosting multi-lane
+
+- **The release line runs its own lanes.** The self-hosting gate fixture
+  (`tests/gate_b06/test_self_hosting_multilane_gate.py`) drives parallel,
+  conflict, SHA, review, and coordinator-kill fixtures under `bash -eo
+  pipefail`, with the five W3-L1 hermetic unit suites, and emits
+  `SELF_HOSTING_MULTI_LANE_PASS` only when every fixture holds.
+
+### Ready-to-release amendment
+
+- **GLE-020 lazy-surface restoration.** Optional runtime surfaces resolve on
+  first access rather than eager import, so the engine's core imports without
+  `runtime/` present.
+- **Frameworks anchor derivation.** The capability frameworks list derives
+  from the installer's declared agent targets, never re-typed in
+  `capability_sync.py`.
+- **Version and CI net.** `.version.yaml` declares the version locations; the
+  release readiness gate enforces every declared manifest carries the release
+  version, and the changelog is written by hand, not rewritten by a bump.
+
+### Notes
+
+All fourteen manifests (root plus thirteen skills) move to 1.3.7 in step. The
+prose changelog remains a hand-written history and is not an auto-bumped
+location.
+
 ## 1.3.6 — The seam closes, and the council learns who answered
 
 1.3.5 shipped every part of a dispatch except the seam that joins them: a

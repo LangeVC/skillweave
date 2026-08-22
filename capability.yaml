@@ -1,6 +1,6 @@
 kind: bundle
 name: skillweave
-version: 1.3.6
+version: 1.3.7
 description: A complete 7-phase AI-assisted development lifecycle ecosystem.
 author: SkillWeave Team
 license: Apache-2.0
@@ -28,40 +28,40 @@ keywords:
 capabilities:
 - name: skillweave-blueprint
   source: ./skills/skillweave-blueprint
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-council
   source: ./skills/skillweave-council
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-design
   source: ./skills/skillweave-design
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-discovery
   source: ./skills/skillweave-discovery
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-launch
   source: ./skills/skillweave-launch
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-lifecycle
   source: ./skills/skillweave-lifecycle
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-observe
   source: ./skills/skillweave-observe
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-post-release
   source: ./skills/skillweave-post-release
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-promptchain-execute
   source: ./skills/skillweave-promptchain-execute
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-promptchain-generate
   source: ./skills/skillweave-promptchain-generate
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-promptchain-validate
   source: ./skills/skillweave-promptchain-validate
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-releasechain
   source: ./skills/skillweave-releasechain
-  version: 1.3.6
+  version: 1.3.7
 - name: skillweave-repo-health
   source: ./skills/skillweave-repo-health
-  version: 1.3.6
+  version: 1.3.7
