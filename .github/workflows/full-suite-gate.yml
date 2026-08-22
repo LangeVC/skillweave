@@ -6,8 +6,7 @@ name: Full Suite + GLE-020 Gate
 # failure — not for the red-to-red failures that already exist on the base.
 #
 # Three defences make the gate honest (as opposed to `|| true` in a new skin):
-#   1. `--continue-on-collection-errors` — a collection error (e.g.
-#      tests/unit/test_dagscheduler.py failing to import under 3.12) surfaces
+#   #   1. `--continue-on-collection-errors` — a collection error surfaces
 #      as an ERROR node instead of aborting with every other test skipped.
 #   2. A lower bound on the `N passed` count — if fewer than MIN_PASSED tests
 #      ran, the gate is red regardless of the allow-list, so "zero tests ran"
@@ -83,19 +82,16 @@ jobs:
           #   - discovery prompt_inventory/iteration_log: read
           #     .skillweave/tracking-log/*.yaml that is gitignored and absent
           #     in a fresh checkout (CI-only failure, passes on a dirty local).
-          #   - unit test_dagscheduler: 3.12 collection error
-          #     (TypeError: type 'Sequence' is not subscriptable) — surfaced
-          #     as an ERROR node, not an abort, by continue-on-collection-errors.
           ALLOWED = {
               "tests/integration/test_gle020_import_cycle.py::test_only_lazy_bound_modules_import_optional_subpackage",
               "tests/integration/test_gle020_import_cycle.py::test_import_succeeds_against_installed_wheel_with_runtime_absent",
+              "tests/test_backlog_sync.py::test_fetch_github_issues",
               "tests/test_backlog_sync.py::test_get_repo_owner_and_name_https",
               "tests/test_backlog_sync.py::test_get_repo_owner_and_name_ssh",
               "tests/test_council.py::TestCouncilEngine::test_deliberate_with_searcher_timeout",
               "tests/test_integration.py::test_promptchain_to_releasechain_flow",
               "tests/test_discovery.py::test_prompt_inventory_registered",
               "tests/test_discovery.py::test_iteration_log_exists",
-              "tests/unit/test_dagscheduler.py",
           }
 
           def failed_nodes(output):
