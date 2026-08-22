@@ -35,8 +35,15 @@ def _skill_dirs() -> list[Path]:
 class TestVersionSync:
     """Runtime, bundle, and skill-package versions agree on one release line."""
 
-    def test_pyproject_version_is_136(self):
-        assert _pyproject_version() == "1.3.6"
+    def test_pyproject_version_is_well_formed_and_matches_source_of_truth(self):
+        # .version.yaml names pyproject.toml as the release line's
+        # source_of_truth; assert that file is the actual source read here and
+        # that its version is a valid semver. Deliberately not pinned to any
+        # concrete release number so it cannot drift with the bump.
+        version_sources = yaml.safe_load((REPO_ROOT / ".version.yaml").read_text())
+        assert version_sources["source_of_truth"] == "pyproject.toml"
+        version = _pyproject_version()
+        assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"not semver: {version!r}"
 
     def test_bundle_manifest_version_matches_pyproject(self):
         manifest = yaml.safe_load((REPO_ROOT / "capability.yaml").read_text())
