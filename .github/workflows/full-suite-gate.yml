@@ -62,7 +62,7 @@ jobs:
           import sys
 
           # Lower bound on the passed count.  The healthy 3.12 fresh-checkout
-          # run is ~1062 passed; this floor catches "zero tests actually ran"
+          # run is 1090 passed; this floor catches "zero tests actually ran"
           # (e.g. an earlier abort), which a bare allow-list would read green.
           MIN_PASSED = 1000
 
@@ -84,7 +84,6 @@ jobs:
           #     in a fresh checkout (CI-only failure, passes on a dirty local).
           ALLOWED = {
               "tests/integration/test_gle020_import_cycle.py::test_only_lazy_bound_modules_import_optional_subpackage",
-              "tests/integration/test_gle020_import_cycle.py::test_import_succeeds_against_installed_wheel_with_runtime_absent",
               "tests/test_backlog_sync.py::test_fetch_github_issues",
               "tests/test_backlog_sync.py::test_get_repo_owner_and_name_https",
               "tests/test_backlog_sync.py::test_get_repo_owner_and_name_ssh",
