@@ -10,12 +10,13 @@ homepage: https://github.com/LangeVC/skillweave
 frameworks:
 - opencode
 - claude-code
-- claude-desktop
-- antigravity
-- qwen
-- gemini-cli
-- cursor
 - codex
+- gemini-cli
+- antigravity
+- openclaw
+- aider
+- windsurf
+- qwen
 keywords:
 - post-release
 - retrospective

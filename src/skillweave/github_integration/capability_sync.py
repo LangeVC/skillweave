@@ -15,11 +15,9 @@ from typing import Any
 
 import yaml
 
-DEFAULT_FRAMEWORKS = [
-    "opencode",
-    "claude-code",
-    "gemini-cli",
-]
+from ..installer import AGENT_CONFIG
+
+DEFAULT_FRAMEWORKS = [target.name for target in AGENT_CONFIG]
 
 DEFAULT_LICENSE = "Apache-2.0"
 DEFAULT_AUTHOR = "SkillWeave Team"
