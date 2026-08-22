@@ -21,14 +21,23 @@ never starts a process itself. The actual review body is the caller's concern
 
 from __future__ import annotations
 
+import importlib
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from skillweave.runtime.authority import AuthorityGuard, Role
-
 _FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _authority_module():
+    """Return the runtime ``authority`` module at call time (GLE-020).
+
+    ``skillweave.runtime`` is an optional subpackage that must not be imported
+    at module level here; the guard and role enum are resolved lazily at the
+    moment they are needed.
+    """
+    return importlib.import_module("skillweave.runtime.authority")
 
 
 class ReviewGateError(Exception):
@@ -62,8 +71,8 @@ class ReviewGate:
     it may start a review child-run.
     """
 
-    def __init__(self, guard: Optional[AuthorityGuard] = None):
-        self.guard = guard or AuthorityGuard()
+    def __init__(self, guard: Optional[Any] = None):
+        self.guard = guard or _authority_module().AuthorityGuard()
 
     @staticmethod
     def _normalize(sha: str) -> str:
@@ -79,13 +88,15 @@ class ReviewGate:
             )
         return norm
 
-    def assert_read_only(self, role: str = Role.REVIEWER.value) -> None:
+    def assert_read_only(self, role: Optional[str] = None) -> None:
         """Prove the role is read-only before a review may start.
 
         The review may proceed only when the running role is *technically*
         read-only (per the authority matrix). A role with any write, commit, or
         push capability is refused: a review must never run on a mutable path.
         """
+        if role is None:
+            role = _authority_module().Role.REVIEWER.value
         for action in ("write", "commit", "push", "mutate_run_state"):
             if self.guard.can_perform(role, action):
                 raise ReviewGateError(
@@ -100,22 +111,24 @@ class ReviewGate:
         pinned_remote_sha: str,
         fetched_sha: str,
         subject_repo: str,
-        role: str = Role.REVIEWER.value,
+        role: Optional[str] = None,
     ) -> ReviewRun:
         """Release a review child-run only when pin matches and role is read-only.
 
         Raises :class:`ReviewGateError` on a full-SHA mismatch or a write attempt.
         Returns a :class:`ReviewRun` otherwise.
         """
+        if role is None:
+            role = _authority_module().Role.REVIEWER.value
         pin = self.pin(pinned_remote_sha)
         fetched = self._normalize(fetched_sha)
         if fetched != pin:
             raise ReviewGateError(
                 f"full-SHA mismatch: pinned {pin} != fetched {fetched}; review blocked"
             )
-        if role != Role.REVIEWER.value:
+        if role != _authority_module().Role.REVIEWER.value:
             raise ReviewGateError(
-                f"review must run under '{Role.REVIEWER.value}', not '{role}'",
+                f"review must run under '{_authority_module().Role.REVIEWER.value}', not '{role}'",
                 code="REVIEW_WRONG_ROLE",
             )
         self.assert_read_only(role)

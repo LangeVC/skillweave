@@ -26,13 +26,18 @@ them from ``BundleSources``, so a valid bundle is recovered with no transcript
 involved.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, asdict
 from typing import Any, Optional
 import hashlib
+import importlib
 import json
 
-from skillweave.runtime.handoff import ColdStartBundle
-from skillweave.runtime.checkpoint import EnvironmentFingerprint
+
+def _cold_start_bundle():
+    """Return the runtime ``ColdStartBundle`` type at call time (GLE-020)."""
+    return importlib.import_module("skillweave.runtime.handoff").ColdStartBundle
 
 
 class ResumeIntegrityError(Exception):
@@ -81,6 +86,7 @@ def _fingerprint_dict(fp: EnvironmentFingerprint) -> dict[str, Any]:
 def _build_bundle(src: BundleSources) -> ColdStartBundle:
     """Reconstruct a bundle purely from raw sources (no transcript, no cached
     serialized fields)."""
+    ColdStartBundle = _cold_start_bundle()
     return ColdStartBundle(
         prd_uri=src.prd_uri,
         prd_digest=_sha256(src.prd_bytes),
