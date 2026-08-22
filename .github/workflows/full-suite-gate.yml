@@ -1,0 +1,232 @@
+name: Full Suite + GLE-020 Gate
+
+# SW-137A-L4-01: a real CI gate over the full pytest suite and the GLE-020
+# contract, with no `|| true` guard. Pre-existing failures are declared as a
+# *named* allow-list (per-test node IDs), so this job is red only for a new
+# failure — not for the red-to-red failures that already exist on the base.
+#
+# Three defences make the gate honest (as opposed to `|| true` in a new skin):
+#   #   1. `--continue-on-collection-errors` — a collection error surfaces
+#      as an ERROR node instead of aborting with every other test skipped.
+#   2. A lower bound on the `N passed` count — if fewer than MIN_PASSED tests
+#      ran, the gate is red regardless of the allow-list, so "zero tests ran"
+#      can never be mistaken for green.
+#   3. A GLE-020 offender-set *content* pin — the set of modules that
+#      top-level import the optional subpackage outside the declared lazy
+#      surface must remain exactly ['routing']; a bare node-id allow-list
+#      would let that set grow unnoticed.
+#
+# The allow-list is measured on a FRESH checkout (git archive, no gitignored
+# state) under python3.12, so it reflects the CI environment, not a dirty
+# local machine.
+#
+# Do NOT weaken this into `|| true` or a blanket `--ignore`. The whole point
+# is that something new must go red even while the pre-existing failures stay
+# red-to-red in the existing thin gates.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-suite-gate:
+    name: Full suite + GLE-020 with named allow-list
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          set -eo pipefail
+          pip install PyYAML pytest
+
+      - name: Run full suite + GLE-020 gate (no || true)
+        shell: bash
+        run: |
+          set -eo pipefail
+          PYTHONPATH=src python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+          # Lower bound on the passed count.  The healthy 3.12 fresh-checkout
+          # run is ~1062 passed; this floor catches "zero tests actually ran"
+          # (e.g. an earlier abort), which a bare allow-list would read green.
+          MIN_PASSED = 1000
+
+          # Named allow-list of pre-existing red-to-red failures on the base,
+          # measured on a FRESH checkout (git archive, no gitignored state)
+          # under python3.12 with --continue-on-collection-errors.
+          #
+          # Each entry is paired with the reason it is red-to-red so a future
+          # reviewer can re-judge it:
+          #   - gle020 lazy-bound: offender set is ['routing'], red-to-red by
+          #     design (the content pin below guards against growth).
+          #   - gle020 wheel: environmental offline wheel build (pip wheel in
+          #     a sandboxed runner has no network/index).
+          #   - backlog_sync:*: live GitHub/network calls, no token in CI.
+          #   - council searcher timeout: network search absent in CI.
+          #   - integration promptchain->releasechain: environment/infra.
+          #   - discovery prompt_inventory/iteration_log: read
+          #     .skillweave/tracking-log/*.yaml that is gitignored and absent
+          #     in a fresh checkout (CI-only failure, passes on a dirty local).
+          ALLOWED = {
+              "tests/integration/test_gle020_import_cycle.py::test_only_lazy_bound_modules_import_optional_subpackage",
+              "tests/integration/test_gle020_import_cycle.py::test_import_succeeds_against_installed_wheel_with_runtime_absent",
+              "tests/test_backlog_sync.py::test_fetch_github_issues",
+              "tests/test_backlog_sync.py::test_get_repo_owner_and_name_https",
+              "tests/test_backlog_sync.py::test_get_repo_owner_and_name_ssh",
+              "tests/test_council.py::TestCouncilEngine::test_deliberate_with_searcher_timeout",
+              "tests/test_integration.py::test_promptchain_to_releasechain_flow",
+              "tests/test_discovery.py::test_prompt_inventory_registered",
+              "tests/test_discovery.py::test_iteration_log_exists",
+          }
+
+          def failed_nodes(output):
+              nodes = set()
+              in_summary = False
+              for line in output.splitlines():
+                  if "short test summary info" in line:
+                      in_summary = True
+                      continue
+                  if not in_summary:
+                      continue
+                  m = re.match(r"^(?:FAILED|ERROR)\s+(.+)$", line)
+                  if m:
+                      nodes.add(m.group(1).split(" - ", 1)[0].strip())
+              return nodes
+
+          def passed_count(output):
+              m = re.search(r"(\d+)\s+passed", output)
+              return int(m.group(1)) if m else 0
+
+          env = dict(os.environ)
+          env["PYTHONPATH"] = "src" + os.pathsep + env.get("PYTHONPATH", "")
+          proc = subprocess.run(
+              [
+                  sys.executable, "-m", "pytest", "tests/", "-q",
+                  "-p", "no:cacheprovider", "--tb=no",
+                  "--continue-on-collection-errors",
+              ],
+              stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT,
+              text=True,
+              env=env,
+          )
+          out = proc.stdout or ""
+          print(out)
+
+          failed = failed_nodes(out)
+          passed = passed_count(out)
+          unexpected = sorted(failed - ALLOWED)
+          allow_listed = sorted(failed & ALLOWED)
+
+          print("=" * 70)
+          print(f"Passed: {passed} (floor {MIN_PASSED})")
+          print(f"Failed/errored tests: {len(failed)}")
+          print(f"Allow-listed (pre-existing): {len(allow_listed)}")
+          for n in allow_listed:
+              print(f"  [allow-listed] {n}")
+          print(f"Unexpected (new): {len(unexpected)}")
+          for n in unexpected:
+              print(f"  [UNEXPECTED] {n}")
+
+          red = []
+          if passed < MIN_PASSED:
+              red.append(
+                  f"passed {passed} < floor {MIN_PASSED} (did tests actually run?)"
+              )
+          if unexpected:
+              red.append("new failure(s) not in the allow-list: " + ", ".join(unexpected))
+
+          # F1 regression guard: pin the GLE-020 offender set by CONTENT.
+          # A bare node-id allow-list would let the offender set silently GROW
+          # (a new module top-level importing skillweave.runtime outside the
+          # lazy surface) and still read green.  Reproduce the offender
+          # computation in-process and require it to be exactly {'routing'}.
+          print("-" * 70)
+          print("GLE-020 offender-set content pin")
+          gle = subprocess.run(
+              [sys.executable, "-c", env["GLE_OFFENDERS_SNIPPET"]],
+              stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT,
+              text=True,
+              env=env,
+          )
+          print(gle.stdout or "")
+          if gle.returncode != 0:
+              red.append(
+                  "GLE-020 offender set is not exactly ['routing'] (regression "
+                  "outside the lazy surface)"
+              )
+
+          if red:
+              print("=" * 70)
+              for r in red:
+                  print(f"GATE: RED - {r}")
+              sys.exit(1)
+
+          print("GATE: GREEN - passed >= floor, no unexpected failures, "
+                "GLE-020 offender set intact.")
+          sys.exit(0)
+          PY
+        env:
+          GLE_OFFENDERS_SNIPPET: |
+            import ast, os, sys
+            sys.path.insert(0, "src")
+            import skillweave
+            lazy_roots = {m.split(".", 1)[1].split(".")[0] for m in skillweave._LAZY_NAMES.values()}
+            SRC = "src"
+            PKG = os.path.join(SRC, "skillweave")
+            PREFIX = "skillweave."
+            OPTIONAL = ("runtime",)
+            def is_optional(n):
+                return any(n == PREFIX + s or n.startswith(PREFIX + s + ".") for s in OPTIONAL)
+            def core_paths():
+                for dp, dn, fns in os.walk(PKG):
+                    rel = os.path.relpath(dp, SRC).replace(os.sep, ".")
+                    for fn in fns:
+                        if fn.endswith(".py"):
+                            stem = fn[:-3]
+                            yield os.path.join(dp, fn), (rel + "." + stem) if rel != "." else stem
+            def top_imports(path):
+                with open(path, encoding="utf-8") as fh:
+                    tree = ast.parse(fh.read(), filename=path)
+                out = []
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for a in node.names:
+                            if a.name.startswith(PREFIX):
+                                out.append(a.name)
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.level and node.module:
+                            out.append(PREFIX + node.module)
+                        elif node.level == 0 and node.module and node.module.startswith(PREFIX):
+                            out.append(node.module)
+                return out
+            offenders = set()
+            for path, dotted in core_paths():
+                if is_optional(dotted) or dotted == "skillweave":
+                    continue
+                for t in top_imports(path):
+                    if is_optional(t):
+                        offenders.add(dotted.split(".")[1].split(".")[0])
+            actual = sorted(offenders - lazy_roots)
+            expected = ["routing"]
+            print("GLE-020 offenders outside lazy surface:", actual)
+            if actual != expected:
+                print(f"OFFENDER-MISMATCH expected {expected} got {actual}")
+                sys.exit(1)
+            print("OFFENDER-SET-OK", actual)
