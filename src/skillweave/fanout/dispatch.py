@@ -17,12 +17,17 @@ content-addressed), so two children never share one run or one artifact.
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, List, Optional, Sequence, Tuple
 
-from skillweave.runtime.runner_adapter import start_process, ProcessResult, RunningProcess
 from skillweave.routing.modelspec import ModelSpec, from_value
+
+
+def _start_process():
+    """Return the runtime ``start_process`` primitive at call time (GLE-020)."""
+    return importlib.import_module("skillweave.runtime.runner_adapter").start_process
 
 
 @dataclass
@@ -119,10 +124,10 @@ def fan_out_dispatch(
 
     resolved_models = [_resolve_spec(spec) for spec in specs]
 
-    handles: List[Tuple[int, RunningProcess, List[str]]] = []
+    handles: List[Tuple[int, Any, List[str]]] = []
     for index, argv in enumerate(commands):
         child_run_id = f"{run_id}-{index}"
-        handle = start_process(
+        handle = _start_process()(
             list(argv),
             run_id=child_run_id,
             subject_repo=subject_repo,

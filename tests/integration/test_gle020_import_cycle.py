@@ -220,28 +220,39 @@ def _build_and_probe_wheel(tmp):
     dist = os.path.join(tmp, "dist")
     venv = os.path.join(tmp, "venv")
 
+    # Every subprocess below must resolve against the wheel it just installed,
+    # never against the caller's source tree.  The full-suite gate runs pytest
+    # with PYTHONPATH=src; inherited, that makes find_spec('skillweave') in the
+    # venv probe return the WORKING TREE, and the venv-containment assert below
+    # is then the only thing between that and an rmtree of the repo's own
+    # src/skillweave/runtime.  Strip it here so the probe is hermetic and the
+    # assert stays a guard rather than a tripwire.
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
     subprocess.run(
         ["git", "archive", "HEAD"],
         check=True, stdout=open(src_archive, "wb"), cwd=REPO_ROOT, timeout=60,
+        env=env,
     )
     os.makedirs(src_dir)
     subprocess.run(
         ["tar", "-xf", src_archive], check=True, capture_output=True,
-        cwd=src_dir, timeout=60,
+        cwd=src_dir, timeout=60, env=env,
     )
     os.makedirs(dist)
     subprocess.run(
         [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", dist, src_dir],
-        check=True, capture_output=True, cwd=src_dir, timeout=120,
+        check=True, capture_output=True, cwd=src_dir, timeout=120, env=env,
     )
     subprocess.run(
-        [sys.executable, "-m", "venv", venv], check=True, capture_output=True, timeout=60,
+        [sys.executable, "-m", "venv", venv], check=True, capture_output=True,
+        timeout=60, env=env,
     )
     wheels = glob.glob(os.path.join(dist, "*.whl"))
     venv_py = os.path.join(venv, "bin", "python3")
     subprocess.run(
         [venv_py, "-m", "pip", "install", wheels[-1]],
-        check=True, capture_output=True, timeout=120,
+        check=True, capture_output=True, timeout=120, env=env,
     )
 
     # Find runtime/ inside site-packages of the venv and remove it there only.
@@ -250,7 +261,9 @@ def _build_and_probe_wheel(tmp):
         "s=importlib.util.find_spec('skillweave'); "
         "print(os.path.join(os.path.dirname(s.origin),'runtime'))"
     )
-    rp = subprocess.run([venv_py, "-c", code], capture_output=True, text=True)
+    rp = subprocess.run(
+        [venv_py, "-c", code], capture_output=True, text=True, env=env,
+    )
     runtime_dir = rp.stdout.strip()
     assert os.path.realpath(runtime_dir).startswith(
         os.path.realpath(venv)
@@ -269,5 +282,6 @@ def _build_and_probe_wheel(tmp):
     )
     res = subprocess.run(
         [venv_py, "-c", probe], capture_output=True, text=True, timeout=60,
+        env=env,
     )
     return res.returncode, (res.stdout + res.stderr)

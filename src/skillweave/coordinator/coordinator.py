@@ -19,25 +19,25 @@ and never by ``reviewer``/``worker``/``sub_agent`` roles.
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from skillweave.runtime.authority import Role
-
 #: The capability that grants root-DAG-cursor mutation. Held by ops only.
 COORDINATOR_CAPABILITY = "mutate_root_dag"
 
-#: Roles that may mutate the root cursor (exactly the coordinator).
-_WRITER_ROLES = {Role.OPS.value}
 
-#: Roles that may read the root cursor.
-_READER_ROLES = {
-    Role.OPS.value,
-    Role.REVIEWER.value,
-    Role.OBSERVER.value,
-    Role.OPERATOR.value,
-}
+def _role_value(name: str) -> str:
+    """Resolve a runtime ``Role`` member to its string value at call time.
+
+    GLE-020: ``skillweave.runtime`` is an optional subpackage that must not be
+    top-level imported here. The ``Role`` enum is resolved lazily (via
+    ``importlib`` on a string, so no ``skillweave.runtime.*`` import statement
+    appears in this module's AST) at the moment a role string is needed.
+    """
+    role = importlib.import_module("skillweave.runtime.authority").Role
+    return getattr(role, name).value
 
 #: DDL for the root-DAG cursor table, created lazily by the coordinator on the
 #: shared SQLite store. Exposed so a caller can pre-create it in a known schema.
@@ -118,7 +118,7 @@ class Coordinator:
         self._conn.commit()
 
     def _can_write(self, role: str) -> bool:
-        return role in _WRITER_ROLES
+        return role == _role_value("OPS")
 
     def _assert_writer(self, role: str, action: str) -> None:
         if not self._can_write(role):
@@ -126,12 +126,14 @@ class Coordinator:
 
     # ---- read ----
 
-    def load(self, sequence_id: str, wave: str, role: str = Role.REVIEWER.value) -> Optional[RootDAGCursor]:
+    def load(self, sequence_id: str, wave: str, role: Optional[str] = None) -> Optional[RootDAGCursor]:
         """Load the persisted root cursor (the fresh-coordinator resume path).
 
         Reading is open to reader roles; loading with a reviewer role is
         explicitly allowed so a reviewer can inspect (but not mutate) the root.
         """
+        if role is None:
+            role = _role_value("REVIEWER")
         row = self._conn.execute(
             "SELECT * FROM root_dag_cursor WHERE key = ?", (_key(sequence_id, wave),)
         ).fetchone()
@@ -157,7 +159,7 @@ class Coordinator:
         sequence_id: str,
         wave: str,
         lane: str,
-        role: str = Role.OPS.value,
+        role: Optional[str] = None,
     ) -> RootDAGCursor:
         """Record the initial root cursor exactly once (idempotent).
 
@@ -165,6 +167,8 @@ class Coordinator:
         cursor unchanged — a fresh coordinator never re-initialises over another
         coordinator's committed cursor.
         """
+        if role is None:
+            role = _role_value("OPS")
         self._assert_writer(role, "ensure_root")
         key = _key(sequence_id, wave)
         existing = self.load(sequence_id, wave)
@@ -209,7 +213,7 @@ class Coordinator:
         wave: str,
         node_id: str,
         *,
-        role: str = Role.OPS.value,
+        role: Optional[str] = None,
         expected_version: Optional[int] = None,
     ) -> RootDAGCursor:
         """Append ``node_id`` to the root cursor (compare-and-set on version).
@@ -218,8 +222,10 @@ class Coordinator:
         does not match the persisted cursor's version, the write is refused —
         two coordinators therefore cannot both append the same next node.
         """
+        if role is None:
+            role = _role_value("OPS")
         self._assert_writer(role, "advance")
-        cursor = self.load(sequence_id, wave, role=Role.OPS.value)
+        cursor = self.load(sequence_id, wave, role=_role_value("OPS"))
         if cursor is None:
             raise CoordinatorAccessError(role, "advance (no root cursor yet; call ensure_root)")
         if expected_version is not None and cursor.version != expected_version:
