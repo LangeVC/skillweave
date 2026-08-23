@@ -1,17 +1,23 @@
-"""FFR-700-2 (dispatch 1 of 2): session_boundary required; parallel lanes
-dispatched as subagents.
+"""FFR-700-2: session_boundary required; parallel lanes dispatched as
+subagents; a cold session resumes from the state file alone and runs one batch.
 
-Covers the two acceptance criteria of this dispatch:
+Covers all four acceptance criteria of this lane:
 
 1. ``sequences/*.yaml`` carries an explicit ``session_boundary: batch``, and the
    executor refuses a sequence that does not declare one.
 2. Lanes marked ``parallel_lanes`` are dispatched as subagents rather than
    executed inline.
+3. Demonstrated, not asserted: one batch is executed by a session that receives
+   the state file and nothing else.
+4. Red proof: a sequence without ``session_boundary`` is rejected, and a second
+   batch in the same session is refused.
 
 Self-contained ``sys.path`` handling (independent of conftest/pytest).
 """
 
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _src = Path(__file__).resolve().parent.parent / "src"
@@ -27,6 +33,11 @@ from skillweave.promptchain.execute import (  # noqa: E402
     load_sequence,
     build_dispatch_plan,
     execute_sequence,
+    BatchCommand,
+    SessionState,
+    Session,
+    SessionConsumedError,
+    load_state_file,
 )
 
 
@@ -153,6 +164,139 @@ def test_execute_sequence_without_parallel_lanes_does_not_call_seam():
     assert called == []
 
 
+# --- Criterion 3: a cold session resumes from the state file alone ---
+
+
+def _state(session_boundary="batch", batch_index=0, commands=None):
+    if commands is None:
+        commands = [
+            BatchCommand(
+                lane_id="T1",
+                mode=SUBAGENT,
+                command=[sys.executable, "-c", "print('batch-0-T1')"],
+            ),
+            BatchCommand(
+                lane_id="T3",
+                mode=INLINE,
+                command=[sys.executable, "-c", "print('batch-0-T3')"],
+            ),
+        ]
+    return SessionState(
+        session_boundary=session_boundary,
+        batch_index=batch_index,
+        commands=commands,
+    )
+
+
+def test_cold_session_executes_one_batch_from_state_file_alone():
+    # A real subprocess must actually run, proving execution (not an assertion
+    # that a plan was built). The session receives only the state object — no
+    # sequence, no declaration, no transcript.
+    state = _state(
+        commands=[
+            BatchCommand(
+                lane_id="T1",
+                mode=INLINE,
+                command=[sys.executable, "-c", "print('real-cold-execution')"],
+            ),
+        ]
+    )
+    captured = {}
+
+    def inline(argv):
+        out = subprocess.run(argv, capture_output=True, check=True)
+        captured["stdout"] = out.stdout.decode().strip()
+        return out
+
+    session = Session(state=state)
+    result = session.run(inline=inline)
+
+    assert result.ran_any is True
+    assert result.inline_lane_ids == ["T1"]
+    # The batch really executed, not merely planned.
+    assert captured["stdout"] == "real-cold-execution"
+
+
+def test_state_file_round_trips_boundary_and_batch():
+    state = _state(batch_index=2)
+    d = state.to_dict()
+    assert d["session_boundary"] == "batch"
+    assert d["batch_index"] == 2
+    back = SessionState.from_dict(d)
+    assert back.session_boundary == "batch"
+    assert back.batch_index == 2
+    assert [c.lane_id for c in back.commands] == ["T1", "T3"]
+
+
+def test_load_state_file_reads_boundary_from_disk():
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as fh:
+        import yaml
+
+        yaml.safe_dump(_state().to_dict(), fh)
+        path = fh.name
+    try:
+        state = load_state_file(path)
+        assert state.session_boundary == "batch"
+        assert state.batch_index == 0
+    finally:
+        Path(path).unlink()
+
+
+# --- Criterion 4 (red proof): missing boundary rejected; second batch refused ---
+
+
+def test_state_file_without_session_boundary_is_rejected():
+    for bad in ("", None):
+        state = _state(session_boundary=bad)
+        try:
+            Session(state=state).run(inline=lambda argv: None)
+            assert False, "expected MissingSessionBoundaryError"
+        except MissingSessionBoundaryError:
+            pass
+
+
+def test_state_file_from_dict_without_boundary_is_rejected():
+    d = _state().to_dict()
+    del d["session_boundary"]
+    try:
+        SessionState.from_dict(d)
+        assert False, "expected MissingSessionBoundaryError"
+    except MissingSessionBoundaryError as e:
+        assert "session_boundary" in str(e)
+
+
+def test_second_batch_in_same_session_is_refused():
+    ran = []
+
+    def inline(argv):
+        ran.append(list(argv))
+        return None
+
+    state = _state(
+        batch_index=0,
+        commands=[
+            BatchCommand(
+                lane_id="T3",
+                mode=INLINE,
+                command=[sys.executable, "-c", "print('batch-0')"],
+            ),
+        ],
+    )
+    session = Session(state=state)
+    first = session.run(inline=inline)
+    assert first.batch_index == 0
+    assert len(ran) == 1
+
+    # A second batch in the same session is refused, never run.
+    try:
+        session.run(inline=inline)
+        assert False, "second batch in the same session must be refused"
+    except SessionConsumedError as e:
+        assert e.batch_index == 0
+    # Only the first batch's lane ever executed; the second never ran.
+    assert len(ran) == 1
+
+
 def _run_all() -> int:
     tests = [
         test_sequence_with_session_boundary_is_accepted,
@@ -165,6 +309,12 @@ def _run_all() -> int:
         test_lane_kind_is_derived_from_the_block_not_invented,
         test_execute_sequence_returns_a_plan_and_uses_the_seam,
         test_execute_sequence_without_parallel_lanes_does_not_call_seam,
+        test_cold_session_executes_one_batch_from_state_file_alone,
+        test_state_file_round_trips_boundary_and_batch,
+        test_load_state_file_reads_boundary_from_disk,
+        test_state_file_without_session_boundary_is_rejected,
+        test_state_file_from_dict_without_boundary_is_rejected,
+        test_second_batch_in_same_session_is_refused,
     ]
     failed = 0
     for t in tests:

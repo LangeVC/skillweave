@@ -17,6 +17,13 @@ from .execute import (
     load_sequence,
     build_dispatch_plan,
     execute_sequence,
+    BatchCommand,
+    SessionState,
+    SessionRun,
+    Session,
+    SessionConsumedError,
+    SessionExecutionError,
+    load_state_file,
 )
 
 __all__ = [
@@ -30,4 +37,11 @@ __all__ = [
     "load_sequence",
     "build_dispatch_plan",
     "execute_sequence",
+    "BatchCommand",
+    "SessionState",
+    "SessionRun",
+    "Session",
+    "SessionConsumedError",
+    "SessionExecutionError",
+    "load_state_file",
 ]
