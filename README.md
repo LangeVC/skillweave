@@ -212,6 +212,17 @@ SkillWeave ships in two formats depending on agent capabilities:
 
 Both formats use the same Python core (`src/skillweave/`). SKILL.md is the universal baseline; MCP provides richer tool-based interaction for agents that support it.
 
+### Host-Neutral Scope
+
+Shipped skills are host-neutral by contract: they neither invoke a specific host
+binary nor default task assignment to a concrete host or model. Task routing is
+capability-based (`target_agent: any`); any retained host-specific invocation
+lives under `references/adapters/<host>.md` as a non-binding adapter example.
+
+Stable, host-neutral Command/Intent semantics and full cross-transport
+(Command ⇄ MCP/Intent) parity are **1.4.0 scope** and are not implemented in
+the current release.
+
 ---
 
 ## Free / Studio

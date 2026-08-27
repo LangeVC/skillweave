@@ -452,7 +452,7 @@ PromptChain Generate is a key component in the complete SkillWeave development f
 Like all SkillWeave skills, PromptChain Generate is **agent-agnostic**:
 - Uses **capability-based routing** instead of specific agent names
 - Maps task types to required capabilities (`code_generation`, `planning`, `testing`, etc.)
-- Compatible with any AI coding agent (OpenCode, Claude Code, Gemini, future agents)
+- Compatible with any AI coding agent on any supported transport (Markdown or MCP)
 - Runtime agent discovery and capability matching
 
 ## Recommended companion files

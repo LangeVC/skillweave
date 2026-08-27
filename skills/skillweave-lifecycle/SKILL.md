@@ -259,7 +259,7 @@ All reports follow: `yyyy-mm-dd-topic.md`
 
 Examples:
 - `2026-05-17-v1.0-release.md`
-- `2026-05-17-council-opencode-diagnosis.md`
+- `2026-05-17-council-multi-model-diagnosis.md`
 - `2026-05-20-sprint-retrospective.md`
 
 #### Report Generation

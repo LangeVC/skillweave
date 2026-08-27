@@ -598,7 +598,7 @@ After creating the blueprint:
 
 ## Agent-Agnostic Design
 
-SkillWeave Blueprint is designed to be **agent-agnostic** – it works with any AI coding agent, not just specific ones like OpenCode, Claude Code, or Gemini.
+SkillWeave Blueprint is designed to be **agent-agnostic** – it works with any AI coding agent that reads Markdown or speaks MCP, across all supported transports.
 
 ### How It Works
 
@@ -617,11 +617,10 @@ SkillWeave Blueprint is designed to be **agent-agnostic** – it works with any 
    - Current availability and load
    - User preferences and configurations
 
-3. **Flexible Configuration**: You can still specify preferred agents if needed, but the system defaults to capability-based routing:
+3. **Flexible Configuration**: Assignment is capability-based by default (`target_agent: any`). Pin a concrete host only via an explicit, user-supplied adapter — never as a built-in default:
    ```json
    {
-     "target_agent": "any",  // Let system choose (recommended)
-     "target_agent": "opencode",  // Specific agent preference
+     "target_agent": "any",  // Recommended: let the runtime map capabilities to an available agent
      "required_capabilities": ["code_generation", "testing"]
    }
    ```

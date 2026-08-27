@@ -137,18 +137,13 @@ def calculate_duration_score(tasks):
 ### Agent Diversity Calculation
 ```python
 def calculate_agent_diversity(tasks):
-    agent_types = set()
+    capabilities = set()
     for task in tasks:
-        if agent := task.get("target_agent"):
-            agent_types.add(agent)
-        if agent_type := task.get("agent_type"):
-            # Map agent_type to likely agents
-            if agent_type == "build":
-                agent_types.add("opencode")
-            elif agent_type == "plan":
-                agent_types.add("claude-code")
-    
-    diversity = len(agent_types)
+        # Diversity is measured by required capabilities, not concrete hosts.
+        caps = task.get("required_capabilities") or ["any"]
+        capabilities.update(caps)
+
+    diversity = len(capabilities)
     if diversity == 1:
         return 20
     elif diversity == 2:
@@ -322,10 +317,11 @@ def find_parallel_opportunities(tasks):
             # Deadlock or circular dependency
             break
         
-        # Group by agent type for parallel execution
+        # Group by target for parallel execution; the neutral default lets the
+        # runtime map to any available capability/runtime rather than pinning a host.
         by_agent = {}
         for task in ready:
-            agent = task.get("target_agent", "opencode")
+            agent = task.get("target_agent", "any")
             by_agent.setdefault(agent, []).append(task["id"])
         
         # Add parallel group if multiple tasks can run concurrently
@@ -404,7 +400,7 @@ Complex Mode (Overnight)
 Tasks: 1 (BUG-001: Fix login error)
 Duration: 30 minutes
 Dependencies: None
-Agents: 1 (opencode)
+Capabilities: 1 (code_generation)
 Risks: Low
 Types: 1 (bug-fix)
 
@@ -417,7 +413,7 @@ Recommendation: Direct execution with REX-style workflow
 Tasks: 5 (INFRA-001, API-001, UI-001, TEST-001, DOC-001)
 Duration: 3 hours
 Dependencies: Moderate (API depends on INFRA, UI depends on API)
-Agents: 2 (opencode, claude-code)
+Capabilities: 3 (code_generation, testing, review)
 Risks: Medium
 Types: 4 (infrastructure, api, ui, documentation)
 
@@ -430,7 +426,7 @@ Recommendation: Ralph Loop Attended with checkpoints
 Tasks: 12 (various setup, core features, testing, deployment)
 Duration: 8 hours
 Dependencies: Complex (multiple dependency chains)
-Agents: 3 (opencode, claude-code, gemini)
+Capabilities: 4 (code_generation, testing, review, infrastructure)
 Risks: High
 Types: 6 (infrastructure, api, ui, database, testing, devops)
 

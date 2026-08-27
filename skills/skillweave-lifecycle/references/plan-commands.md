@@ -33,7 +33,7 @@ Example output:
   INFRA-001  Define Handover Schemas            [high] completed 2026-05-17
 
 🔄 Doing (2)
-  INFRA-002  Council OpenCode Bug               [high] week 1
+  INFRA-002  Council Cross-Model Bug             [high] week 1
   FEAT-002   File-Based Planning System         [high] week 1
 
 📥 Backlog (8)

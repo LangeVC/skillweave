@@ -48,7 +48,8 @@ verification: [test-results, build-status, etc.]
 iterations:
   - id: iteration-001
     task: TASK-ID
-    agent: opencode
+    agent: any
+    capability: code_generation
     start: 2024-01-15T14:30:00Z
     end: 2024-01-15T14:32:00Z
     status: success
@@ -82,7 +83,7 @@ iterations:
   "settings": {
     "max_iterations": 50,
     "timeout_minutes": 480,
-    "required_agents": ["opencode", "codex"],
+    "required_capabilities": ["code_generation", "testing"],
     "verification_level": "strict"
   },
   "tasks": [
@@ -91,9 +92,9 @@ iterations:
       "title": "Task Title",
       "description": "Task description",
       "agent_type": "build", // or "plan", "mixed"
-      "target_agent": "opencode", // specific or "any"
+      "target_agent": "any", // recommended: let the runtime map capabilities; omit to defer entirely
+      "required_capabilities": ["code_generation"], // optional capability requirements
       "estimated_tokens": 2000,
-      "estimated_minutes": 30,
       "priority": "critical",
       "dependencies": ["OTHER-TASK"],
       "acceptance_criteria": [],
@@ -115,54 +116,60 @@ iterations:
 ## Multi-Agent Execution Strategy
 
 ### Agent Capability Mapping
-Different agents have different strengths:
+Task assignment follows declared capabilities, not concrete hosts. The runtime
+picks whatever available agent best matches the required capability:
 
-| Agent | Strengths | Best For |
-|-------|-----------|----------|
-| **Opencode** | Code generation, file operations | Build tasks, infrastructure |
-| **Claude Code** | Complex reasoning, planning | Architecture, design decisions |
-| **Codex** | Quick iterations, code completion | Small fixes, prototyping |
-| **Gemini** | Research, analysis | Planning, market research |
-| **Antigravity** | Automation, scripting | DevOps, deployment |
+| Capability | Typical Use |
+|------------|-------------|
+| `planning` | Architecture, design decisions |
+| `code_generation` | Build tasks, infrastructure |
+| `testing` | Test creation and execution |
+| `review` | Code review, quality assessment |
+| `research` | Planning, market research |
+| `automation` | DevOps, deployment, scripting |
+
+A concrete host is only selected through an explicit, user-supplied adapter —
+never as a built-in default. See `references/adapters/`.
 
 ### Task Routing Logic
 ```python
 def route_task(task, available_agents):
-    if task["agent_type"] == "plan":
-        # Prefer agents good at planning
-        preferred = ["claude-code", "gemini", "codex"]
-    elif task["agent_type"] == "build":
-        # Prefer agents good at building
-        preferred = ["opencode", "codex", "antigravity"]
-    else:  # mixed
-        # Balance based on task content
-        preferred = ["opencode", "claude-code"]
-    
-    # Select available preferred agent
-    for agent in preferred:
-        if agent in available_agents:
+    # Route by required capability, defaulting to neutral ("any").
+    required = task.get("required_capabilities") or ["any"]
+    if len(required) == 1:
+        capability = required[0]
+    else:
+        capability = "any"
+
+    if capability == "any":
+        # Any capable agent; the runtime maps based on availability.
+        return available_agents[0] if available_agents else None
+
+    # Return any available agent that declares the required capability.
+    for agent in available_agents:
+        if capability in (agent.get("capabilities") or []):
             return agent
-    
-    # Fallback to any available
+
+    # Fallback to any available.
     return available_agents[0] if available_agents else None
 ```
 
-### Parallel Execution with Multiple Agents
+### Parallel Execution with Multiple Capabilities
 ```yaml
 execution_plan:
   phase_1:
     tasks: ["INFRA-001", "INFRA-002"]
-    agents: ["opencode", "codex"]  # Run in parallel
+    required_capabilities: ["code_generation"]  # Run in parallel
     strategy: parallel_independent
     
   phase_2:
     tasks: ["API-001", "UI-001"]
-    agents: ["opencode", "claude-code"]
+    required_capabilities: ["code_generation"]
     strategy: parallel_after_phase_1
     
   phase_3:
     tasks: ["TEST-001", "TEST-002"]
-    agents: ["opencode", "codex"]
+    required_capabilities: ["testing"]
     strategy: parallel_after_respective_tasks
 ```
 
@@ -334,10 +341,10 @@ task_completion_flow:
 ```yaml
 pattern: collaborative_feature_build
 agents:
-  planner: claude-code  # Architecture and design
-  builder: opencode     # Implementation
-  tester: codex         # Test creation
-  reviewer: gemini      # Quality assurance
+  planner: planning     # Architecture and design
+  builder: code_generation  # Implementation
+  tester: testing       # Test creation
+  reviewer: review      # Quality assurance
 flow:
   - planner: Create design specification
   - builder: Implement based on specification
@@ -354,19 +361,19 @@ flow:
 pattern: multi_agent_review
 personas:
   - role: security_reviewer
-    agent: gemini
+    capability: review
     focus: vulnerabilities, input validation
   
   - role: performance_reviewer  
-    agent: codex
+    capability: review
     focus: optimization, bottlenecks
   
   - role: accessibility_reviewer
-    agent: claude-code
+    capability: review
     focus: WCAG compliance, screen readers
   
   - role: code_quality_reviewer
-    agent: opencode
+    capability: code_generation
     focus: standards, maintainability
 process: Parallel review with consolidated feedback
 ```
@@ -378,10 +385,10 @@ process: Parallel review with consolidated feedback
 ```yaml
 pattern: specialized_testing
 agents:
-  unit_tester: codex          # Fast, many small tests
-  integration_tester: opencode # API, database tests
-  e2e_tester: claude-code     # User flow tests
-  coverage_analyst: gemini     # Analysis, reporting
+  unit_tester: testing          # Fast, many small tests
+  integration_tester: testing   # API, database tests
+  e2e_tester: testing           # User flow tests
+  coverage_analyst: research    # Analysis, reporting
 strategy: Parallel test development with coverage tracking
 ```
 

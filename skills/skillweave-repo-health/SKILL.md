@@ -48,21 +48,25 @@ Repo Assessment & Cleanup — Inventory-Scan, 5-Class-Klassifikation, Duplikatse
 
 ## Usage
 
-```bash
-# Scan
-opencode skillweave-repo-health command="scan" path="./src"
+Invoke the skill by its name with a `command` and `path` argument. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
 
-# Classify + Report
-opencode skillweave-repo-health command="classify" path="."
-opencode skillweave-repo-health command="report" path="."
+```text
+skillweave-repo-health command="scan" path="./src"
+skillweave-repo-health command="classify" path="."
+skillweave-repo-health command="report" path="."
 
 # Dry-run cleanup (default)
-opencode skillweave-repo-health command="cleanup" path="."
+skillweave-repo-health command="cleanup" path="."
 
 # Archive duplicates
-opencode skillweave-repo-health command="duplicates" path="."
-opencode skillweave-repo-health command="archive" path="."
+skillweave-repo-health command="duplicates" path="."
+skillweave-repo-health command="archive" path="."
 
 # Restore from manifest
-opencode skillweave-repo-health command="restore" path="./archive"
+skillweave-repo-health command="restore" path="./archive"
 ```
+
+Host-specific invocation examples (non-binding adapters) live in
+[`references/adapters/`](references/adapters/).
