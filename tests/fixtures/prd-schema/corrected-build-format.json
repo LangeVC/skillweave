@@ -7,6 +7,9 @@
     "sequence_type": "build",
     "execution_mode": "ralph_attended",
     "session_boundary": "batch",
+    "worktree": "langevc/wt-corrected-ops",
+    "branch": "ops/CORRECTED-format",
+    "base": "main 949967a",
     "state_file": ".corrected-state.md",
     "runner_shell": "bash -eo pipefail",
     "phase_names": {

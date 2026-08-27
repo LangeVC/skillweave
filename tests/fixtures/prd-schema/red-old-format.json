@@ -11,11 +11,6 @@
     "timeout_minutes": 120,
     "verification_level": "standard"
   },
-  "sequence": {
-    "sequence_id": "red-old-format",
-    "sequence_type": "build",
-    "execution_mode": "ralph_attended"
-  },
   "tasks": [
     {
       "id": "RED-001",

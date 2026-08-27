@@ -55,6 +55,36 @@ def _fixture(name):
     return json.loads((_FIXTURE_DIR / name).read_text())
 
 
+# Keys regen-sequence.py's ``_sequence`` and ``_briefs`` read unconditionally
+# from the ``sequence`` block (``cfg[key]``). Their absence makes the real
+# generator raise ``KeyError`` before a single brief is written, so a PRD that
+# omits any of them fails closed with zero dispatches regardless of task shape.
+# See planning/scripts/regen-sequence.py (_sequence/_briefs).
+_SEQUENCE_REQUIRED_KEYS = (
+    "sequence_id",
+    "sequence_type",
+    "execution_mode",
+    "worktree",
+    "branch",
+    "base",
+    "state_file",
+    "runner_shell",
+)
+
+
+def _sequence_fail_closed(prd):
+    """True if the real generator fails before writing any dispatch brief.
+
+    Mirrors regen-sequence.py: ``load`` aborts without a ``sequence`` block,
+    and ``_sequence``/``_briefs`` read these keys directly, so any missing key
+    raises ``KeyError`` before a brief exists.
+    """
+    cfg = prd.get("sequence")
+    if not isinstance(cfg, dict):
+        return True
+    return any(key not in cfg for key in _SEQUENCE_REQUIRED_KEYS)
+
+
 def _dispatch_count(prd):
     """Number of dispatch briefs regen-sequence.py would write for a PRD.
 
@@ -63,8 +93,12 @@ def _dispatch_count(prd):
     criteria; a lane with explicit ``dispatch_order`` emits one brief per
     entry instead of chunking. A task without ``acceptanceCriteria`` cannot
     be dispatched at all — regen-sequence.py raises ``KeyError`` and zero
-    briefs are written.
+    briefs are written. A ``sequence`` block missing any generator-required
+    key also fails closed with zero, because ``_sequence``/``_briefs`` read
+    them before any brief exists.
     """
+    if _sequence_fail_closed(prd):
+        return 0
     total = 0
     for task in prd["tasks"]:
         lane = task.get("lane") or {}
