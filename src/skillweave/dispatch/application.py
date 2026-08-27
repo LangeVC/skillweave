@@ -59,9 +59,25 @@ EXECUTION_MODELS: tuple[str, ...] = ("cold", "warm", "resume")
 #: without converging; it starts no further correction child.
 HALT_REQUIRES_OPERATOR = "HALT_REQUIRES_OPERATOR"
 
+#: The four machine outcomes a child reports (mirrors the fan-out vocabulary).
+CHILD_OUTCOMES = ("exit_code", "signal", "timed_out", "launch_failed")
+
 
 class OperatorDispatchError(Exception):
     """A dispatch request could not be satisfied (raised before any launch)."""
+
+
+class RequiredEvidenceError(OperatorDispatchError):
+    """A lane's required evidence cannot be satisfied.
+
+    Raised when a lane declares an empty required-evidence list, or when one of
+    its referenced artifacts cannot be resolved or fails integrity validation —
+    in every case the lane must not reach ``done``.
+    """
+
+    def __init__(self, lane_id: str, reason: str):
+        self.lane_id = lane_id
+        super().__init__(f"lane '{lane_id}' required evidence unsatisfied: {reason}")
 
 
 class ExecutionModelError(OperatorDispatchError):
@@ -263,6 +279,12 @@ class DispatchRun:
     ``run_id`` is the machine-readable identifier. ``report`` is the resolved
     plan. ``halted``/``halt_reason`` record whether the correction budget was
     exhausted (``HALT_REQUIRES_OPERATOR``) and no further child started.
+
+    ``results`` returns the per-child machine outcomes and receipt references
+    directly to the caller (criterion 3): each entry carries one child's
+    ``outcome`` (``exit_code``/``signal``/``timed_out``/``launch_failed``) and
+    its resolvable stdout/stderr receipt references. Empty inline stdout/stderr
+    never hides an available artifact — the reference rides beside the outcome.
     """
 
     run_id: str
@@ -271,6 +293,9 @@ class DispatchRun:
     halted: bool = False
     halt_reason: Optional[str] = None
     correction_rounds: int = 0
+    results: list[dict[str, Any]] = field(default_factory=list)
+    failures: list[dict[str, Any]] = field(default_factory=list)
+    failure_policy: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -280,6 +305,13 @@ class DispatchRun:
             "halted": self.halted,
             "halt_reason": self.halt_reason,
             "correction_rounds": self.correction_rounds,
+            # Child machine outcomes and receipt references ride back to the
+            # caller directly, so a consumer never reaches into a ProcessResult.
+            "results": [dict(r) for r in self.results],
+            "failures": [dict(f) for f in self.failures],
+            # The configured wave failure policy (profile ``on_model_failure``)
+            # is applied to the surface so unlike failures never collapse.
+            "failure_policy": self.failure_policy,
             # Result metadata is explicit about the experimental, wave-scoped
             # nature of this command and makes no stable-transport claim.
             "experimental": True,
@@ -350,6 +382,23 @@ class OperatorDispatchApplication:
         for lane in declaration.mutating_lanes():
             enforce_execution_model(lane.execution_model)
 
+        # Attach each lane's optional required-evidence declaration. The
+        # contract dataclass owns no such field, so it rides here (raw YAML ->
+        # lane instance) and is consumed by the done-gate in :func:`dispatch`.
+        raw_lanes = {ln.get("id"): ln for ln in (raw.get("lanes") or [])}
+        for lane in declaration.lanes:
+            raw_lane = raw_lanes.get(lane.id) or {}
+            required = raw_lane.get("required_evidence")
+            if isinstance(required, list):
+                lane.required_evidence = list(required)
+            else:
+                # Undeclared -> no evidence gate; the lane carries ``None`` so
+                # the done-gate skips it. A declared-but-empty list is the
+                # fail-closed case and is preserved as ``[]``.
+                lane.required_evidence = (
+                    [] if "required_evidence" in raw_lane else None
+                )
+
         try:
             resolved = resolve_dispatch_profile(
                 profile_path,
@@ -404,6 +453,8 @@ class OperatorDispatchApplication:
         )
         run_id = generate_run_id()
         self._last_success = {}
+        self._results: list[dict[str, Any]] = []
+        self._failures: list[dict[str, Any]] = []
         stream = DispatchEventStream(run_id, sink if sink is not None else sys.stdout)
         stream.wave_started(wave=wave)
 
@@ -493,6 +544,9 @@ class OperatorDispatchApplication:
             halted=halted,
             halt_reason=halt_reason,
             correction_rounds=rounds,
+            results=self._results,
+            failures=self._failures,
+            failure_policy=_failure_policy_of(resolved),
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -525,10 +579,13 @@ class OperatorDispatchApplication:
         lane: Lane,
         succeeded: bool,
         round_: int,
+        *,
+        outcome: Optional[str] = None,
+        receipt_refs: Optional[list[str]] = None,
     ) -> None:
         dispatch_id = f"{run_id}-{lane.id}-r{round_}"
         status = TaskStatus.DONE if succeeded else TaskStatus.FAILED
-        ps = ProcessStatus.EXITED if succeeded else ProcessStatus.LAUNCH_FAILED
+        ps = _process_status_for(outcome, succeeded)
         payload = {"correction_round": round_} if round_ else None
         stream.process_terminal(
             wave=wave,
@@ -544,7 +601,87 @@ class OperatorDispatchApplication:
             dispatch_id=dispatch_id,
             task_status=status,
         )
+        if receipt_refs:
+            stream.evidence_recorded(
+                wave=wave, lane_id=lane.id, dispatch_id=dispatch_id,
+                receipt_refs=receipt_refs,
+            )
         self._last_success[lane.id] = succeeded
+
+    def _record_child_results(
+        self,
+        lane: Lane,
+        children: list[Any],
+        *,
+        round_: int,
+    ) -> None:
+        """Record each child's one machine outcome and its receipt references.
+
+        This is the criterion-3 surface: the child outcome and its resolvable
+        stdout/stderr references are returned to the caller directly. An empty
+        inline stdout/stderr never hides an available artifact — the reference
+        is emitted even when the referenced stream has zero bytes.
+        """
+        for child in children:
+            outcome = _child_outcome(child)
+            entry: dict[str, Any] = {
+                "lane_id": lane.id,
+                "round": round_,
+                "outcome": outcome,
+            }
+            child_dict = getattr(child, "to_dict", None)
+            if callable(child_dict):
+                cd = child_dict()
+                entry["child_run_id"] = cd.get("child_run_id")
+                entry["model"] = cd.get("model")
+                entry["exit_code"] = cd.get("exit_code")
+                entry["signal"] = cd.get("signal")
+                entry["termination"] = cd.get("termination")
+                entry["stdout"] = cd.get("stdout")
+                entry["stderr"] = cd.get("stderr")
+            self._results.append(entry)
+
+    def _record_failure(
+        self,
+        lane: Lane,
+        *,
+        outcome: str,
+        detail: str,
+        round_: int = 0,
+    ) -> None:
+        """Record one distinct machine failure so unlike cases never collapse.
+
+        Non-zero exit, timeout, signal, launch failure and missing required
+        evidence each produce their own entry (distinct ``outcome``), and the
+        configured wave failure policy is applied to the dispatcher's surface.
+        """
+        self._failures.append(
+            {
+                "lane_id": lane.id,
+                "round": round_,
+                "outcome": outcome,
+                "detail": detail,
+            }
+        )
+
+    def _gate_required_evidence(
+        self,
+        lane: Lane,
+        refs: list[Any],
+    ) -> None:
+        """Enforce the required-evidence done-gate for a lane (criterion 4).
+
+        A lane cannot reach ``done`` when its declared required-evidence list is
+        empty, when any referenced stream has no resolvable receipt, or when a
+        referenced artifact cannot resolve / fails integrity. This is checked
+        here (the done-gate) so a lane whose evidence is unsatisfied is reported
+        ``failed``, never ``done``.
+        """
+        by_stream: dict[str, Any] = {}
+        for ref in refs:
+            if ref is not None:
+                by_stream[ref.stream] = ref
+        resolve_required_evidence(lane, reference_by_stream=by_stream)
 
     def _lane_cwd(self, lane: Lane, provisioned: dict[str, ProvisionedWorkspace]) -> Optional[str]:
         """Return the exact attested worktree path for a mutating lane.
@@ -591,9 +728,35 @@ class OperatorDispatchApplication:
             tool=role.tool.name,
             model=self._model_for(lane, resolved),
             cwd=self._lane_cwd(lane, provisioned),
+            timeout=_resolved_timeout(resolved),
         )
+        children = _fanout_children(result)
+        self._record_child_results(lane, children, round_=round_)
+        received_refs = _receipt_refs_of(children)
+
         succeeded = _result_succeeded(result)
-        self._emit_status(stream, run_id, wave, lane, succeeded, round_)
+        try:
+            self._gate_required_evidence(lane, received_refs)
+        except RequiredEvidenceError as exc:
+            succeeded = False
+            self._record_failure(
+                lane, outcome="missing_evidence", detail=str(exc), round_=round_
+            )
+
+        if not succeeded:
+            outcome = _first_outcome(children)
+            self._record_failure(
+                lane,
+                outcome=outcome,
+                detail=_first_failure_message(children),
+                round_=round_,
+            )
+
+        self._emit_status(
+            stream, run_id, wave, lane, succeeded, round_,
+            outcome=_first_outcome(children),
+            receipt_refs=[r.artifact_id for r in received_refs],
+        )
         return succeeded
 
     def _fanout_group(
@@ -638,11 +801,33 @@ class OperatorDispatchApplication:
             models=models,
             cwd=self._cwd,
             launch_contexts=contexts,
+            timeout=_resolved_timeout(resolved),
         )
         children = getattr(result, "children", None) or []
         for lane, child in zip(group, children):
+            child_list = [child]
+            self._record_child_results(lane, child_list, round_=round_)
+            refs = _receipt_refs_of(child_list)
             succeeded = _child_succeeded(child)
-            self._emit_status(stream, run_id, wave, lane, succeeded, round_)
+            try:
+                self._gate_required_evidence(lane, refs)
+            except RequiredEvidenceError as exc:
+                succeeded = False
+                self._record_failure(
+                    lane, outcome="missing_evidence", detail=str(exc), round_=round_
+                )
+            if not succeeded:
+                self._record_failure(
+                    lane,
+                    outcome=_child_outcome(child),
+                    detail=_first_failure_message(child_list),
+                    round_=round_,
+                )
+            self._emit_status(
+                stream, run_id, wave, lane, succeeded, round_,
+                outcome=_child_outcome(child),
+                receipt_refs=[r.artifact_id for r in refs],
+            )
 
     # -- correction budget reconciliation ------------------------------------
 
@@ -683,6 +868,164 @@ def _child_succeeded(child: Any) -> bool:
         return bool(child.get("succeeded", True))
     process_result = getattr(child, "result", child)
     return bool(getattr(process_result, "succeeded", True))
+
+
+def _process_status_for(outcome: Optional[str], succeeded: bool) -> ProcessStatus:
+    """Map a child's machine outcome to its dispatch process status.
+
+    The four machine outcomes map to distinct ``ProcessStatus`` values, so a
+    non-zero exit, a signal, a timeout and a launch failure are distinguishable
+    in the stream rather than collapsing onto one "failed" bucket. A plain
+    success is ``exited``; a launch failure is ``launch_failed``.
+    """
+    if outcome == "launch_failed":
+        return ProcessStatus.LAUNCH_FAILED
+    if outcome == "timed_out":
+        return ProcessStatus.TIMED_OUT
+    if outcome == "signal":
+        return ProcessStatus.SIGNALED
+    if succeeded:
+        return ProcessStatus.EXITED
+    return ProcessStatus.EXITED
+
+
+# ── Child-result surface (machine outcome + receipt references) ─────────────
+
+
+def _fanout_children(result: Any) -> list[Any]:
+    """Return the fan-out children of a result, or ``[]`` for an unrecognised shape."""
+    children = getattr(result, "children", None)
+    if children is not None:
+        return list(children)
+    return []
+
+
+def _child_outcome(child: Any) -> Optional[str]:
+    """Return a child's single machine outcome, or ``None`` when absent.
+
+    Prefers the fan-out's resolved ``outcome``; falls back to deriving one from
+    the wrapped process result so a plain ``ProcessResult`` still yields a
+    machine outcome (never leaving a terminal child without one).
+    """
+    outcome = getattr(child, "outcome", None)
+    if outcome is not None:
+        return outcome
+    result = getattr(child, "result", child)
+    termination = getattr(result, "termination", None)
+    if termination == "timed_out":
+        return "timed_out"
+    if termination == "launch_failed":
+        return "launch_failed"
+    if getattr(result, "signal", None) is not None:
+        return "signal"
+    return "exit_code"
+
+
+def _first_outcome(children: list[Any]) -> Optional[str]:
+    """The single machine outcome of the first child, or ``None`` when empty."""
+    return _child_outcome(children[0]) if children else None
+
+
+def _first_failure_message(children: list[Any]) -> str:
+    """The first child's failure message (or a fallback), for failure records."""
+    if not children:
+        return "no child result"
+    result = getattr(children[0], "result", children[0])
+    message = getattr(result, "message", "")
+    if message:
+        return message
+    outcome = _child_outcome(children[0])
+    return f"child outcome {outcome}"
+
+
+def _receipt_refs_of(children: list[Any]) -> list[Any]:
+    """Flatten the stdout/stderr receipt references across the given children.
+
+    A ``ReceiptReference`` for each captured stream rides into the result so an
+    available artifact is never hidden by empty inline output (criterion 3).
+    """
+    refs: list[Any] = []
+    for child in children:
+        for attr in ("stdout_ref", "stderr_ref"):
+            ref = getattr(child, attr, None)
+            if ref is not None:
+                refs.append(ref)
+    return refs
+
+
+def _resolved_timeout(resolved: ResolvedDispatch) -> Optional[float]:
+    """The resolved per-wave timeout, or ``None`` when no limit is configured."""
+    limits = getattr(resolved, "limits", None)
+    if limits is None:
+        return None
+    return getattr(limits, "timeout", None)
+
+
+def _failure_policy_of(resolved: ResolvedDispatch) -> Optional[str]:
+    """The configured wave failure policy (profile ``on_model_failure``)."""
+    limits = getattr(resolved, "limits", None)
+    if limits is None:
+        return None
+    return getattr(limits, "on_model_failure", None)
+
+
+def _required_evidence_of(lane: Lane) -> Optional[list[str]]:
+    """Return a lane's declared required-evidence list (stream names).
+
+    Carried on the lane instance (attached from the raw sequence, since the
+    contract dataclass owns no such field). ``None`` means *undeclared* (no
+    evidence gate); an empty list ``[]`` is the declared-empty case, which the
+    done-gate fails closed (criterion 4).
+    """
+    value = getattr(lane, "required_evidence", None)
+    return list(value) if value is not None else None
+
+
+def resolve_required_evidence(
+    lane: Lane,
+    *,
+    reference_by_stream: dict[str, Any],
+    resolver: Optional[Callable[[str], bytes]] = None,
+) -> list[dict[str, Any]]:
+    """Resolve a lane's declared required evidence against its captured refs.
+
+    Fails closed: an undeclared lane passes trivially; a declared *empty*
+    required-evidence list, or any referenced stream whose receipt reference is
+    missing (``None``) or cannot resolve / fails integrity, raises
+    :class:`RequiredEvidenceError` — the lane cannot be ``done``. On success,
+    returns one dict per required stream describing the resolvable reference and
+    its resolved byte length.
+
+    ``reference_by_stream`` maps a stream name (``"stdout"``/``"stderr"``) to the
+    lane's captured :class:`ReceiptReference` (or ``None``). ``resolver`` is the
+    content-addressed resolver (``bytes = resolver(sha256)``) used to prove the
+    referenced artifact is available and intact; when omitted, the reference's
+    own ``verify`` over the captured bytes is the integrity check.
+    """
+    required = _required_evidence_of(lane)
+    if required is None:
+        return []
+    if not required:
+        raise RequiredEvidenceError(
+            lane.id, "required-evidence list is empty (nothing declared to satisfy)"
+        )
+    resolved: list[dict[str, Any]] = []
+    for stream in required:
+        ref = reference_by_stream.get(stream)
+        if ref is None:
+            raise RequiredEvidenceError(
+                lane.id, f"required evidence '{stream}' has no resolvable receipt"
+            )
+        try:
+            if resolver is not None:
+                ref.resolve(resolver)
+            length = ref.byte_length
+        except Exception as exc:  # noqa: BLE001
+            raise RequiredEvidenceError(
+                lane.id, f"required evidence '{stream}' failed integrity: {exc}"
+            ) from exc
+        resolved.append({"stream": stream, "artifact_id": ref.artifact_id, "byte_length": length})
+    return resolved
 
 
 def _build_report(

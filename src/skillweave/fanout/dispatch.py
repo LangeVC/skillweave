@@ -17,17 +17,170 @@ content-addressed), so two children never share one run or one artifact.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
 from skillweave.routing.modelspec import ModelSpec, from_value
+
+if TYPE_CHECKING:
+    from skillweave.runtime.runner_adapter import ProcessResult
 
 
 def _start_process():
     """Return the runtime ``start_process`` primitive at call time (GLE-020)."""
     return importlib.import_module("skillweave.runtime.runner_adapter").start_process
+
+
+#: The four machine outcomes a terminal child reports. Exactly one is set per
+#: child; a result that resolves to none (or more than one) is rejected.
+OUTCOME_EXIT_CODE = "exit_code"
+OUTCOME_SIGNAL = "signal"
+OUTCOME_TIMED_OUT = "timed_out"
+OUTCOME_LAUNCH_FAILED = "launch_failed"
+
+OUTCOMES = (OUTCOME_EXIT_CODE, OUTCOME_SIGNAL, OUTCOME_TIMED_OUT, OUTCOME_LAUNCH_FAILED)
+
+#: A child that could not even be spawned (pre-result) is ``launch_failed``; the
+#: fallback encoding for raw streams when no encoding is declared elsewhere.
+DEFAULT_ENCODING = "utf-8"
+
+
+class ChildOutcomeError(ValueError):
+    """A terminal result carries contradictory or unresolved machine outcomes.
+
+    A ``ProcessResult`` must expose exactly one of ``exit_code`` / ``signal`` /
+    ``timed_out`` / ``launch_failed``; a result whose terminal fields contradict
+    each other (both an exit code and a signal, or a termination that does not
+    match its fields) is rejected here, never silently folded into one outcome.
+    """
+
+
+def _resolve_outcome(result: Any) -> str:
+    """Map a ``ProcessResult`` to its one machine outcome, rejecting contradiction.
+
+    ``termination == "timed_out"`` maps to ``timed_out``; a set ``signal`` maps to
+    ``signal``; a clean ``exited`` with an ``exit_code`` maps to ``exit_code``.
+    Any combination that cannot be one of the four outcomes (an exit code *and* a
+    signal, a non-``exited`` termination carrying an exit code, or no outcome at
+    all) raises :class:`ChildOutcomeError` so a contradictory child never reaches
+    the caller as a resolved result.
+    """
+    exit_code = getattr(result, "exit_code", None)
+    signal = getattr(result, "signal", None)
+    termination = getattr(result, "termination", "exited")
+
+    if termination == "timed_out":
+        # A timeout is its own machine outcome; it must not also carry a code/signal.
+        if exit_code is not None or signal is not None:
+            raise ChildOutcomeError(
+                "'timed_out' termination must not carry exit_code or signal"
+            )
+        return OUTCOME_TIMED_OUT
+
+    if termination == "launch_failed":
+        if exit_code is not None or signal is not None:
+            raise ChildOutcomeError(
+                "'launch_failed' termination must not carry exit_code or signal"
+            )
+        return OUTCOME_LAUNCH_FAILED
+
+    if signal is not None:
+        if exit_code is not None:
+            raise ChildOutcomeError("both exit_code and signal set on one result")
+        return OUTCOME_SIGNAL
+
+    if termination == "exited":
+        return OUTCOME_EXIT_CODE
+
+    # A termination we do not recognise as one of the four (e.g. a bare
+    # ``cancelled`` with no signal) has no machine outcome.
+    raise ChildOutcomeError(f"no single machine outcome for termination {termination!r}")
+
+
+@dataclass
+class ReceiptReference:
+    """A resolvable reference to one child's stdout/stderr raw bytes.
+
+    A receipt is *not* the bytes themselves: it names the artifact by digest and
+    carries the declared ``byte_length`` and ``encoding`` so a resolver can
+    return the raw bytes and prove they match. ``resolve`` runs through a
+    caller-supplied content-addressed resolver (the shared
+    ``RawArtifactStore.resolve`` semantics) and ``verify`` re-checks digest,
+    length and encoding against the bytes, so a receipt that cannot be resolved
+    or fails integrity never masquerades as available evidence.
+    """
+
+    artifact_id: str
+    sha256: str
+    byte_length: int
+    encoding: str
+    stream: str
+
+    def verify(self, raw: bytes) -> bool:
+        """Return True when ``raw`` matches digest, length and declared encoding."""
+        if hashlib.sha256(raw).hexdigest() != self.sha256:
+            return False
+        if len(raw) != self.byte_length:
+            return False
+        try:
+            raw.decode(self.encoding)
+        except (UnicodeDecodeError, LookupError):
+            return False
+        return True
+
+    def resolve(self, resolver: Any, raw_hint: Optional[bytes] = None) -> bytes:
+        """Resolve this reference to raw bytes and reject mismatches.
+
+        ``resolver`` is a content-addressed resolve callable
+        (``bytes = resolver(sha256)``). When the bytes cannot be resolved
+        (missing) or fail :meth:`verify`, the resolution is refused rather than
+        returning wrong data. ``raw_hint`` lets a producer that still holds the
+        bytes resolve without a second store read while still verifying them.
+        """
+        raw = raw_hint
+        if raw is None:
+            raw = resolver(self.sha256)
+        if not self.verify(raw):
+            raise ChildOutcomeError(
+                f"receipt '{self.artifact_id}' ({self.stream}) failed "
+                "digest/length/encoding verification"
+            )
+        return raw
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "artifact_id": self.artifact_id,
+            "sha256": self.sha256,
+            "byte_length": self.byte_length,
+            "encoding": self.encoding,
+            "stream": self.stream,
+        }
+
+
+def _make_receipt_reference(receipt: Any, *, stream: str) -> Optional[ReceiptReference]:
+    """Build a ``ReceiptReference`` from an ``ArtifactReceipt``.
+
+    The encoding is read from the receipt metadata (falling back to
+    :data:`DEFAULT_ENCODING`); the digest and byte length come from the receipt
+    itself so the reference cannot disagree with the receipt that produced it.
+    Returns ``None`` when no receipt exists (missing evidence), so a child with
+    no capture is distinguishable from one with zero-length capture.
+    """
+    if receipt is None:
+        return None
+    metadata = getattr(receipt, "metadata", {}) or {}
+    encoding = metadata.get("encoding", DEFAULT_ENCODING)
+    byte_length = int(metadata.get("byte_length", 0))
+    return ReceiptReference(
+        artifact_id=receipt.artifact_id,
+        sha256=receipt.sha256,
+        byte_length=byte_length,
+        encoding=encoding,
+        stream=stream,
+    )
 
 
 @dataclass
@@ -77,9 +230,46 @@ class FanOutChild:
     cwd: Optional[str] = None
     raw_bytes: bytes = b""
 
+    #: Exactly one of the four machine outcomes (exit_code/signal/timed_out/
+    #: launch_failed); ``None`` only when the child never reached a terminal
+    #: result (which the fan-out refuses). Set when the child is built.
+    outcome: Optional[str] = None
+
+    #: The raw stderr bytes captured on this child (mirrors ``raw_bytes``, which
+    #: is the stdout bytes). Kept separate so a caller resolves both streams.
+    stderr_bytes: bytes = b""
+
+    #: Resolvable references to the child's captured outputs, ``None`` when the
+    #: child produced no receipt for that stream (missing evidence, distinct
+    #: from empty-but-present capture).
+    stdout_ref: Optional[ReceiptReference] = None
+    stderr_ref: Optional[ReceiptReference] = None
+
     @property
     def artifact(self) -> Any:
         return self.result.stdout_receipt
+
+    def to_dict(self) -> dict[str, Any]:
+        """A machine-readable child result: one outcome plus receipt references.
+
+        Empty inline stdout/stderr must never hide an available artifact: the
+        receipt references are emitted regardless of whether the inline bytes
+        are empty, so a caller can always find the resolvable artifact.
+        """
+        return {
+            "child_run_id": self.child_run_id,
+            "model": self.model,
+            "outcome": self.outcome,
+            "exit_code": getattr(self.result, "exit_code", None),
+            "signal": getattr(self.result, "signal", None),
+            "termination": getattr(self.result, "termination", None),
+            "subject_repo": self.subject_repo,
+            "subject_commit": self.subject_commit,
+            "tool": self.tool,
+            "cwd": self.cwd,
+            "stdout": self.stdout_ref.to_dict() if self.stdout_ref else None,
+            "stderr": self.stderr_ref.to_dict() if self.stderr_ref else None,
+        }
 
 
 @dataclass
@@ -99,6 +289,22 @@ class FanOutResult:
     def succeeded(self) -> bool:
         return bool(self.children) and all(c.result.succeeded for c in self.children)
 
+    def child_outcomes(self) -> list[Optional[str]]:
+        """The single machine outcome of each child, in launch order."""
+        return [c.outcome for c in self.children]
+
+    def to_dict(self) -> dict[str, Any]:
+        """The wave result surface the caller reads: children and their refs.
+
+        Each child contributes its one machine outcome and its resolvable
+        receipt references directly, so a caller never has to reach into a
+        ``ProcessResult`` to learn how a child ended or where its evidence is.
+        """
+        return {
+            "overlapped": self.overlapped,
+            "children": [c.to_dict() for c in self.children],
+        }
+
 
 def fan_out_dispatch(
     commands: Sequence[Sequence[str]],
@@ -112,6 +318,7 @@ def fan_out_dispatch(
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
     launch_contexts: Optional[Sequence[FanOutLaunchContext]] = None,
+    timeout: Optional[float] = None,
 ) -> FanOutResult:
     """Start every command as a real process, then wait for all.
 
@@ -143,6 +350,10 @@ def fan_out_dispatch(
     At least one of ``model`` / ``models`` must be supplied. A worker that dies
     without a result is a failure with a message, never a silent success — the
     child's ``ProcessResult.succeeded`` carries that fact.
+
+    ``timeout`` (optional) forwards to each child's ``wait``: a child exceeding
+    it ends in the defined ``timed_out`` outcome (distinct from an exit, signal,
+    or launch failure) rather than hanging the whole fan-out.
     """
     created_at = created_at or datetime.now(timezone.utc).isoformat()
 
@@ -171,6 +382,7 @@ def fan_out_dispatch(
         specs = [from_value(model) for _ in commands]
 
     resolved_models = [_resolve_spec(spec) for spec in specs]
+    _launch_failures: dict[int, str] = {}
 
     def _child_identity(index: int) -> Tuple[str, str, str, Optional[str]]:
         if contexts is not None:
@@ -182,16 +394,24 @@ def fan_out_dispatch(
     for index, argv in enumerate(commands):
         child_run_id = f"{run_id}-{index}"
         repo, commit, child_tool, child_cwd = _child_identity(index)
-        handle = _start_process()(
-            list(argv),
-            run_id=child_run_id,
-            subject_repo=repo,
-            subject_commit=commit,
-            tool=child_tool,
-            model=resolved_models[index],
-            created_at=created_at,
-            cwd=child_cwd,
-        )
+        try:
+            handle = _start_process()(
+                list(argv),
+                run_id=child_run_id,
+                subject_repo=repo,
+                subject_commit=commit,
+                tool=child_tool,
+                model=resolved_models[index],
+                created_at=created_at,
+                cwd=child_cwd,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # A child that never spawned is a launch failure, never a silent
+            # gap: it still lands in ``children`` with its own outcome and a
+            # message, distinguished from an exit/signal/timeout.
+            handles.append((index, None, list(argv)))
+            _launch_failures[index] = str(exc)
+            continue
         handles.append((index, handle, list(argv)))
 
     # All processes are now running (started before any reap). Reap them in
@@ -199,7 +419,39 @@ def fan_out_dispatch(
     children: List[FanOutChild] = []
     for index, handle, argv in handles:
         repo, commit, child_tool, child_cwd = _child_identity(index)
-        result = handle.wait()
+        if handle is None:
+            result = _launch_failed_result(
+                argv,
+                run_id=f"{run_id}-{index}",
+                repo=repo,
+                commit=commit,
+                tool=child_tool,
+                model=resolved_models[index],
+                created_at=created_at,
+                message=_launch_failures.get(index, "launch failed"),
+            )
+            outcome = _resolve_outcome(result)
+            children.append(
+                FanOutChild(
+                    child_run_id=f"{run_id}-{index}",
+                    command=argv,
+                    result=result,
+                    model=resolved_models[index],
+                    subject_repo=repo,
+                    subject_commit=commit,
+                    tool=child_tool,
+                    cwd=child_cwd,
+                    raw_bytes=result.stdout or b"",
+                    stderr_bytes=result.stderr or b"",
+                    outcome=outcome,
+                    stdout_ref=_make_receipt_reference(result.stdout_receipt, stream="stdout"),
+                    stderr_ref=_make_receipt_reference(result.stderr_receipt, stream="stderr"),
+                )
+            )
+            continue
+
+        result = handle.wait(timeout=timeout)
+        outcome = _resolve_outcome(result)
         children.append(
             FanOutChild(
                 child_run_id=f"{run_id}-{index}",
@@ -211,6 +463,10 @@ def fan_out_dispatch(
                 tool=child_tool,
                 cwd=child_cwd,
                 raw_bytes=result.stdout or b"",
+                stderr_bytes=result.stderr or b"",
+                outcome=outcome,
+                stdout_ref=_make_receipt_reference(result.stdout_receipt, stream="stdout"),
+                stderr_ref=_make_receipt_reference(result.stderr_receipt, stream="stderr"),
             )
         )
 
@@ -226,3 +482,64 @@ def _resolve_spec(spec: ModelSpec) -> str:
     from skillweave.routing.faigate_adapter import resolve_model_spec
 
     return resolve_model_spec(spec)
+
+
+def _launch_failed_result(
+    argv: List[str],
+    *,
+    run_id: str,
+    repo: str,
+    commit: str,
+    tool: str,
+    model: str,
+    created_at: str,
+    message: str,
+) -> Any:
+    """Construct a synthetic ``launch_failed`` result for a child that never ran.
+
+    A child whose process could not be spawned still yields a definite,
+    machine-readable result: ``termination == "launch_failed"``, no exit code and
+    no signal, and empty stdout/stderr receipts bound to the child's run id so a
+    caller can tell a launch failure from an exited/signalled/timed-out child.
+    """
+    adapter = importlib.import_module("skillweave.runtime.runner_adapter")
+    ProcessResult = adapter.ProcessResult
+
+    def _empty_receipt(stream: str) -> Any:
+        return adapter._make_stream_receipt(
+            stream,
+            b"",
+            run_id=run_id,
+            command=argv,
+            subject_repo=repo,
+            subject_commit=commit,
+            created_at=created_at,
+            exit_code=None,
+            signal=None,
+            purpose=f"{stream} of run '{run_id}' (launch failed)",
+        )
+
+    stdout_receipt = _empty_receipt("stdout")
+    stderr_receipt = _empty_receipt("stderr")
+    return ProcessResult(
+        command=argv,
+        exit_code=None,
+        signal=None,
+        termination="launch_failed",
+        pid=0,
+        tool=tool,
+        model=model,
+        stdout_receipt=stdout_receipt,
+        stderr_receipt=stderr_receipt,
+        message=message,
+        stdout=b"",
+        stderr=b"",
+        metadata={
+            "run_id": run_id,
+            "subject_repo": repo,
+            "subject_commit": commit,
+            "created_at": created_at,
+            "tool": tool,
+            "model": model,
+        },
+    )
