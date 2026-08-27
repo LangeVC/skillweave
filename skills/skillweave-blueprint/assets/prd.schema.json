@@ -1,52 +1,70 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Product Requirements Document (PRD)",
-  "description": "Structured PRD format adapted from Ralph Loop principles for multi-agent AI development",
+  "description": "Structured PRD format adapted from Ralph Loop principles for multi-agent AI development. This schema describes the format the SkillWeave ecosystem produces (see planning/scripts/regen-sequence.py as the de facto contract). Effort is expressed as Fibonacci complexity points; there is no time-estimate field.",
   "type": "object",
-  "required": ["project", "tasks"],
+  "required": ["projectName", "tasks"],
   "properties": {
-    "project": {
+    "projectName": {
+      "type": "string",
+      "description": "Project name (used by regen-sequence.py to title generated artifacts)"
+    },
+    "version": {
+      "type": "string",
+      "description": "PRD version (semantic versioning recommended)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "active", "completed", "archived"],
+      "description": "PRD status"
+    },
+    "sequence": {
       "type": "object",
-      "required": ["name", "version"],
+      "description": "Execution sequence metadata consumed by regen-sequence.py and promptchain-execute. Required by the tool — see planning/scripts/regen-sequence.py.",
       "properties": {
-        "name": {
+        "sequence_id": { "type": "string" },
+        "sequence_type": {
           "type": "string",
-          "description": "Project name"
+          "enum": ["build", "plan", "mixed"]
         },
-        "version": {
+        "execution_mode": { "type": "string" },
+        "session_boundary": {
           "type": "string",
-          "description": "PRD version (semantic versioning recommended)"
+          "enum": ["batch", "phase", "none"],
+          "description": "Where a session is allowed to stop and resume. promptchain-validate and promptchain-execute key off this."
         },
-        "description": {
-          "type": "string",
-          "description": "Brief project description"
+        "worktree": { "type": "string" },
+        "branch": { "type": "string" },
+        "base": { "type": "string" },
+        "state_file": { "type": "string" },
+        "runner_shell": { "type": "string" },
+        "phase_names": {
+          "type": "object",
+          "description": "Map of level number to phase name, e.g. {\"0\": \"fix-the-tool\"}",
+          "additionalProperties": { "type": "string" }
         },
-        "domain": {
-          "type": "string",
-          "description": "Business domain (e.g., saas, ecommerce, healthcare)"
+        "parallel_lanes": {
+          "type": "array",
+          "description": "Phases declared to run lanes as subagents concurrently",
+          "items": { "type": "object" }
         },
-        "repository": {
-          "type": "string",
-          "description": "Git repository URL",
-          "format": "uri"
-        },
-        "created": {
-          "type": "string",
-          "description": "Creation timestamp",
-          "format": "date-time"
-        },
-        "updated": {
-          "type": "string",
-          "description": "Last update timestamp",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "enum": ["draft", "review", "approved", "active", "completed", "archived"],
-          "description": "PRD status"
+        "exclusive": {
+          "type": "array",
+          "description": "Surfaces written by more than one task - mutual exclusion that dependsOn cannot express",
+          "items": {
+            "type": "object",
+            "required": ["surface", "tasks"],
+            "properties": {
+              "surface": { "type": "string" },
+              "tasks": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "settings": {
       "type": "object",
@@ -142,12 +160,12 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "title", "description", "acceptance_criteria", "priority", "type"],
+        "required": ["id", "title", "description", "acceptanceCriteria", "priority", "type", "points"],
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[A-Z]+-\\d+$",
-            "description": "Task ID (e.g., INFRA-001, API-001)"
+            "pattern": "^[A-Z]+[-A-Z0-9]+$",
+            "description": "Task ID (e.g., INFRA-001, OPS-002-R, FFR-000-1); prefix plus dashed alphanumeric sections"
           },
           "title": {
             "type": "string",
@@ -157,41 +175,25 @@
             "type": "string",
             "description": "Detailed task description"
           },
-          "agent_type": {
-            "type": "string",
-            "enum": ["plan", "build", "mixed", "test", "review"],
-            "description": "Type of agent work required"
-          },
-          "target_agent": {
-            "type": "string",
-            "description": "Preferred agent name for this task (e.g., 'opencode', 'claude-code', 'gemini', 'any'). Use 'any' for agent-agnostic execution."
-          },
-          "estimated_tokens": {
-            "type": "integer",
-            "minimum": 100,
-            "maximum": 100000,
-            "description": "Estimated token usage"
-          },
-          "estimated_minutes": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 480,
-            "description": "Estimated minutes to complete"
-          },
           "priority": {
             "type": "string",
-            "enum": ["critical", "high", "medium", "low"],
+            "enum": ["P0", "P1", "P2", "P3", "critical", "high", "medium", "low"],
             "description": "Priority level"
           },
-          "dependencies": {
+          "points": {
+            "type": "integer",
+            "enum": [1, 2, 3, 5, 8, 13, 21],
+            "description": "Effort in Fibonacci complexity points. The ecosystem dropped time estimates (they were assumptions without a measurement basis); practice uses complexity. regen-sequence.py and dispatch briefs read this."
+          },
+          "dependsOn": {
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^[A-Z]+-\\d+$"
+              "pattern": "^[A-Z]+[-A-Z0-9]+$"
             },
             "description": "Task IDs this task depends on"
           },
-          "acceptance_criteria": {
+          "acceptanceCriteria": {
             "type": "array",
             "minItems": 1,
             "items": {
@@ -199,75 +201,71 @@
               "description": "Binary, testable acceptance criterion"
             }
           },
-          "verification_steps": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "description": "Steps to verify task completion"
-            }
-          },
           "type": {
             "type": "string",
-            "enum": ["infrastructure", "database", "api", "ui", "integration", "testing", "documentation", "devops", "security", "performance"],
+            "enum": ["bug", "bugfix", "feature", "refactor", "task", "review", "verification", "infrastructure", "docs"],
             "description": "Task type"
-          },
-          "files": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "description": "Files involved in this task"
-            }
-          },
-          "resources": {
-            "type": "object",
-            "properties": {
-              "docs": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "format": "uri"
-                }
-              },
-              "examples": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "format": "uri"
-                }
-              },
-              "templates": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "notes": {
-            "type": "string",
-            "description": "Additional context or constraints"
           },
           "passes": {
             "type": "boolean",
             "description": "Whether task has passed verification",
             "default": false
           },
-          "attempts": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "Number of attempts made",
-            "default": 0
-          },
-          "last_attempt": {
+          "repo": {
             "type": "string",
-            "format": "date-time",
-            "description": "Timestamp of last attempt"
+            "description": "Repository this task runs in, when the PRD spans multiple repositories"
           },
-          "best_practice": {
-            "type": "string",
-            "description": "Reference to best practice in agents.md"
+          "lane": {
+            "type": "object",
+            "description": "Dispatch/lane block consumed by regen-sequence.py and promptchain-execute",
+            "properties": {
+              "creates": {
+                "type": "string",
+                "description": "Path the lane writes and that does not exist yet"
+              },
+              "modifies": {
+                "type": "string",
+                "description": "Path the lane writes and that already exists"
+              },
+              "tests": {
+                "type": "string",
+                "description": "Test file the lane owns"
+              },
+              "reads": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "must_not_touch": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "worktree": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "dispatch_order": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["criteria", "focus"],
+                  "properties": {
+                    "criteria": {
+                      "type": "array",
+                      "items": { "type": "integer", "minimum": 1 }
+                    },
+                    "focus": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "additionalProperties": true
           }
-        }
+        },
+        "additionalProperties": false
       }
     },
     "assumptions": {
@@ -417,7 +415,21 @@
           }
         }
       }
-    }
+    },
+    "totals": {
+      "type": "object",
+      "description": "Rolled-up effort/task counts across the whole PRD, produced by regen-sequence.py's tooling",
+      "properties": {
+        "tasks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "points": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
     },
     "execution_recommendation": {
       "type": "object",
@@ -461,63 +473,48 @@
           "maximum": 100,
           "description": "Complexity score (0-100)"
         }
-      }
-    },
-    "additionalProperties": false,
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
   "examples": [
     {
-      "project": {
-        "name": "Todo API",
-        "version": "1.0.0",
-        "description": "REST API for task management",
-        "domain": "productivity",
-        "repository": "https://github.com/example/todo-api",
-        "created": "2024-01-15T10:00:00Z",
-        "status": "draft"
-      },
-      "settings": {
-        "max_iterations": 30,
-        "timeout_minutes": 240,
-        "required_capabilities": ["code_generation", "infrastructure"],
-        "verification_level": "standard"
-      },
+      "projectName": "Todo API",
+      "version": "1.0.0",
+      "status": "draft",
       "tasks": [
         {
           "id": "INFRA-001",
           "title": "Set up project structure",
-          "description": "Initialize repository with TypeScript, Express, and testing setup",
-          "agent_type": "build",
-          "target_agent": "opencode",
-          "estimated_tokens": 1500,
-          "estimated_minutes": 15,
-          "priority": "critical",
-          "dependencies": [],
-          "acceptance_criteria": [
-            "package.json exists with Express and TypeScript dependencies",
+          "description": "Initialize repository with Express setup",
+          "priority": "P0",
+          "points": 3,
+          "dependsOn": [],
+          "acceptanceCriteria": [
+            "package.json exists with Express dependencies",
             "tsconfig.json configured with strict mode",
             "src/index.ts exists with basic Express server",
             "npm run build compiles without errors",
             "npm test runs test suite"
           ],
-          "verification_steps": [
-            "Run: npm run typecheck",
-            "Run: npm run lint",
-            "Run: npm test",
-            "Run: npm run build"
-          ],
           "type": "infrastructure",
           "passes": false,
-          "attempts": 0
+          "lane": {
+            "creates": "src/index.ts",
+            "tests": "tests/test_index.ts",
+            "reads": ["docs/README.md"],
+            "must_not_touch": ["docs/templates/unified-mirror.yml"],
+            "dispatch_order": [
+              { "criteria": [1, 2, 3], "focus": "set up the package and the build" },
+              { "criteria": [4, 5], "focus": "prove the build and tests are green" }
+            ]
+          }
         }
       ],
-      "execution_recommendation": {
-        "mode": "standard",
-        "reason": "1 task, 15 minutes total, simple infrastructure setup",
-        "suggested_workflow": "ralph-loop-attended",
-        "estimated_iterations": 2,
-        "parallel_opportunities": 0,
-        "recommended_capabilities": ["code_generation", "infrastructure"],
-        "complexity_score": 25
+      "totals": {
+        "tasks": 1,
+        "points": 3
       }
     }
   ]

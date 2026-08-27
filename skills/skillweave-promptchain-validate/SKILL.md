@@ -110,17 +110,42 @@ What should be saved as .md?
    - Ask user about preferred document splitting (single consolidated vs. multiple separate files)
 
 4. **Validation Focus:**
-   - Structural completeness
-   - Logical step order  
-   - Consistency of inputs and outputs
-   - Usefulness of usage notes
-   - Usefulness of validation rules
-   - Usefulness of failure handling
-   - Output format appropriateness for sequence type
-   - **Parallelization readiness**: Check if sequence cleanly separates critical path (single-owner surfaces) from parallelizable sidecar lanes
-   - **Single-owner surfaces**: Identify steps that modify critical surfaces (database schemas, core APIs, config files) requiring exclusive ownership
-   - **Dependency clarity**: Verify blocking vs non-blocking dependencies are explicitly defined
-   - **Integration gates**: Ensure appropriate synchronization points for parallel lanes
+
+   Detect which **format** the sequence is in first, then validate against
+   that format's contract — never apply the other format's checklist.
+
+   - **Build sequences** (the ecosystem-produced `execution-sequences.yaml`,
+     emitted by `regen-sequence.py` and consumed by `promptchain-execute`).
+     Validate the build structure keys directly:
+     - `phases`: every phase has `dispatches_total`, one `session` boundary,
+       and `depends_on_phase` where ordering matters
+     - `parallel_lanes`: each lane owns a disjoint write surface and a
+       separate `worktree`/`branch`; two sessions sharing a git index collide
+       no matter how disjoint their files are
+     - `mutual_exclusion`: surfaces written by more than one task are listed;
+       a surface written by exactly one task must NOT be here (it costs that
+       task its parallel slot)
+     - `gate_pass_requires`: binary gates a phase must clear before the next
+       one may start (branch tip refetched and SHA named, red proofs exit 1
+       against base, reviewer role separate from ops)
+     - `session_boundary`: a batch is where one session ends; a sequence without
+       it is refused
+   - **Topic sequences** (the twelve-section contract below). Validate the
+     twelve sections in order.
+   - **Generic structural checks** that apply to either format:
+     - Structural completeness
+     - Logical step order
+     - Consistency of inputs and outputs
+     - Usefulness of usage notes
+     - Usefulness of validation rules
+     - Usefulness of failure handling
+     - Output format appropriateness for sequence type
+     - Parallelization readiness: cleanly separates the critical path
+       (single-owner surfaces) from parallelizable sidecar lanes
+     - Single-owner surfaces: steps that modify critical surfaces (database
+       schemas, core APIs, config files) require exclusive ownership
+     - Dependency clarity: blocking vs non-blocking dependencies are explicit
+     - Integration gates: appropriate synchronization points for parallel lanes
 
 **Rules:**
 - Do not only critique; provide complete improved sequence
@@ -129,9 +154,17 @@ What should be saved as .md?
 - Identify when steps are too broad, too vague, or out of order
 - Ensure improved sequence is production-ready and fully self-contained
 
-## Standard format
+## Standard format — topic contract (twelve sections)
 
-The expected prompt-sequence structure is:
+This is the **topic format**: a twelve-section prompt sequence laid out for a
+human or a general prompt-chain run. It is the document this skill's pre-0.6
+behaviour assumed for every input. Its consuming flow is the standalone
+prompt-chain player / copilot-inline execution — not `regen-sequence.py`.
+
+When the input is a *build sequence* instead, validate it against the
+**Build format** contract below, NOT these twelve sections.
+
+The topic format's expected structure is:
 
 1. Metadata
 2. Objective
@@ -145,6 +178,32 @@ The expected prompt-sequence structure is:
 10. Validation Rules
 11. Failure Handling
 12. Final Deliverable Format
+
+## Build format — machine-issued dispatch contract
+
+This is the **build format**: the `execution-sequences.yaml` that
+`regen-sequence.py` emits from a PRD and `promptchain-execute` dispatches.
+It is what the SkillWeave ecosystem produces today. Validate these keys, not
+the twelve sections:
+
+- `sequence_id`, `sequence_type` (build/plan/mixed), `execution_mode`
+- `phases:` — one per dependency level, each with `level`, `session:
+  separate`, `depends_on_phase`, `dispatches_total`, and lanes split into
+  `parallel_lanes` (subagent per lane, disjoint scope) and
+  `serialized_lanes` (shared surface, never concurrent)
+- `parallel_lanes:` — each lane carries `id`, `criteria`, `dispatches`,
+  `points`, its `worktree`/`branch`, and write surface (`creates`|`modifies`)
+- `mutual_exclusion:` — surfaces written by more than one task, with
+  `rule: at_most_one_in_flight`; used to serialize lanes that dependsOn
+  cannot order
+- `gate_pass_requires:` — the binary gates a phase must clear before the next
+  one starts
+- `session_boundary:` — where a session may stop; `batch` means one batch per
+  session and a second batch in the same session is refused
+
+Consuming flow: `regen-sequence.py` (producer) → `promptchain-execute`
+(dispatcher). If the input is a build sequence, run this skill in build mode
+and never fall back to the twelve-section checklist.
 
 ## Next Level Features
 

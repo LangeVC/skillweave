@@ -1,0 +1,91 @@
+{
+  "projectName": "Corrected — a PRD in the format the ecosystem produces",
+  "version": "1.0",
+  "status": "draft",
+  "sequence": {
+    "sequence_id": "corrected-build-format",
+    "sequence_type": "build",
+    "execution_mode": "ralph_attended",
+    "session_boundary": "batch",
+    "state_file": ".corrected-state.md",
+    "runner_shell": "bash -eo pipefail",
+    "phase_names": {
+      "0": "setup",
+      "1": "verify"
+    },
+    "exclusive": [
+      {
+        "surface": "config.yml",
+        "tasks": ["CORR-001", "CORR-002"]
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "CORR-001",
+      "title": "Write the corrected task shape",
+      "description": "Carries acceptanceCriteria, points (Fibonacci), dependsOn, a lane block, and reads back cleanly.",
+      "priority": "P0",
+      "points": 3,
+      "dependsOn": [],
+      "acceptanceCriteria": [
+        "The corrected schema accepts this task",
+        "regen-sequence-style dispatch counting yields at least two briefs for this lane",
+        "No time-estimate field appears anywhere in this document"
+      ],
+      "type": "feature",
+      "passes": false,
+      "lane": {
+        "creates": "config.yml",
+        "tests": "tests/test_corrected.sh",
+        "reads": ["docs/templates/unified-mirror.yml"],
+        "must_not_touch": ["docs/templates/unified-mirror.yml"],
+        "dispatch_order": [
+          {
+            "criteria": [1, 2],
+            "focus": "corrected task accepted and briefs counted"
+          },
+          {
+            "criteria": [3],
+            "focus": "no time-estimate field anywhere"
+          }
+        ]
+      }
+    },
+    {
+      "id": "CORR-002",
+      "title": "A second lane sharing the exclusive surface",
+      "description": "Shares config.yml with CORR-001, so the sequence declares mutual exclusion.",
+      "priority": "P1",
+      "points": 5,
+      "dependsOn": ["CORR-001"],
+      "acceptanceCriteria": [
+        "The exclusive surface keeps the two tasks from running concurrently",
+        "This task also yields a dispatch brief"
+      ],
+      "type": "feature",
+      "passes": false,
+      "lane": {
+        "modifies": "config.yml",
+        "tests": "tests/test_shared_surface.sh",
+        "reads": ["docs/templates/unified-mirror.yml"],
+        "must_not_touch": ["docs/templates/unified-mirror.yml"],
+        "dispatch_order": [
+          {
+            "criteria": [1, 2],
+            "focus": "mutual exclusion declared and a brief produced"
+          }
+        ]
+      }
+    }
+  ],
+  "execution_recommendation": {
+    "mode": "standard",
+    "suggested_workflow": "ralph-loop-attended",
+    "reason": "2 tasks, 8 points"
+  },
+  "totals": {
+    "tasks": 2,
+    "points": 8
+  }
+}

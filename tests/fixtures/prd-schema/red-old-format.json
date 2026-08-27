@@ -1,0 +1,36 @@
+{
+  "project": {
+    "name": "Red proof — a PRD valid under the previous prd.schema.json",
+    "version": "1.0.0",
+    "description": "This PRD matches the OLD blueprint asset: tasks carry acceptance_criteria (snake_case), estimated_minutes, dependencies (instead of dependsOn), and there is no sequence/lane/points/totals block. It is exactly the shape the previous schema called valid. regen-sequence.py reads acceptanceCriteria and points, so it cannot dispatch this document: it raises on the first task and writes zero briefs.",
+    "domain": "devops",
+    "status": "draft"
+  },
+  "settings": {
+    "max_iterations": 10,
+    "timeout_minutes": 120,
+    "verification_level": "standard"
+  },
+  "sequence": {
+    "sequence_id": "red-old-format",
+    "sequence_type": "build",
+    "execution_mode": "ralph_attended"
+  },
+  "tasks": [
+    {
+      "id": "RED-001",
+      "title": "A task written the old way",
+      "description": "Written to the previous schema: acceptance_criteria, estimated_minutes, dependencies.",
+      "estimated_minutes": 20,
+      "priority": "high",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The old fixture cannot feed regen-sequence.py — it reads acceptanceCriteria (no underscore)",
+        "The corrected schema rejects this task and the tooling produces zero dispatches"
+      ],
+      "type": "devops",
+      "passes": false,
+      "attempts": 0
+    }
+  ]
+}
