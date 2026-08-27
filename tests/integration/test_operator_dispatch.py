@@ -46,6 +46,7 @@ from skillweave.dispatch.application import (  # noqa: E402
     ExecutionModelError,
     OperatorDispatchApplication,
     ProfileLocationError,
+    ProvisionedWorkspace,
     WorkspaceMismatchError,
     WorkspaceSeam,
 )
@@ -56,19 +57,26 @@ from skillweave.dispatch.cli import build_parser, main  # noqa: E402
 class _FakeWorkspace(WorkspaceSeam):
     """In-memory workspace seam that attests whatever base the lane declares.
 
-    ``attested_overrides`` lets a test simulate a mismatch; ``provisions`` and
-    ``releases`` count the calls so "zero workers" and "block before child
-    start" can be asserted.
+    ``attested_overrides`` lets a test simulate a mismatch; ``paths`` (optional)
+    gives each lane a materialised worktree path so the exact per-lane cwd can
+    be proven. ``provisions`` and ``releases`` count the calls so "zero workers"
+    and "block before child start" can be asserted.
     """
 
-    def __init__(self, attested_overrides: dict[str, str] | None = None):
+    def __init__(
+        self,
+        attested_overrides: dict[str, str] | None = None,
+        paths: dict[str, str] | None = None,
+    ):
         self.attested_overrides = attested_overrides or {}
+        self.paths = paths or {}
         self.provisions: list[str] = []
         self.releases: list[str] = []
 
-    def provision(self, lane: Lane, run_id: str) -> str:
+    def provision(self, lane: Lane, run_id: str) -> ProvisionedWorkspace:
         self.provisions.append(lane.id)
-        return self.attested_overrides.get(lane.id, lane.base or "")
+        base = self.attested_overrides.get(lane.id, lane.base or "")
+        return ProvisionedWorkspace(base_sha=base, path=self.paths.get(lane.id))
 
     def release(self, lane: Lane, run_id: str) -> None:
         self.releases.append(lane.id)
@@ -80,10 +88,14 @@ class _RecordingFanout:
 
     def __init__(self, fail_lane: str | None = None):
         self.batches: list[list[list[str]]] = []
+        self.contexts: list[list] = []
+        self.cwd_kwargs: list = []
         self._fail_lane = fail_lane
 
     def __call__(self, commands, **kwargs):
         self.batches.append([list(c) for c in commands])
+        self.contexts.append(list(kwargs.get("launch_contexts") or []))
+        self.cwd_kwargs.append(kwargs.get("cwd"))
         children = []
         for command in commands:
             children.append(_FakeChild(succeeded=not bool(self._fail_lane)))
@@ -316,6 +328,58 @@ def test_base_mismatch_blocks_before_child_start():
         app.dispatch(str(_SEQUENCE), str(_PROFILE), wave="0", sink=io.StringIO())
     assert "lane-ops-a" in str(exc.value)
     assert recorder.batches == [], "no child may start after a base mismatch"
+
+
+def test_parallel_group_passes_per_child_identity_not_group_leader():
+    # The blocked-c4 defect: a disjoint group of lanes must each receive their
+    # own repo/base/tool/cwd, never group[0]'s. lane-ops-a (repo-a) and
+    # lane-ops-b (repo-b) are disjoint; their per-child launch contexts must
+    # differ in repo and cwd, and each cwd must be its own attested path.
+    paths = {
+        "lane-ops-a": "/tmp/attested-repo-a",
+        "lane-ops-b": "/tmp/attested-repo-b",
+        "lane-ops-c": "/tmp/attested-repo-a-c",
+    }
+    ws = _FakeWorkspace(paths=paths)
+    recorder = _RecordingFanout()
+    app = OperatorDispatchApplication(
+        workspace_seam=ws, fanout_seam=recorder, cwd="/tmp/operator-cwd"
+    )
+    _run_dispatch(app)
+
+    # First batch is the disjoint group [lane-ops-a, lane-ops-b].
+    first_contexts = recorder.contexts[0]
+    assert len(first_contexts) == 2
+    by_repo = {ctx.subject_repo: ctx for ctx in first_contexts}
+    assert set(by_repo) == {
+        "skillweave/fixture-repo-a",
+        "skillweave/fixture-repo-b",
+    }
+    # Each lane's cwd is its own attested path, not the operator cwd.
+    assert by_repo["skillweave/fixture-repo-a"].cwd == "/tmp/attested-repo-a"
+    assert by_repo["skillweave/fixture-repo-b"].cwd == "/tmp/attested-repo-b"
+    assert by_repo["skillweave/fixture-repo-a"].cwd != "/tmp/operator-cwd"
+
+
+def test_single_lane_worker_runs_inside_attested_path():
+    # A single-lane worker must run with cwd equal to its attested worktree
+    # path, never the operator/global cwd.
+    paths = {
+        "lane-ops-a": "/tmp/attested-repo-a",
+        "lane-ops-b": "/tmp/attested-repo-b",
+        "lane-ops-c": "/tmp/attested-repo-a-c",
+    }
+    ws = _FakeWorkspace(paths=paths)
+    recorder = _RecordingFanout()
+    app = OperatorDispatchApplication(
+        workspace_seam=ws, fanout_seam=recorder, cwd="/tmp/operator-cwd"
+    )
+    _run_dispatch(app)
+
+    # The serialized lane-ops-c is its own batch (index 1); its single-lane call
+    # passes cwd equal to its attested path, never the operator cwd.
+    assert recorder.cwd_kwargs[1] == "/tmp/attested-repo-a-c"
+    assert recorder.cwd_kwargs[1] != "/tmp/operator-cwd"
 
 
 # ── Criterion 5: dry-run reports everything and starts zero workers ─────────

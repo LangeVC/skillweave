@@ -163,14 +163,29 @@ class DispatchReport:
 # ── Workspace seam ──────────────────────────────────────────────────────────
 
 
+@dataclass
+class ProvisionedWorkspace:
+    """A lane's materialised workspace: attested base SHA and its exact path.
+
+    The path is the *materialised* worktree the provider created for that lane.
+    It is the only correct working directory for that lane's mutating worker:
+    never substitute the operator/global cwd for a lane whose workspace was
+    attested.
+    """
+
+    base_sha: str
+    path: Optional[str] = None
+
+
 class WorkspaceSeam:
     """Adapter over the shared workspace provider.
 
     ``provision`` materialises a lane's declared base into an attested workspace
-    and returns the attested base SHA; ``release`` tears it down.
+    and returns the attested base SHA *and* the materialised path; ``release``
+    tears it down.
     """
 
-    def provision(self, lane: Lane, run_id: str) -> str:
+    def provision(self, lane: Lane, run_id: str) -> ProvisionedWorkspace:
         raise NotImplementedError
 
     def release(self, lane: Lane, run_id: str) -> None:
@@ -181,7 +196,8 @@ class GitWorkspaceSeam(WorkspaceSeam):
     """Default seam over :class:`GitWorktreeProvider`.
 
     Provisioning is per-lane on a run/lane-derived branch, so two lanes never
-    share a branch. The attested base SHA is the provider's resolved full SHA.
+    share a branch. The attested base SHA is the provider's resolved full SHA;
+    the materialised path is the provider's worktree path.
     """
 
     def __init__(self, repo_root: str):
@@ -190,11 +206,14 @@ class GitWorkspaceSeam(WorkspaceSeam):
         self._provider = GitWorktreeProvider(repo_root)
         self._workspaces: dict[str, Any] = {}
 
-    def provision(self, lane: Lane, run_id: str) -> str:
+    def provision(self, lane: Lane, run_id: str) -> ProvisionedWorkspace:
         branch = f"sw-dispatch/{run_id[:8]}/{lane.id}".replace("/", "-")
         workspace = self._provider.acquire(lane.base or "", branch)
         self._workspaces[lane.id] = workspace
-        return workspace.attestation.base_sha
+        return ProvisionedWorkspace(
+            base_sha=workspace.attestation.base_sha,
+            path=workspace.attestation.path,
+        )
 
     def release(self, lane: Lane, run_id: str) -> None:
         workspace = self._workspaces.pop(lane.id, None)
@@ -392,11 +411,14 @@ class OperatorDispatchApplication:
         mutating = declaration.mutating_lanes()
 
         # Provision + attest every mutating lane; a base mismatch blocks before
-        # any child starts (criterion 4).
+        # any child starts (criterion 4). The materialised path is retained
+        # per lane so the worker runs *inside* its attested worktree.
+        provisioned: dict[str, ProvisionedWorkspace] = {}
         for lane in mutating:
-            attested = ws.provision(lane, run_id)
-            if (lane.base or "") != attested:
-                raise WorkspaceMismatchError(lane.id, lane.base or "", attested)
+            pw = ws.provision(lane, run_id)
+            provisioned[lane.id] = pw
+            if (lane.base or "") != pw.base_sha:
+                raise WorkspaceMismatchError(lane.id, lane.base or "", pw.base_sha)
 
         groups = _pare_lanes(mutating, declaration.max_parallel)
         halted = False
@@ -407,11 +429,25 @@ class OperatorDispatchApplication:
             for group in groups:
                 if len(group) == 1:
                     self._run_lane(
-                        run_id, wave, group[0], resolved, stream, work, round_=0
+                        run_id,
+                        wave,
+                        group[0],
+                        resolved,
+                        stream,
+                        work,
+                        round_=0,
+                        provisioned=provisioned,
                     )
                 else:
                     self._fanout_group(
-                        run_id, wave, group, resolved, stream, work, round_=0
+                        run_id,
+                        wave,
+                        group,
+                        resolved,
+                        stream,
+                        work,
+                        round_=0,
+                        provisioned=provisioned,
                     )
 
             # Correction budget: a failed lane is re-run up to the declared
@@ -421,7 +457,14 @@ class OperatorDispatchApplication:
                 rounds += 1
                 for lane in failed:
                     self._run_lane(
-                        run_id, wave, lane, resolved, stream, work, round_=rounds
+                        run_id,
+                        wave,
+                        lane,
+                        resolved,
+                        stream,
+                        work,
+                        round_=rounds,
+                        provisioned=provisioned,
                     )
                 failed = self._reconcile_failed(
                     declaration, resolved, stream, run_id, wave
@@ -503,6 +546,18 @@ class OperatorDispatchApplication:
         )
         self._last_success[lane.id] = succeeded
 
+    def _lane_cwd(self, lane: Lane, provisioned: dict[str, ProvisionedWorkspace]) -> Optional[str]:
+        """Return the exact attested worktree path for a mutating lane.
+
+        A mutating lane with an attested workspace must run *inside* that
+        materialised path — never the operator/global ``self._cwd``. For a
+        lane with no provisioned workspace the caller's cwd is the fallback.
+        """
+        pw = provisioned.get(lane.id)
+        if pw is not None and pw.path:
+            return pw.path
+        return self._cwd
+
     def _run_lane(
         self,
         run_id: str,
@@ -512,6 +567,7 @@ class OperatorDispatchApplication:
         stream: DispatchEventStream,
         work: bytes,
         round_: int,
+        provisioned: Optional[dict[str, ProvisionedWorkspace]] = None,
     ) -> bool:
         stream.lane_started(wave=wave, lane_id=lane.id)
         command = self._command_for(lane, resolved)
@@ -526,6 +582,7 @@ class OperatorDispatchApplication:
 
         role = resolved.role(lane.role)
         fanout = self._fanout()
+        provisioned = provisioned or {}
         result = fanout(
             [command],
             run_id=run_id,
@@ -533,7 +590,7 @@ class OperatorDispatchApplication:
             subject_commit=lane.base or "",
             tool=role.tool.name,
             model=self._model_for(lane, resolved),
-            cwd=self._cwd,
+            cwd=self._lane_cwd(lane, provisioned),
         )
         succeeded = _result_succeeded(result)
         self._emit_status(stream, run_id, wave, lane, succeeded, round_)
@@ -548,25 +605,39 @@ class OperatorDispatchApplication:
         stream: DispatchEventStream,
         work: bytes,
         round_: int,
+        provisioned: Optional[dict[str, ProvisionedWorkspace]] = None,
     ) -> None:
         # Start every lane in the group at once (overlap), then record per-lane.
         commands = [self._command_for(lane, resolved) for lane in group]
-        role = resolved.role(group[0].role)
         for lane in group:
             stream.lane_started(wave=wave, lane_id=lane.id)
 
+        from skillweave.fanout.dispatch import FanOutLaunchContext
         from skillweave.routing.modelspec import from_value
 
+        provisioned = provisioned or {}
         models = [from_value(self._model_for(lane, resolved)) for lane in group]
+        # Each lane carries its own repo/base/tool/cwd; never broadcast the
+        # group leader's identity onto its siblings (criterion-4 blocker).
+        contexts = [
+            FanOutLaunchContext(
+                subject_repo=lane.repo or "",
+                subject_commit=lane.base or "",
+                tool=resolved.role(lane.role).tool.name,
+                cwd=self._lane_cwd(lane, provisioned),
+            )
+            for lane in group
+        ]
         fanout = self._fanout()
         result = fanout(
             commands,
             run_id=run_id,
             subject_repo=group[0].repo or "",
             subject_commit=group[0].base or "",
-            tool=role.tool.name,
+            tool=resolved.role(group[0].role).tool.name,
             models=models,
             cwd=self._cwd,
+            launch_contexts=contexts,
         )
         children = getattr(result, "children", None) or []
         for lane, child in zip(group, children):

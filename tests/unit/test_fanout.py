@@ -23,7 +23,7 @@ _src = Path(__file__).resolve().parent.parent.parent / "src"
 if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
-from skillweave.fanout import FanOutResult, fan_out_dispatch  # noqa: E402
+from skillweave.fanout import FanOutLaunchContext, FanOutResult, fan_out_dispatch  # noqa: E402
 from skillweave.routing.modelspec import concrete, delegated  # noqa: E402
 
 
@@ -186,6 +186,73 @@ def test_failing_child_is_a_failure_not_a_silent_success():
     assert result.succeeded is False
 
 
+def test_per_child_launch_context_keeps_distinct_identity():
+    # A heterogeneous parallel group (mixed repos / base commits / tools / cwds)
+    # must keep each child's own identity, never collapse onto group[0]. The
+    # launch context is the criterion-4 seam: per-child repo/base/tool/cwd.
+    wt_a = tempfile.mkdtemp(prefix="sw-fanout-ctx-a-")
+    wt_b = tempfile.mkdtemp(prefix="sw-fanout-ctx-b-")
+    cmd = [sys.executable, "-c", "print('child')"]
+    contexts = [
+        FanOutLaunchContext(
+            subject_repo="skillweave/repo-a",
+            subject_commit="a" * 40,
+            tool="opencode",
+            cwd=wt_a,
+        ),
+        FanOutLaunchContext(
+            subject_repo="skillweave/repo-b",
+            subject_commit="b" * 40,
+            tool="reviewer-cli",
+            cwd=wt_b,
+        ),
+    ]
+    result = fan_out_dispatch(
+        [cmd, cmd],
+        run_id="run-fanout-ctx",
+        subject_repo="skillweave/repo-a",
+        subject_commit="a" * 40,
+        tool="opencode",
+        model="model-xyz-7",
+        launch_contexts=contexts,
+    )
+    assert len(result.children) == 2
+    c0, c1 = result.children
+    assert c0.subject_repo == "skillweave/repo-a"
+    assert c0.subject_commit == "a" * 40
+    assert c0.tool == "opencode"
+    assert c0.cwd == wt_a
+    assert c1.subject_repo == "skillweave/repo-b"
+    assert c1.subject_commit == "b" * 40
+    assert c1.tool == "reviewer-cli"
+    assert c1.cwd == wt_b
+    assert c0.subject_repo != c1.subject_repo
+    assert c0.subject_commit != c1.subject_commit
+    assert c0.cwd != c1.cwd
+
+
+def test_malformed_launch_context_length_starts_zero_children():
+    # A launch-context list misaligned to the command list is fail-closed, like
+    # the per-child models list: raise before any process starts.
+    cmd = [sys.executable, "-c", "print('child')"]
+    try:
+        fan_out_dispatch(
+            [cmd, cmd],
+            run_id="run-fanout-badctx",
+            subject_repo="skillweave",
+            subject_commit="abc123",
+            tool="opencode",
+            model="model-xyz-7",
+            launch_contexts=[
+                FanOutLaunchContext("skillweave", "abc123", "opencode", None)
+            ],
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("misaligned launch_contexts must raise, not launch")
+
+
 def _run_all() -> int:
     tests = [
         test_two_processes_overlap_in_time,
@@ -194,6 +261,8 @@ def _run_all() -> int:
         test_per_child_models_resolve_distinctly,
         test_per_child_different_routers_do_not_collapse,
         test_single_model_backward_compatible_lifts_to_concrete,
+        test_per_child_launch_context_keeps_distinct_identity,
+        test_malformed_launch_context_length_starts_zero_children,
     ]
     failed = 0
     for t in tests:

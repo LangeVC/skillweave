@@ -31,6 +31,24 @@ def _start_process():
 
 
 @dataclass
+class FanOutLaunchContext:
+    """A per-child launch identity: repo, base commit, tool, and working dir.
+
+    A heterogeneous parallel group cannot be represented by a single scalar
+    ``subject_repo``/``subject_commit``/``tool``/``cwd``: two children may touch
+    different repos, different base commits, different tools, and — critically —
+    different materialised worktrees. This context carries exactly those four
+    facts *per child*, so ``fan_out_dispatch`` threads each lane's own identity
+    into that lane's own ``start_process`` call.
+    """
+
+    subject_repo: str
+    subject_commit: str
+    tool: str
+    cwd: Optional[str] = None
+
+
+@dataclass
 class FanOutChild:
     """One fan-out child: its distinct run identity and its own raw artifact.
 
@@ -40,6 +58,11 @@ class FanOutChild:
     model string (never the shared parent model): each child may answer from a
     different model, and the child carries which one it actually used.
 
+    ``subject_repo``/``subject_commit``/``tool``/``cwd`` mirror the per-child
+    launch context actually used for that child, so a mutating lane's attested
+    worktree path and its own repo/base/tool are provable from the result, not
+    assumed from the group leader.
+
     The raw bytes are kept here so overlap (and separation) can be asserted
     without a second re-run.
     """
@@ -48,6 +71,10 @@ class FanOutChild:
     command: List[str]
     result: ProcessResult
     model: str
+    subject_repo: Optional[str] = None
+    subject_commit: Optional[str] = None
+    tool: Optional[str] = None
+    cwd: Optional[str] = None
     raw_bytes: bytes = b""
 
     @property
@@ -84,6 +111,7 @@ def fan_out_dispatch(
     models: Optional[Sequence[ModelSpec]] = None,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
+    launch_contexts: Optional[Sequence[FanOutLaunchContext]] = None,
 ) -> FanOutResult:
     """Start every command as a real process, then wait for all.
 
@@ -102,6 +130,16 @@ def fan_out_dispatch(
       that a single ``model`` applies to all. It is ignored when ``models`` is
       given.
 
+    ``launch_contexts`` (optional) is a per-child launch identity, length-aligned
+    to ``commands``: one ``FanOutLaunchContext`` per child carrying that child's
+    own ``subject_repo``/``subject_commit``/``tool``/``cwd``. When supplied, each
+    child's identity comes from its own context, never from the group's scalar
+    values — a heterogeneous parallel group (mixed repos, roles, tools, or
+    attested worktrees) is represented faithfully. Alignment is fail-closed,
+    like the per-child ``models`` list: a length mismatch raises before any
+    process starts. When omitted, the scalar ``subject_repo``/``subject_commit``/
+    ``tool``/``cwd`` apply to every child, preserving the prior contract.
+
     At least one of ``model`` / ``models`` must be supplied. A worker that dies
     without a result is a failure with a message, never a silent success — the
     child's ``ProcessResult.succeeded`` carries that fact.
@@ -110,6 +148,16 @@ def fan_out_dispatch(
 
     if not commands:
         return FanOutResult(children=[], overlapped=False)
+
+    if launch_contexts is not None:
+        if len(launch_contexts) != len(commands):
+            raise ValueError(
+                "per-child launch context count "
+                f"{len(launch_contexts)} != command count {len(commands)}"
+            )
+        contexts = list(launch_contexts)
+    else:
+        contexts = None
 
     if models is not None:
         if len(models) != len(commands):
@@ -124,18 +172,25 @@ def fan_out_dispatch(
 
     resolved_models = [_resolve_spec(spec) for spec in specs]
 
+    def _child_identity(index: int) -> Tuple[str, str, str, Optional[str]]:
+        if contexts is not None:
+            ctx = contexts[index]
+            return ctx.subject_repo, ctx.subject_commit, ctx.tool, ctx.cwd
+        return subject_repo, subject_commit, tool, cwd
+
     handles: List[Tuple[int, Any, List[str]]] = []
     for index, argv in enumerate(commands):
         child_run_id = f"{run_id}-{index}"
+        repo, commit, child_tool, child_cwd = _child_identity(index)
         handle = _start_process()(
             list(argv),
             run_id=child_run_id,
-            subject_repo=subject_repo,
-            subject_commit=subject_commit,
-            tool=tool,
+            subject_repo=repo,
+            subject_commit=commit,
+            tool=child_tool,
             model=resolved_models[index],
             created_at=created_at,
-            cwd=cwd,
+            cwd=child_cwd,
         )
         handles.append((index, handle, list(argv)))
 
@@ -143,6 +198,7 @@ def fan_out_dispatch(
     # launch order; the overlap was established by the start-before-wait shape.
     children: List[FanOutChild] = []
     for index, handle, argv in handles:
+        repo, commit, child_tool, child_cwd = _child_identity(index)
         result = handle.wait()
         children.append(
             FanOutChild(
@@ -150,6 +206,10 @@ def fan_out_dispatch(
                 command=argv,
                 result=result,
                 model=resolved_models[index],
+                subject_repo=repo,
+                subject_commit=commit,
+                tool=child_tool,
+                cwd=child_cwd,
                 raw_bytes=result.stdout or b"",
             )
         )
