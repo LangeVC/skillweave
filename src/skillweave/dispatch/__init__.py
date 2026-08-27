@@ -1,8 +1,9 @@
-"""Operator dispatch surface (SW138-CONTRACT-001).
+"""Operator dispatch surface (contract, profile resolution, and live events).
 
-Exports the sequence/event contract and the practice task validation. The
-worker-launch mechanics are not part of this lane: the dispatcher itself is
-SW138-DISPATCH-001, which consumes these contracts.
+Exports the sequence/event contract, the practice task validation, and the
+typed live event stream. The worker-launch mechanics are not part of this
+lane: the dispatcher itself is SW138-DISPATCH-001, which consumes these
+contracts and feeds the event stream.
 """
 
 from .contracts import (  # noqa: F401
@@ -37,6 +38,12 @@ from .profile_resolution import (  # noqa: F401
     resolve_dispatch_profile,
 )
 
+from .events import (  # noqa: F401
+    DispatchEventStream,
+    HeartbeatMonitor,
+    EventStreamError,
+)
+
 __all__ = [
     "ContractError",
     "SequenceBoundaryError",
@@ -62,4 +69,7 @@ __all__ = [
     "ResolvedDispatch",
     "resolve_limits",
     "resolve_dispatch_profile",
+    "DispatchEventStream",
+    "HeartbeatMonitor",
+    "EventStreamError",
 ]
