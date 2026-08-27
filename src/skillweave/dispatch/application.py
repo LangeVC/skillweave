@@ -27,6 +27,7 @@ wave the caller names) and makes no claim of stable 1.4 transport compatibility.
 
 from __future__ import annotations
 
+import importlib
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -125,6 +126,17 @@ def generate_run_id() -> str:
     A bare hex UUID carries no prefix or punctuation a parser must decode.
     """
     return uuid.uuid4().hex
+
+
+def _new_raw_artifact_store() -> Any:
+    """Return a fresh :class:`RawArtifactStore` (lazy runtime import).
+
+    The registry is an optional (lazy-bound) subpackage; it is resolved via
+    ``importlib.import_module`` (a string, not an import statement) so the
+    dispatch application module keeps a runtime-free eager import closure
+    (GLE-020), exactly like the fan-out's runner adapter.
+    """
+    return importlib.import_module("skillweave.runtime.registry").RawArtifactStore()
 
 
 # ── Lane plan / report (dry-run and post-run) ───────────────────────────────
@@ -296,6 +308,20 @@ class DispatchRun:
     results: list[dict[str, Any]] = field(default_factory=list)
     failures: list[dict[str, Any]] = field(default_factory=list)
     failure_policy: Optional[str] = None
+    artifact_store: Optional[Any] = None
+
+    @property
+    def resolver(self) -> Optional[Callable[[str], bytes]]:
+        """The content-addressed resolver bound to this run's artifact store.
+
+        A caller that received this run's ``results`` (receipt references) can
+        resolve any returned reference to its raw bytes through this resolver
+        without re-inserting the bytes: the fan-out already stored stdout and
+        stderr under their digests, so ``raw = ref.resolve(run.resolver)`` works
+        immediately. ``None`` only for a run produced with no store (e.g. a
+        dry-run).
+        """
+        return self.artifact_store.resolve if self.artifact_store is not None else None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -343,12 +369,16 @@ class OperatorDispatchApplication:
         fanout_seam: Optional[Callable[..., Any]] = None,
         repo_root: Optional[str] = None,
         cwd: Optional[str] = None,
+        artifact_store: Optional[Any] = None,
     ):
         self._workspace_seam = workspace_seam
         self._fanout_seam = fanout_seam
         self._repo_root = repo_root
         self._cwd = cwd
+        self._artifact_store = artifact_store
+        self._active_store: Optional[Any] = None
         self._last_success: dict[str, bool] = {}
+        self._typed_failure: dict[str, bool] = {}
 
     def _fanout(self) -> Callable[..., Any]:
         if self._fanout_seam is not None:
@@ -453,6 +483,12 @@ class OperatorDispatchApplication:
         )
         run_id = generate_run_id()
         self._last_success = {}
+        self._typed_failure = {}
+        self._active_store = (
+            self._artifact_store
+            if self._artifact_store is not None
+            else _new_raw_artifact_store()
+        )
         self._results: list[dict[str, Any]] = []
         self._failures: list[dict[str, Any]] = []
         stream = DispatchEventStream(run_id, sink if sink is not None else sys.stdout)
@@ -501,29 +537,68 @@ class OperatorDispatchApplication:
                         provisioned=provisioned,
                     )
 
-            # Correction budget: a failed lane is re-run up to the declared
-            # budget; past that, halt and start no further correction child.
+            # Failure policy applied to typed failures; the legacy/untyped
+            # verification failures keep the correction-budget path.
             failed = self._reconcile_failed(declaration, resolved, stream, run_id, wave)
-            while failed and rounds < declaration.max_correction_rounds_per_wave:
-                rounds += 1
-                for lane in failed:
-                    self._run_lane(
-                        run_id,
-                        wave,
-                        lane,
-                        resolved,
-                        stream,
-                        work,
-                        round_=rounds,
-                        provisioned=provisioned,
-                    )
-                failed = self._reconcile_failed(
-                    declaration, resolved, stream, run_id, wave
-                )
+            policy = _failure_policy_of(resolved)
+            max_retries = _max_retries_of(resolved)
 
-            if failed:
+            def _typed(failed_lanes: list[Any]) -> list[Any]:
+                return [ln for ln in failed_lanes if self._typed_failure.get(ln.id, False)]
+
+            def _legacy(failed_lanes: list[Any]) -> list[Any]:
+                return [ln for ln in failed_lanes if not self._typed_failure.get(ln.id, False)]
+
+            typed = _typed(failed)
+            legacy = _legacy(failed)
+
+            # ``abort`` halts immediately after the first policy-managed failure
+            # and starts zero correction children.
+            if policy == "abort" and typed:
                 halted = True
                 halt_reason = HALT_REQUIRES_OPERATOR
+            else:
+                # Legacy (untyped) lanes are budget-managed as before; typed
+                # lanes are retried only under ``retry``, bounded by both
+                # ``limits.max_retries`` and ``max_correction_rounds_per_wave``.
+                while (
+                    legacy or (policy == "retry" and typed)
+                ) and rounds < declaration.max_correction_rounds_per_wave:
+                    typed_eligible = (
+                        typed if (policy == "retry" and rounds < max_retries) else []
+                    )
+                    if not legacy and not typed_eligible:
+                        break
+                    rounds += 1
+                    for lane in legacy + typed_eligible:
+                        self._run_lane(
+                            run_id,
+                            wave,
+                            lane,
+                            resolved,
+                            stream,
+                            work,
+                            round_=rounds,
+                            provisioned=provisioned,
+                        )
+                    failed = self._reconcile_failed(
+                        declaration, resolved, stream, run_id, wave
+                    )
+                    typed = _typed(failed)
+                    legacy = _legacy(failed)
+
+                if legacy:
+                    # Budget exhausted on untyped verification failures.
+                    halted = True
+                    halt_reason = HALT_REQUIRES_OPERATOR
+                elif policy == "retry" and typed:
+                    # Retry-policy lanes still failing after max_retries.
+                    halted = True
+                    halt_reason = HALT_REQUIRES_OPERATOR
+                # ``skip``-policy typed failures stay failed (not done) without
+                # a halt: other lanes and the wave continue.
+
+            if halted:
                 stream.emit(
                     wave=wave,
                     lane_id="",
@@ -547,6 +622,7 @@ class OperatorDispatchApplication:
             results=self._results,
             failures=self._failures,
             failure_policy=_failure_policy_of(resolved),
+            artifact_store=self._active_store,
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -681,7 +757,12 @@ class OperatorDispatchApplication:
         for ref in refs:
             if ref is not None:
                 by_stream[ref.stream] = ref
-        resolve_required_evidence(lane, reference_by_stream=by_stream)
+        resolver = (
+            self._active_store.resolve if self._active_store is not None else None
+        )
+        resolve_required_evidence(
+            lane, reference_by_stream=by_stream, resolver=resolver
+        )
 
     def _lane_cwd(self, lane: Lane, provisioned: dict[str, ProvisionedWorkspace]) -> Optional[str]:
         """Return the exact attested worktree path for a mutating lane.
@@ -729,19 +810,26 @@ class OperatorDispatchApplication:
             model=self._model_for(lane, resolved),
             cwd=self._lane_cwd(lane, provisioned),
             timeout=_resolved_timeout(resolved),
+            artifact_store=self._active_store,
         )
         children = _fanout_children(result)
         self._record_child_results(lane, children, round_=round_)
         received_refs = _receipt_refs_of(children)
 
         succeeded = _result_succeeded(result)
+        evidence_failed = False
         try:
             self._gate_required_evidence(lane, received_refs)
         except RequiredEvidenceError as exc:
             succeeded = False
+            evidence_failed = True
             self._record_failure(
                 lane, outcome="missing_evidence", detail=str(exc), round_=round_
             )
+
+        self._typed_failure[lane.id] = evidence_failed or _typed_process_failure(
+            children
+        )
 
         if not succeeded:
             outcome = _first_outcome(children)
@@ -802,6 +890,7 @@ class OperatorDispatchApplication:
             cwd=self._cwd,
             launch_contexts=contexts,
             timeout=_resolved_timeout(resolved),
+            artifact_store=self._active_store,
         )
         children = getattr(result, "children", None) or []
         for lane, child in zip(group, children):
@@ -809,13 +898,20 @@ class OperatorDispatchApplication:
             self._record_child_results(lane, child_list, round_=round_)
             refs = _receipt_refs_of(child_list)
             succeeded = _child_succeeded(child)
+            evidence_failed = False
             try:
                 self._gate_required_evidence(lane, refs)
             except RequiredEvidenceError as exc:
                 succeeded = False
+                evidence_failed = True
                 self._record_failure(
                     lane, outcome="missing_evidence", detail=str(exc), round_=round_
                 )
+
+            self._typed_failure[lane.id] = evidence_failed or _typed_process_failure(
+                child_list
+            )
+
             if not succeeded:
                 self._record_failure(
                     lane,
@@ -967,6 +1063,37 @@ def _failure_policy_of(resolved: ResolvedDispatch) -> Optional[str]:
     if limits is None:
         return None
     return getattr(limits, "on_model_failure", None)
+
+
+def _max_retries_of(resolved: ResolvedDispatch) -> int:
+    """The configured retry bound (profile ``limits.max_retries``)."""
+    limits = getattr(resolved, "limits", None)
+    if limits is None:
+        return 0
+    retries = getattr(limits, "max_retries", 0)
+    return int(retries) if retries is not None else 0
+
+
+def _typed_process_failure(children: list[Any]) -> bool:
+    """Whether any child is a typed process failure (policy-managed).
+
+    A *typed* failure is a real process result that did not succeed with a
+    concrete machine outcome (non-zero ``exit_code``, ``signal``, ``timed_out``
+    or ``launch_failed``). A child with no wrapped process result (e.g. a
+    synthetic verification marker that only reports ``succeeded=False``) is
+    *not* typed: it stays on the legacy/untyped correction-budget path, so the
+    existing budget gate is preserved without weakening it.
+    """
+    for child in children:
+        result = getattr(child, "result", None)
+        if result is None:
+            continue
+        if bool(getattr(result, "succeeded", True)):
+            continue
+        outcome = getattr(child, "outcome", None) or _child_outcome(child)
+        if outcome in CHILD_OUTCOMES:
+            return True
+    return False
 
 
 def _required_evidence_of(lane: Lane) -> Optional[list[str]]:

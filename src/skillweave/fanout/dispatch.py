@@ -160,6 +160,25 @@ class ReceiptReference:
         }
 
 
+def _store_child_bytes(store: Any, child: "FanOutChild") -> None:
+    """Put a child's captured stdout/stderr into ``store`` and assert integrity.
+
+    Both streams are stored under their own content digest *before* any
+    reference is returned, and each reference is re-verified against the store
+    (digest, byte length and declared encoding), so a returned reference can
+    never name bytes that are absent from the store or corrupt. This is the
+    content-addressed wiring: the fan-out binds its captured raw bytes to the
+    shared ``RawArtifactStore`` so a caller can resolve a ref without re-putting
+    the bytes itself.
+    """
+    store.put(child.raw_bytes)
+    store.put(child.stderr_bytes)
+    if child.stdout_ref is not None:
+        child.stdout_ref.resolve(store.resolve)
+    if child.stderr_ref is not None:
+        child.stderr_ref.resolve(store.resolve)
+
+
 def _make_receipt_reference(receipt: Any, *, stream: str) -> Optional[ReceiptReference]:
     """Build a ``ReceiptReference`` from an ``ArtifactReceipt``.
 
@@ -319,6 +338,7 @@ def fan_out_dispatch(
     cwd: Optional[str] = None,
     launch_contexts: Optional[Sequence[FanOutLaunchContext]] = None,
     timeout: Optional[float] = None,
+    artifact_store: Optional[Any] = None,
 ) -> FanOutResult:
     """Start every command as a real process, then wait for all.
 
@@ -354,6 +374,14 @@ def fan_out_dispatch(
     ``timeout`` (optional) forwards to each child's ``wait``: a child exceeding
     it ends in the defined ``timed_out`` outcome (distinct from an exit, signal,
     or launch failure) rather than hanging the whole fan-out.
+
+    ``artifact_store`` (optional) is the shared ``RawArtifactStore`` (the run /
+    application-owned content-addressed store). When supplied, every child's
+    captured stdout and stderr bytes are put into it *before* the child's
+    receipt references are returned, and each reference is re-verified against
+    the store (digest, byte length, declared encoding). A returned reference is
+    therefore immediately resolvable from the store by a caller that received
+    no bytes out-of-band.
     """
     created_at = created_at or datetime.now(timezone.utc).isoformat()
 
@@ -448,6 +476,8 @@ def fan_out_dispatch(
                     stderr_ref=_make_receipt_reference(result.stderr_receipt, stream="stderr"),
                 )
             )
+            if artifact_store is not None:
+                _store_child_bytes(artifact_store, children[-1])
             continue
 
         result = handle.wait(timeout=timeout)
@@ -469,6 +499,8 @@ def fan_out_dispatch(
                 stderr_ref=_make_receipt_reference(result.stderr_receipt, stream="stderr"),
             )
         )
+        if artifact_store is not None:
+            _store_child_bytes(artifact_store, children[-1])
 
     # Overlap is structurally guaranteed when more than one worker was launched
     # and all started before any wait; record it as a measured fact.
