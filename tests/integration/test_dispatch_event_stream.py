@@ -24,6 +24,7 @@ ended) without ever containing the raw bytes a worker emitted.
 import io
 import json
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -307,3 +308,108 @@ def _t(offset_seconds: float) -> str:
 
     now = datetime.now(timezone.utc)
     return (now + timedelta(seconds=offset_seconds)).isoformat()
+
+
+# ── Concurrency: serialized emission, ordered persisted JSONL, one terminal ─
+
+class _SynchronizedSink(io.StringIO):
+    """A thread-safe text sink for concurrent emitters.
+
+    ``StringIO`` is not safe for concurrent writes; the stream's own lock
+    already serializes emission, but the live reader (the getvalue()/read path)
+    and the terminal idempotency still need a safe sink under the stress test.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._read_lock = threading.Lock()
+
+    def write(self, s):
+        with self._read_lock:
+            super().write(s)
+        return len(s)
+
+    def getvalue(self):
+        with self._read_lock:
+            return super().getvalue()
+
+
+def _join_stream(stream):
+    from threading import Thread
+
+    def worker(index):
+        for _ in range(2000):
+            stream.heartbeat(wave="w", lane_id=f"l{index}", dispatch_id=f"d{index}")
+
+    threads = [Thread(target=worker, args=(i,)) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+
+def test_concurrent_emission_persists_strictly_increasing_order():
+    """Serialized emission keeps the persisted JSONL strictly increasing.
+
+    The prior commit released the lock between sequence assignment and the
+    sink write, so concurrent emitters produced adjacent inversions. This test
+    drives 8 emitters x 2000 events and asserts the persisted sequence is
+    strictly increasing with unique, gap-free values.
+    """
+    sink = _SynchronizedSink()
+    stream = DispatchEventStream("run-concurrent", sink)
+    _join_stream(stream)
+    sequences = [e["sequence"] for e in _lines(sink)]
+    assert len(sequences) == 8 * 2000
+    assert len(set(sequences)) == len(sequences), "sequences must be unique"
+    assert sequences == sorted(sequences), "persisted order must be monotonic"
+    assert all(
+        b == a + 1 for a, b in zip(sequences, sequences[1:])
+    ), "sequences must be gap-free and strictly increasing"
+
+
+def test_concurrent_terminal_once_is_exactly_one_per_child():
+    """Concurrent/retried terminal collection yields one terminal per child.
+
+    Restructures the terminal guard and emission into a single serialized
+    emission operation (no nested-lock deadlock), so a child whose terminal is
+    requested concurrently still persists exactly one terminal event.
+    """
+    sink = _SynchronizedSink()
+    stream = DispatchEventStream("run-terminal", sink)
+    keys = [f"run-terminal-{i}" for i in range(8)]
+    args = [
+        dict(
+            child_key=k,
+            wave="w",
+            lane_id="l",
+            dispatch_id=f"d{i}",
+            process_status=ProcessStatus.EXITED,
+            task_status=TaskStatus.DONE,
+        )
+        for i, k in enumerate(keys)
+    ]
+
+    def collector(i):
+        a = args[i]
+        for _ in range(200):
+            stream.emit_terminal_once(
+                child_key=keys[i],
+                wave=a["wave"],
+                lane_id=a["lane_id"],
+                dispatch_id=a["dispatch_id"],
+                process_status=a["process_status"],
+                task_status=a["task_status"],
+            )
+
+    threads = [threading.Thread(target=collector, args=(i,)) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    events = _lines(sink)
+    terminals = [e for e in events if e["event_type"] == EventType.PROCESS_TERMINAL.value]
+    assert len(terminals) == 8
+    seen_keys = {e["dispatch_id"] for e in terminals}
+    assert seen_keys == {f"d{i}" for i in range(8)}, "one terminal per child"

@@ -37,7 +37,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from threading import Lock
+from threading import RLock
 from typing import Any, List, Optional, TextIO
 
 from .contracts import (
@@ -122,7 +122,7 @@ class DispatchEventStream:
         self.run_id = run_id
         self._sink = sink
         self._sequence = start_sequence
-        self._lock = Lock()
+        self._lock = RLock()
         self._children: dict[str, _ChildState] = {}
 
     # -- sequence ----------------------------------------------------------
@@ -130,18 +130,24 @@ class DispatchEventStream:
     @property
     def sequence(self) -> int:
         """The next sequence number to be emitted (strictly increasing)."""
-        return self._sequence
+        with self._lock:
+            return self._sequence
 
     def _next_sequence(self) -> int:
-        with self._lock:
-            seq = self._sequence
-            self._sequence += 1
-            return seq
+        seq = self._sequence
+        self._sequence += 1
+        return seq
 
     # -- core emission ------------------------------------------------------
 
-    def _emit(self, event: DispatchEvent) -> DispatchEvent:
-        """Append one event as an unbuffered JSONL line and return it."""
+    def _emit_locked(self, event: DispatchEvent) -> DispatchEvent:
+        """Append one event as an unbuffered JSONL line and return it.
+
+        The caller must hold ``self._lock``. Sequence assignment, event
+        construction, the sink write and the flush form one serialized
+        emission operation, so on-disk/live-reader order is strictly
+        increasing even under concurrency.
+        """
         self._sink.write(_encode_event(event) + "\n")
         self._sink.flush()
         return event
@@ -164,34 +170,36 @@ class DispatchEventStream:
 
         ``payload`` is an optional set of *metadata-only* extra fields merged
         into the event's ``receipt_refs``-adjacent surface. Any payload field
-        that carries raw stdout/stderr is refused (criterion 5). The event is
-        assigned the next strict per-run sequence number before it is flushed.
+        that carries raw stdout/stderr is refused (criterion 5). Sequence
+        assignment, construction, write and flush happen as one serialized
+        operation, so a concurrent emitter cannot reorder the live file.
         """
-        merged: dict[str, Any] = {}
-        if payload:
-            bad = _has_raw_output(payload)
-            if bad:
-                _refuse_raw_output(bad)
-            merged.update(payload)
+        with self._lock:
+            merged: dict[str, Any] = {}
+            if payload:
+                bad = _has_raw_output(payload)
+                if bad:
+                    _refuse_raw_output(bad)
+                merged.update(payload)
 
-        event = DispatchEvent(
-            run_id=self.run_id,
-            wave=wave,
-            lane_id=lane_id,
-            dispatch_id=dispatch_id,
-            sequence=self._next_sequence(),
-            timestamp=timestamp or _now(),
-            event_type=event_type.value,
-            process_status=process_status.value,
-            task_status=task_status.value,
-            evidence_status=evidence_status,
-            receipt_refs=list(receipt_refs) if receipt_refs else [],
-        )
-        # Metadata-only extras ride alongside the fixed surface, never inside
-        # the process/evidence status fields and never as raw output.
-        if merged:
-            _append_metadata(event, merged)
-        return self._emit(event)
+            event = DispatchEvent(
+                run_id=self.run_id,
+                wave=wave,
+                lane_id=lane_id,
+                dispatch_id=dispatch_id,
+                sequence=self._next_sequence(),
+                timestamp=timestamp or _now(),
+                event_type=event_type.value,
+                process_status=process_status.value,
+                task_status=task_status.value,
+                evidence_status=evidence_status,
+                receipt_refs=list(receipt_refs) if receipt_refs else [],
+            )
+            # Metadata-only extras ride alongside the fixed surface, never
+            # inside the process/evidence status fields and never as raw output.
+            if merged:
+                _append_metadata(event, merged)
+            return self._emit_locked(event)
 
     # -- lifecycle shortcuts ------------------------------------------------
 
@@ -359,15 +367,15 @@ class DispatchEventStream:
             if state.terminal_emitted:
                 return None
             state.terminal_emitted = True
-        return self.emit(
-            wave=wave,
-            lane_id=lane_id,
-            dispatch_id=dispatch_id,
-            event_type=EventType.PROCESS_TERMINAL,
-            process_status=process_status,
-            task_status=task_status,
-            payload=payload,
-        )
+            return self.emit(
+                wave=wave,
+                lane_id=lane_id,
+                dispatch_id=dispatch_id,
+                event_type=EventType.PROCESS_TERMINAL,
+                process_status=process_status,
+                task_status=task_status,
+                payload=payload,
+            )
 
 
 @dataclass
