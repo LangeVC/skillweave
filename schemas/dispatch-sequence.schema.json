@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DispatchSequence",
+  "description": "The operator dispatch sequence contract consumed by the wave dispatcher (SW138-CONTRACT-001). It binds the session boundary, an explicit profile reference, the execution model, the correction budget, and per-lane repo plus full base SHA. It names no model or harness default and carries no duration-estimate field.",
+  "type": "object",
+  "required": [
+    "session_boundary",
+    "profile",
+    "execution_model",
+    "max_correction_rounds_per_wave",
+    "max_parallel",
+    "lanes"
+  ],
+  "properties": {
+    "session_boundary": {
+      "type": "string",
+      "enum": ["batch"]
+    },
+    "profile": {
+      "$ref": "#/$defs/profileReference"
+    },
+    "execution_model": {
+      "type": "string",
+      "enum": ["cold", "warm", "resume"]
+    },
+    "max_correction_rounds_per_wave": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_parallel": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "lanes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/lane"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "profileReference": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "lane": {
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "repo",
+        "base",
+        "execution_model"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_model": {
+          "type": "string",
+          "enum": ["cold", "warm", "resume"]
+        },
+        "mutating": {
+          "type": "boolean"
+        },
+        "criterion_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/criterionGroup"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "criterionGroup": {
+      "type": "object",
+      "required": ["criteria"],
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "dispatchEvent": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "wave",
+        "lane_id",
+        "dispatch_id",
+        "sequence",
+        "timestamp",
+        "event_type",
+        "process_status",
+        "task_status"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "wave": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lane_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dispatch_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timestamp": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "process_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_status": {
+          "type": "string"
+        },
+        "receipt_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "practiceTask": {
+      "type": "object",
+      "required": [
+        "id",
+        "acceptanceCriteria",
+        "points",
+        "dependsOn",
+        "lane"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "points": {
+          "type": "integer",
+          "enum": [1, 2, 3, 5, 8, 13]
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lane": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
