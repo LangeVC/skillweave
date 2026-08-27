@@ -26,6 +26,17 @@ from .contracts import (  # noqa: F401
     validate_practice_task,
 )
 
+# Authoritative profile resolution (SW138-PROFILE-001): the single seam that
+# turns an explicit profile path and required roles into a launchable intent.
+from .profile_resolution import (  # noqa: F401
+    ProfileResolutionError,
+    ResolvedModel,
+    ResolvedRole,
+    ResolvedDispatch,
+    resolve_limits,
+    resolve_dispatch_profile,
+)
+
 __all__ = [
     "ContractError",
     "SequenceBoundaryError",
@@ -45,4 +56,10 @@ __all__ = [
     "validate_mutating_lane",
     "validate_for_dispatch",
     "validate_practice_task",
+    "ProfileResolutionError",
+    "ResolvedModel",
+    "ResolvedRole",
+    "ResolvedDispatch",
+    "resolve_limits",
+    "resolve_dispatch_profile",
 ]
