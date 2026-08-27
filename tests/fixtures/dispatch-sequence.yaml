@@ -1,0 +1,44 @@
+# Dispatch-sequence fixture for the operator-dispatch integration test
+# (SW138-DISPATCH-001). Satisfies the dispatch-sequence.schema.json contract:
+# session_boundary=batch, explicit profile reference, execution_model, correction
+# budget, max_parallel, and per-lane repo + full base SHA.
+#
+# Lanes: two dependency-ready *disjoint* lanes (ops-a, ops-b on distinct repos)
+# that must overlap, plus one lane sharing ops-a's repo (ops-c) that is
+# mutually-exclusive and must serialise. This exercises criteria 3 and 4.
+
+session_boundary: batch
+profile:
+  path: tests/fixtures/dispatch-profile.yaml
+  required: true
+execution_model: cold
+max_correction_rounds_per_wave: 2
+max_parallel: 2
+lanes:
+  - id: lane-ops-a
+    role: ops
+    repo: skillweave/fixture-repo-a
+    base: 953aab4ec8f7babf0857c0033fd7731c8dc16e92
+    execution_model: cold
+    mutating: true
+    criterion_groups:
+      - criteria: [1, 2, 3]
+      - criteria: [4, 5]
+  - id: lane-ops-b
+    role: reviewer
+    repo: skillweave/fixture-repo-b
+    base: 953aab4ec8f7babf0857c0033fd7731c8dc16e92
+    execution_model: cold
+    mutating: true
+    criterion_groups:
+      - criteria: [1, 2, 3]
+      - criteria: [4, 5]
+  - id: lane-ops-c
+    role: ops
+    repo: skillweave/fixture-repo-a
+    base: 953aab4ec8f7babf0857c0033fd7731c8dc16e92
+    execution_model: cold
+    mutating: true
+    criterion_groups:
+      - criteria: [1, 2, 3]
+      - criteria: [4, 5]

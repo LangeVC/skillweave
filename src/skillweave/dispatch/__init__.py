@@ -44,6 +44,26 @@ from .events import (  # noqa: F401
     EventStreamError,
 )
 
+# The experimental application seam and its CLI (SW138-DISPATCH-001). These
+# consume the contract/profile/stream exported above and drive a wave through
+# the shared fan-out / run / workspace services.
+from .application import (  # noqa: F401
+    EXECUTION_MODELS,
+    HALT_REQUIRES_OPERATOR,
+    ExecutionModelError,
+    OperatorDispatchError,
+    ProfileLocationError,
+    WorkspaceMismatchError,
+    DispatchReport,
+    LanePlan,
+    DispatchRun,
+    GitWorkspaceSeam,
+    WorkspaceSeam,
+    OperatorDispatchApplication,
+    enforce_execution_model,
+    generate_run_id,
+)
+
 __all__ = [
     "ContractError",
     "SequenceBoundaryError",
@@ -72,4 +92,18 @@ __all__ = [
     "DispatchEventStream",
     "HeartbeatMonitor",
     "EventStreamError",
+    "EXECUTION_MODELS",
+    "HALT_REQUIRES_OPERATOR",
+    "ExecutionModelError",
+    "OperatorDispatchError",
+    "ProfileLocationError",
+    "WorkspaceMismatchError",
+    "DispatchReport",
+    "LanePlan",
+    "DispatchRun",
+    "GitWorkspaceSeam",
+    "WorkspaceSeam",
+    "OperatorDispatchApplication",
+    "enforce_execution_model",
+    "generate_run_id",
 ]

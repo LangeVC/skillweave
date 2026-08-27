@@ -1,0 +1,34 @@
+# Dispatch routing-profile fixture for the operator-dispatch integration test
+# (SW138-DISPATCH-001). DATA, not code: loaded through
+# skillweave.routing.harness.load_profiles_from_location, exactly like a real
+# profile. The launch commands are hermetic (a thin python marker) so the
+# integration test proves real overlapping processes without a live harness.
+
+name: dispatch-fixture
+tier: balanced
+limits:
+  timeout: 30.0
+  max_retries: 1
+  min_models_required: 2
+  on_model_failure: skip
+roles:
+  observer:
+    observer: true
+    capabilities:
+      can_observe_run: true
+  ops:
+    model: faigate/dispatch-fixture-model
+    tool:
+      name: marker
+      launch_command: python3 -c "import sys; print(sys.argv[1])"
+      args: ["ops-marker"]
+    capabilities:
+      can_mutate_run_state: true
+  reviewer:
+    model: faigate/dispatch-fixture-model
+    tool:
+      name: marker
+      launch_command: python3 -c "import sys; print(sys.argv[1])"
+      args: ["reviewer-marker"]
+    capabilities:
+      can_approve_gate: true

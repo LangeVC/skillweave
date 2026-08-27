@@ -43,6 +43,7 @@ Issues = "https://github.com/LangeVC/skillweave/issues"
 skillweave-install = "skillweave.installer:main"
 skillweave-risk-mode = "skillweave.scripts.resolve_risk_mode:main"
 skillweave-interactive-mode = "skillweave.scripts.interactive_mode:main"
+skillweave = "skillweave.dispatch.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
