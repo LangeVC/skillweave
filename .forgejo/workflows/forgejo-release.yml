@@ -1,0 +1,65 @@
+name: Create Forgejo Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag to create release for (e.g. v1.0.0)"
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          
+          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
+          
+          # Generate release notes
+          LAST_TAG=$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || echo "")
+          CHANGES=""
+          if [ -n "$LAST_TAG" ]; then
+              COMMITS=$(git log "${LAST_TAG}..${TAG_NAME}" --oneline --no-merges 2>/dev/null || true)
+          else
+              COMMITS=$(git log "${TAG_NAME}" --oneline --no-merges --max-count=10 2>/dev/null || true)
+          fi
+          
+          while IFS= read -r line; do
+              [ -n "$line" ] && CHANGES="${CHANGES}- ${line}\n"
+          done <<< "$COMMITS"
+          
+          # Format notes safely
+          NOTES=$(printf "## %s\n\n### What's Changed\n%s" "$TAG_NAME" "$CHANGES")
+          
+          PAYLOAD=$(jq -n \
+            --arg tag_name "$TAG_NAME" \
+            --arg name "$TAG_NAME" \
+            --arg body "$NOTES" \
+            '{tag_name: $tag_name, name: $name, body: $body, draft: false, prerelease: false}')
+            
+          echo "Creating Forgejo release for $TAG_NAME..."
+          
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases" \
+            -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+            
+          if [ "$HTTP_STATUS" != "201" ]; then
+            echo "Failed to create release. HTTP $HTTP_STATUS"
+            cat response.json
+            exit 1
+          fi
+          
+          echo "Release created successfully."
