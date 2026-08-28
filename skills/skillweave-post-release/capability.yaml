@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-post-release
-version: 1.3.8
+version: 1.3.9
 description: Run retrospectives, synthesize feedback and monitoring evidence, and plan the next iteration.
 author: SkillWeave Team
 license: Apache-2.0
