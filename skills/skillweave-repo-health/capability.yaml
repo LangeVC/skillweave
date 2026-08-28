@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-repo-health
-version: 1.3.7
+version: 1.3.8
 description: Assess repository health, classify files, detect duplicates, and produce safe cleanup plans.
 author: SkillWeave Team
 license: Apache-2.0

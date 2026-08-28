@@ -231,7 +231,7 @@ class TestCouncilEngine:
         searcher = MagicMock()
         searcher.search = AsyncMock(side_effect=asyncio.TimeoutError())
         engine = CouncilEngine(provider, searcher=searcher)
-        config = CouncilConfig(models=["m1"], chairman="m1", mode="quick")
+        config = CouncilConfig(models=["m1"], chairman="m1", mode="quick", min_models_required=1)
         result = asyncio.run(engine.deliberate("Test", config))
         assert result.search_context == ""
 

@@ -69,12 +69,6 @@ from typing import Optional, Sequence, Union
 
 from skillweave.routing.profile import ToolSpec
 from skillweave.routing.modelspec import ModelSpec
-from skillweave.runtime.runner_adapter import ProcessResult, run_command
-from skillweave.runtime.registry import (
-    ArtifactReceipt,
-    EvidenceQuality,
-    EvidenceType,
-)
 
 
 #: Documented default timeout (seconds) for a dispatch launch. A caller that
@@ -112,8 +106,8 @@ class DispatchResult:
     tool: str
     launch_command: str
     args: list[str]
-    result: ProcessResult
-    artifact: Optional[ArtifactReceipt]
+    result: "ProcessResult"
+    artifact: Optional["ArtifactReceipt"]
     timeout: Optional[float]
 
     @property
@@ -180,7 +174,7 @@ def _artifact_for(
     signal: Optional[int],
     timeout: Optional[float],
     termination: str,
-) -> ArtifactReceipt:
+) -> "ArtifactReceipt":
     """Build the ``ArtifactReceipt`` that binds the collected output to the run.
 
     The output is stored by digest only (``sha256``); the raw bytes are never
@@ -190,8 +184,10 @@ def _artifact_for(
     which tool, how did it end, and what was declared" without a second lookup.
     """
     import hashlib
+    import importlib
+    reg = importlib.import_module("skillweave.runtime.registry")
 
-    return ArtifactReceipt(
+    return reg.ArtifactReceipt(
         artifact_id=f"dispatch-{run_id}",
         sha256=hashlib.sha256(stdout or b"").hexdigest(),
         schema_version="1",
@@ -199,11 +195,11 @@ def _artifact_for(
         subject_repo=subject_repo,
         subject_commit=subject_commit,
         created_at=created_at,
-        evidence_type=EvidenceType.ARTIFACT.value,
+        evidence_type=reg.EvidenceType.ARTIFACT.value,
         purpose=f"output of dispatch run '{run_id}'",
         method="dispatch",
         system_source="routing.dispatch",
-        quality=EvidenceQuality(
+        quality=reg.EvidenceQuality(
             relevance="unassessed",
             sufficiency="unassessed",
             reliability="unassessed",
@@ -261,6 +257,8 @@ def dispatch(
     argv = tokenize_launch(tool.launch_command) + [str(a) for a in tool.args]
     effective_timeout = DEFAULT_DISPATCH_TIMEOUT if timeout is None else timeout
     try:
+        import importlib
+        run_command = importlib.import_module("skillweave.runtime.runner_adapter").run_command
         result = run_command(
             argv,
             run_id=run_id,

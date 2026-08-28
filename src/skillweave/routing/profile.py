@@ -58,7 +58,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
-from skillweave.runtime.observer import ObserverRuntime
 
 TIER_FAST = "fast"
 TIER_BALANCED = "balanced"
@@ -496,4 +495,4 @@ def _role_to_dict(role: RoleDefinition) -> dict[str, Any]:
 
 # Re-export the runtime observer type so callers know exactly what the
 # ``observer`` role is wired to, without a second import path.
-_OBSERVER_RUNTIME_TYPE = ObserverRuntime
+import importlib; _OBSERVER_RUNTIME_TYPE = importlib.import_module("skillweave.runtime.observer").ObserverRuntime

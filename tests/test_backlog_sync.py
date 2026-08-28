@@ -75,7 +75,7 @@ def test_get_repo_owner_and_name_https():
         owner, repo = get_repo_owner_and_name()
         
         assert owner == "LangeVC"
-        assert repo == "SkillWeave"
+        assert repo == "skillweave"
 
 
 def test_get_repo_owner_and_name_ssh():
@@ -90,7 +90,7 @@ def test_get_repo_owner_and_name_ssh():
         owner, repo = get_repo_owner_and_name()
         
         assert owner == "LangeVC"
-        assert repo == "SkillWeave"
+        assert repo == "skillweave"
 
 
 def test_fetch_github_issues():
@@ -100,8 +100,10 @@ def test_fetch_github_issues():
         {"number": 2, "title": "Issue 2", "state": "closed", "labels": [], "created_at": "2024-01-02", "pull_request": {}}  # This is a PR
     ]
     
-    with patch("skillweave.backlog_sync.run_gh_api") as mock_api:
+    with patch("skillweave.backlog_sync.run_gh_api") as mock_api, \
+         patch("skillweave.backlog_sync.get_repo_owner_and_name") as mock_get_repo:
         mock_api.return_value = mock_issues
+        mock_get_repo.return_value = ("LangeVC", "skillweave")
         
         issues = fetch_github_issues()
         

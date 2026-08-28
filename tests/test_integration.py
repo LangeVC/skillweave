@@ -135,7 +135,7 @@ def test_blueprint_to_promptchain_flow():
     return prompt_sequence
 
 
-def test_promptchain_to_releasechain_flow(prompt_sequence):
+def helper_promptchain_to_releasechain_flow(prompt_sequence):
     """
     Test the flow from PromptChain (sequence) to ReleaseChain (execution).
     
@@ -363,7 +363,7 @@ def test_full_workflow_integration():
     
     # Step 2: PromptChain to ReleaseChain
     print("\n2. Testing PromptChain → ReleaseChain flow...")
-    execution_summary, context = test_promptchain_to_releasechain_flow(prompt_sequence)
+    execution_summary, context = helper_promptchain_to_releasechain_flow(prompt_sequence)
     print(f"   ✓ Executed sequence: {execution_summary['completed']} steps completed")
     print(f"   ✓ Success rate: {execution_summary['success_rate']:.1%}")
     

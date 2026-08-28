@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 from skillweave.routing.modelspec import ModelSpec, from_value
 
 if TYPE_CHECKING:
-    from skillweave.runtime.runner_adapter import ProcessResult
+    pass
 
 
 def _start_process():
