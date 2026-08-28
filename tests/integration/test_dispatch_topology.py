@@ -714,6 +714,24 @@ class _RecordingFanout:
         return _FakeResult(children=[_FakeChild() for _ in commands])
 
 
+class _RecordingInline:
+    """Records one inline (single-lane) execution per call, by lane id.
+
+    This is the *distinct* single-lane seam a serialized/INLINE lane must travel;
+    it is separate from ``_RecordingFanout`` so a test can prove a serialized
+    lane never entered the multi-child fan-out path.
+    """
+
+    def __init__(self):
+        self.calls = 0
+        self.lane_ids = []
+
+    def __call__(self, command, **kwargs):
+        self.calls += 1
+        self.lane_ids.append(_lane_id_from_repo(kwargs.get("subject_repo") or ""))
+        return _FakeResult(children=[_FakeChild()])
+
+
 class _FakeChild:
     succeeded = True
 
@@ -766,10 +784,12 @@ def _write_sequence(tmp_path, lanes):
     return str(path)
 
 
-def _dispatch(tmp_path, lanes, *, fanout, gate_input=None):
+def _dispatch(tmp_path, lanes, *, fanout=None, inline=None, gate_input=None):
     seq = _write_sequence(tmp_path, lanes)
     ws = _FakeWorkspace()
-    app = OperatorDispatchApplication(workspace_seam=ws, fanout_seam=fanout)
+    app = OperatorDispatchApplication(
+        workspace_seam=ws, fanout_seam=fanout, inline_seam=inline
+    )
     run = app.dispatch(
         seq, str(_PROFILE), wave="0", sink=io.StringIO(), gate_input=gate_input
     )
@@ -803,25 +823,32 @@ def test_operator_dispatcher_rejects_detached_branch_in_manifest(tmp_path):
     assert fanout.calls == 0
 
 
-# Criterion 2: overlapping write scope serializes (never one batch).
+# Criterion 2: overlapping write scope serializes (never one batch), and a
+# serialized lane runs on the distinct inline seam, never the multi-child
+# fan-out seam, exactly once.
 def test_operator_dispatcher_serializes_overlapping_write_scope(tmp_path):
     a = _governed_lane("lane-a", write_scope="/shared/**")
     b = _governed_lane("lane-b", write_scope="/shared/sub/**")
     fanout = _RecordingFanout()
-    run, _ = _dispatch(tmp_path, [a, b], fanout=fanout)
-    assert fanout.batches == [["lane-a"], ["lane-b"]], (
+    inline = _RecordingInline()
+    run, _ = _dispatch(tmp_path, [a, b], fanout=fanout, inline=inline)
+    assert fanout.batches == [], (
         f"colliding lanes must never share a fan-out batch, got {fanout.batches}"
     )
+    assert sorted(inline.lane_ids) == ["lane-a", "lane-b"]
+    assert inline.calls == 2, "each serialized lane runs exactly once inline"
     assert run.halted is False
 
 
-# Criterion 2: shared harness state namespace serializes.
+# Criterion 2: shared harness state namespace serializes (inline, not fan-out).
 def test_operator_dispatcher_serializes_shared_namespace(tmp_path):
     a = _governed_lane("lane-a", write_scope="/a/**", namespace="shared")
     b = _governed_lane("lane-b", write_scope="/b/**", namespace="shared")
     fanout = _RecordingFanout()
-    _dispatch(tmp_path, [a, b], fanout=fanout)
-    assert fanout.batches == [["lane-a"], ["lane-b"]]
+    inline = _RecordingInline()
+    _dispatch(tmp_path, [a, b], fanout=fanout, inline=inline)
+    assert fanout.batches == []
+    assert sorted(inline.lane_ids) == ["lane-a", "lane-b"]
 
 
 # F3: requires_integrator without an explicit eligible integrator refuses.
@@ -830,30 +857,13 @@ def test_operator_dispatcher_requires_integrator_fails_closed(tmp_path):
         "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
     )
     fanout = _RecordingFanout()
+    inline = _RecordingInline()
     with pytest.raises(TopologyGateError) as exc:
-        _dispatch(tmp_path, [a], fanout=fanout, gate_input=TopologyGateInput())
+        _dispatch(tmp_path, [a], fanout=fanout, inline=inline,
+                  gate_input=TopologyGateInput())
     assert "requires_integrator" in str(exc.value)
     assert fanout.calls == 0
-
-
-# F3 (green): an explicit distinct integrator lane satisfies requires_integrator.
-def test_operator_dispatcher_requires_integrator_with_integrator_passes(tmp_path):
-    a = _governed_lane(
-        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
-    )
-    integrator = _governed_lane("integrator", write_scope="/repo/integrator/**")
-    fanout = _RecordingFanout()
-    run, _ = _dispatch(
-        tmp_path,
-        [a, integrator],
-        fanout=fanout,
-        gate_input=TopologyGateInput(integration_lanes=["integrator"]),
-    )
-    # Both lanes are disjoint; the requires_integrator lane is released by the
-    # explicit integrator lane, so they share one collision-safe batch.
-    assert len(fanout.batches) == 1
-    assert sorted(fanout.batches[0]) == ["integrator", "lane-a"]
-    assert run.halted is False
+    assert inline.calls == 0
 
 
 # F3 (red): naming only itself as the integrator does not satisfy the policy.
@@ -862,13 +872,56 @@ def test_operator_dispatcher_requires_integrator_not_own_integrator(tmp_path):
         "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
     )
     fanout = _RecordingFanout()
+    inline = _RecordingInline()
     with pytest.raises(TopologyGateError) as exc:
         _dispatch(
-            tmp_path, [a], fanout=fanout,
+            tmp_path, [a], fanout=fanout, inline=inline,
             gate_input=TopologyGateInput(integration_lanes=["lane-a"]),
         )
     assert "requires_integrator" in str(exc.value)
     assert fanout.calls == 0
+    assert inline.calls == 0
+
+
+def _clean_state(lane_id):
+    return WorktreeState(
+        committed_sha="c" * 40, detached=False,
+        on_branch=f"branch-{lane_id}", dirty_paths=[],
+    )
+
+
+# F3 (green): a distinct declared integrator, ordered after the lane it
+# integrates via ``depends_on``, with a clean committed branch state, releases
+# ``requires_integrator`` — and the two run in *separate* batches, never
+# concurrently.
+def test_operator_dispatcher_requires_integrator_with_integrator_passes(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    integrator = _governed_lane(
+        "integrator",
+        write_scope="/repo/integrator/**",
+        depends_on=["lane-a"],
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    run, _ = _dispatch(
+        tmp_path,
+        [a, integrator],
+        fanout=fanout,
+        inline=inline,
+        gate_input=TopologyGateInput(
+            integration_lanes=["integrator"],
+            eligibility={"lane-a": _clean_state("lane-a"),
+                         "integrator": _clean_state("integrator")},
+        ),
+    )
+    # The integrator is ordered after lane-a: each executes once on the inline
+    # seam, in dependency order, never concurrently in the same fan-out batch.
+    assert fanout.batches == []
+    assert inline.calls == 2
+    assert inline.lane_ids == ["lane-a", "integrator"]
+    assert run.halted is False
 
 
 # F2: a semantic conflict is removed from normal fan-out and routed to the
@@ -877,20 +930,22 @@ def test_operator_dispatcher_routes_semantic_conflict_to_integrator(tmp_path):
     a = _governed_lane("lane-a", write_scope="/repo/a/**")
     b = _governed_lane("lane-b", write_scope="/repo/b/**")
     fanout = _RecordingFanout()
+    inline = _RecordingInline()
     run, _ = _dispatch(
         tmp_path,
         [a, b],
         fanout=fanout,
+        inline=inline,
         gate_input=TopologyGateInput(
             semantic_conflict="lane-a",
             conflict_write_scope=["/repo/a/src/foo.py"],
             conflict_test_contract=["tests/test_foo.py::test_resolution"],
         ),
     )
-    # Only lane-b reached normal fan-out; lane-a was routed to the Integrator.
-    assert fanout.batches == [["lane-b"]], (
-        f"conflicted lane must not enter fan-out, got {fanout.batches}"
-    )
+    # Only lane-b reached execution (on the distinct inline seam); lane-a was
+    # routed to the Integrator and never entered either execution seam.
+    assert fanout.batches == []
+    assert inline.lane_ids == ["lane-b"]
     assignment = run.integrator_assignment
     assert assignment is not None
     assert assignment.integrator == "integrator"
@@ -971,4 +1026,166 @@ def test_operator_dispatcher_non_mutating_lane_is_not_governed(tmp_path):
     run, ws = _dispatch(tmp_path, [non_mutating], fanout=fanout)
     assert ws.provisions == []
     assert fanout.calls == 0
+    assert run.halted is False
+
+
+# ── C4 behavioral evidence (controller correction) ──────────────────────────
+#
+# Each evidence point is a behavioral test against the real
+# ``OperatorDispatchApplication``, distinguishing the distinct inline seam from
+# the multi-child fan-out seam.
+
+def _app_with_recorders():
+    ws = _FakeWorkspace()
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    return ws, fanout, inline, OperatorDispatchApplication(
+        workspace_seam=ws, fanout_seam=fanout, inline_seam=inline
+    )
+
+
+# Evidence 1: a mutating lane with zero topology fields raises before any
+# workspace is provisioned and before either execution seam runs.
+def test_zero_topology_mutating_lane_raises_before_provisioning(tmp_path):
+    bad = {
+        "id": "lane-a",
+        "role": "ops",
+        "repo": "skillweave/lane-a",
+        "base": _OP_SHA,
+        "execution_model": "cold",
+        "mutating": True,
+        # zero topology fields: no depends_on/write_scope/worktree/branch/policy.
+    }
+    ws, fanout, inline, app = _app_with_recorders()
+    seq = _write_sequence(tmp_path, [bad])
+    with pytest.raises(TopologyGateError) as exc:
+        app.dispatch(seq, str(_PROFILE), wave="0", sink=io.StringIO())
+    assert "topology" in str(exc.value)
+    assert ws.provisions == []
+    assert fanout.calls == 0
+    assert inline.calls == 0
+
+
+# Evidence 4: an unknown integrator id fails closed (not a declared lane).
+def test_unknown_integrator_fails_closed(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(integration_lanes=["ghost-integrator"]),
+        )
+    assert "ghost-integrator" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 4: a concurrent integrator (not ordered after via depends_on) fails
+# closed.
+def test_concurrent_integrator_fails_closed(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    # integrator does NOT declare lane-a in depends_on -> concurrent.
+    integrator = _governed_lane("integrator", write_scope="/repo/integrator/**")
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(integration_lanes=["integrator"]),
+        )
+    assert "requires_integrator" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 4: a dependency-mismatched integrator (depends_on the wrong lane)
+# fails closed.
+def test_dependency_mismatched_integrator_fails_closed(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    other = _governed_lane("lane-other", write_scope="/repo/other/**")
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-other"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, other, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(integration_lanes=["integrator"]),
+        )
+    assert "requires_integrator" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 4 + 6: a valid integrator with correct dependency ordering but no
+# observed worktree state fails closed (eligibility missing).
+def test_eligibility_missing_integrator_fails_closed(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-a"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(integration_lanes=["integrator"]),
+        )
+    assert "worktree state" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 6: missing eligibility for an integrated lane fails closed; the
+# uncommitted (no committed work) state remains blocked.
+def test_uncommitted_lane_blocked_before_integration(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-a"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    uncommitted = WorktreeState(
+        committed_sha=None, detached=False, on_branch="branch-lane-a",
+        dirty_paths=[],
+    )
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(
+                integration_lanes=["integrator"],
+                eligibility={
+                    "lane-a": uncommitted,
+                    "integrator": _clean_state("integrator"),
+                },
+            ),
+        )
+    assert "no committed work" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 7: disjoint eligible subagent-safe lanes use bounded parallel fan-out
+# exactly once (never the inline seam).
+def test_disjoint_eligible_lanes_use_parallel_fanout_once(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo-a/**")
+    b = _governed_lane("lane-b", write_scope="/repo-b/**")
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    run, _ = _dispatch(
+        tmp_path, [a, b], fanout=fanout, inline=inline,
+        gate_input=TopologyGateInput(
+            eligibility={"lane-a": _clean_state("lane-a"),
+                         "lane-b": _clean_state("lane-b")},
+        ),
+    )
+    assert fanout.batches == [["lane-a", "lane-b"]]
+    assert inline.calls == 0
     assert run.halted is False

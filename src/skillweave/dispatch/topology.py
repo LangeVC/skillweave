@@ -293,6 +293,39 @@ def detect_collisions(
     return collisions
 
 
+def _dependency_order(topologies: Sequence[LaneTopology]) -> List[LaneTopology]:
+    """Return ``topologies`` ordered so each lane follows its ``depends_on`` lanes.
+
+    A stable topological ordering over the declared lanes: a lane declares its
+    integrated dependencies in ``depends_on``, and the serialization plan must
+    place every dependency before every dependent. Two lanes with no dependency
+    edge keep their ``lane_id`` order (stable sort). Declared dependencies that
+    are not themselves lanes in ``topologies`` are ignored (they are external and
+    carry no batch position here). A cycle among the declared lanes falls back to
+    ``lane_id`` order so a malformed manifest still fails later in ``validate``
+    rather than hanging the planner.
+    """
+    by_id = {t.lane_id: t for t in topologies}
+    ordered: List[LaneTopology] = []
+    remaining = set(t.lane_id for t in topologies)
+
+    while remaining:
+        progressed = False
+        for t in [by_id[i] for i in sorted(remaining)]:
+            deps = [d for d in (t.depends_on or []) if d in remaining]
+            if not deps:
+                ordered.append(t)
+                remaining.discard(t.lane_id)
+                progressed = True
+                break
+        if not progressed:
+            # Cycle among the remaining declared deps: emit by lane_id order.
+            for t in [by_id[i] for i in sorted(remaining)]:
+                ordered.append(t)
+            break
+    return ordered
+
+
 def build_serialization_plan(
     topologies: Sequence[LaneTopology],
     *,
@@ -300,10 +333,13 @@ def build_serialization_plan(
 ) -> SerializationPlan:
     """Order lanes into collision-free batches, honoring integration lanes.
 
-    Lanes are grouped greedily by id order; a lane joins a group only if it
-    collides with no member of that group. Colliding lanes are serialized into
+    Lanes are grouped greedily in dependency order; a lane joins a group only if
+    it collides with no member of that group. Colliding lanes are serialized into
     their own later groups — *unless* one member of the colliding pair is an
-    integration lane, which is permitted to absorb the conflict.
+    integration lane, which is permitted to absorb the conflict. A lane is never
+    placed alongside one of its ``depends_on`` dependencies: integration (and any
+    other dependency) is ordered strictly later than the lane it depends on, so a
+    ``requires_integrator`` lane and its integrator can never share a batch.
 
     ``integration_lanes`` names the lanes that are *explicitly* declared as the
     integration lanes (acceptance criterion 2): a collision between two plain
@@ -315,7 +351,7 @@ def build_serialization_plan(
         t.validate()
 
     groups: List[List[str]] = []
-    for t in sorted(topologies, key=lambda t: t.lane_id):
+    for t in _dependency_order(topologies):
         if not groups:
             groups.append([t.lane_id])
             continue
@@ -324,6 +360,10 @@ def build_serialization_plan(
             ok = True
             for other_id in group:
                 other = by_id[other_id]
+                # A dependency edge forbids sharing a batch in either direction.
+                if other_id in (t.depends_on or []) or t.lane_id in (other.depends_on or []):
+                    ok = False
+                    break
                 if _collides(t, other) and not (
                     t.lane_id in integrations or other_id in integrations
                 ):

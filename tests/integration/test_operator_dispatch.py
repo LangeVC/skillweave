@@ -102,6 +102,28 @@ class _RecordingFanout:
         return _FakeResult(children=children)
 
 
+class _RecordingInline:
+    """Records the distinct single-lane (inline) execution seam.
+
+    A serialized/INLINE lane travels this seam, never ``_RecordingFanout``. It
+    records the lane id (from ``subject_repo``) and the ``cwd`` of each call, and
+    can simulate a failed child for the correction-budget red path.
+    """
+
+    def __init__(self, fail: bool = False):
+        self.calls = 0
+        self.lane_ids: list[str] = []
+        self.cwd_kwargs: list = []
+        self._fail = fail
+
+    def __call__(self, command, **kwargs):
+        self.calls += 1
+        repo = kwargs.get("subject_repo") or ""
+        self.lane_ids.append(repo.rsplit("/", 1)[-1])
+        self.cwd_kwargs.append(kwargs.get("cwd"))
+        return _FakeResult(children=[_FakeChild(succeeded=not self._fail)])
+
+
 class _FakeChild:
     def __init__(self, succeeded: bool):
         self.succeeded = succeeded
@@ -212,14 +234,18 @@ def test_disjoint_lanes_overlap_and_serialized_lanes_do_not():
 def test_fanout_seam_receives_disjoint_group_then_serialized_group():
     ws = _FakeWorkspace()
     recorder = _RecordingFanout()
-    app = OperatorDispatchApplication(workspace_seam=ws, fanout_seam=recorder)
+    inline = _RecordingInline()
+    app = OperatorDispatchApplication(
+        workspace_seam=ws, fanout_seam=recorder, inline_seam=inline
+    )
     _run_dispatch(app)
 
-    # First batch: two disjoint lanes (overlap). Second batch: the mutually
-    # exclusive lane alone (no overlap with the first two).
-    assert len(recorder.batches) == 2
+    # First (and only) fan-out batch: the two disjoint lanes overlap. The
+    # mutually-exclusive lane (lane-ops-c) is serialized onto the distinct
+    # inline seam, never the multi-child fan-out path.
+    assert len(recorder.batches) == 1
     assert len(recorder.batches[0]) == 2
-    assert len(recorder.batches[1]) == 1
+    assert inline.lane_ids == ["fixture-repo-a"]  # lane-ops-c, repo-a again
 
 
 def test_disjoint_lanes_measure_overlap_serialized_lane_does_not(tmp_path):
@@ -266,6 +292,11 @@ def test_disjoint_lanes_measure_overlap_serialized_lane_does_not(tmp_path):
                         "base": base_sha,
                         "execution_model": "cold",
                         "mutating": True,
+                        "depends_on": [],
+                        "write_scope": ["skillweave/repo-a/**"],
+                        "worktree": "/tmp/lane-a",
+                        "branch": "branch-lane-a",
+                        "integration_policy": "independent",
                         "criterion_groups": [{"criteria": [1]}],
                     },
                     {
@@ -275,6 +306,11 @@ def test_disjoint_lanes_measure_overlap_serialized_lane_does_not(tmp_path):
                         "base": base_sha,
                         "execution_model": "cold",
                         "mutating": True,
+                        "depends_on": [],
+                        "write_scope": ["skillweave/repo-b/**"],
+                        "worktree": "/tmp/lane-b",
+                        "branch": "branch-lane-b",
+                        "integration_policy": "independent",
                         "criterion_groups": [{"criteria": [1]}],
                     },
                 ],
@@ -342,12 +378,13 @@ def test_parallel_group_passes_per_child_identity_not_group_leader():
     }
     ws = _FakeWorkspace(paths=paths)
     recorder = _RecordingFanout()
+    inline = _RecordingInline()
     app = OperatorDispatchApplication(
-        workspace_seam=ws, fanout_seam=recorder, cwd="/tmp/operator-cwd"
+        workspace_seam=ws, fanout_seam=recorder, inline_seam=inline, cwd="/tmp/operator-cwd"
     )
     _run_dispatch(app)
 
-    # First batch is the disjoint group [lane-ops-a, lane-ops-b].
+    # The disjoint group [lane-ops-a, lane-ops-b] is a single fan-out batch.
     first_contexts = recorder.contexts[0]
     assert len(first_contexts) == 2
     by_repo = {ctx.subject_repo: ctx for ctx in first_contexts}
@@ -362,8 +399,8 @@ def test_parallel_group_passes_per_child_identity_not_group_leader():
 
 
 def test_single_lane_worker_runs_inside_attested_path():
-    # A single-lane worker must run with cwd equal to its attested worktree
-    # path, never the operator/global cwd.
+    # A serialized single-lane worker runs on the distinct inline seam with cwd
+    # equal to its attested worktree path, never the operator/global cwd.
     paths = {
         "lane-ops-a": "/tmp/attested-repo-a",
         "lane-ops-b": "/tmp/attested-repo-b",
@@ -371,15 +408,16 @@ def test_single_lane_worker_runs_inside_attested_path():
     }
     ws = _FakeWorkspace(paths=paths)
     recorder = _RecordingFanout()
+    inline = _RecordingInline()
     app = OperatorDispatchApplication(
-        workspace_seam=ws, fanout_seam=recorder, cwd="/tmp/operator-cwd"
+        workspace_seam=ws, fanout_seam=recorder, inline_seam=inline, cwd="/tmp/operator-cwd"
     )
     _run_dispatch(app)
 
-    # The serialized lane-ops-c is its own batch (index 1); its single-lane call
-    # passes cwd equal to its attested path, never the operator cwd.
-    assert recorder.cwd_kwargs[1] == "/tmp/attested-repo-a-c"
-    assert recorder.cwd_kwargs[1] != "/tmp/operator-cwd"
+    # The serialized lane-ops-c runs inline with its attested path.
+    assert inline.calls == 1
+    assert inline.cwd_kwargs[0] == "/tmp/attested-repo-a-c"
+    assert inline.cwd_kwargs[0] != "/tmp/operator-cwd"
 
 
 # ── Criterion 5: dry-run reports everything and starts zero workers ─────────
@@ -437,10 +475,14 @@ def test_dry_run_cli_emits_json(monkeypatch, capsys):
 def test_correction_budget_reached_yields_halt_requires_operator():
     # A lane that always fails exhausts max_correction_rounds_per_wave=2 and the
     # run reports HALT_REQUIRES_OPERATOR with no further correction child beyond
-    # the budget.
+    # the budget. The serialized lane-ops-c fails on the inline seam; the
+    # disjoint pair fails on the fan-out seam.
     ws = _FakeWorkspace()
     recorder = _RecordingFanout(fail_lane="lane-ops-c")
-    app = OperatorDispatchApplication(workspace_seam=ws, fanout_seam=recorder)
+    inline = _RecordingInline(fail=True)
+    app = OperatorDispatchApplication(
+        workspace_seam=ws, fanout_seam=recorder, inline_seam=inline
+    )
     run, events = _run_dispatch(app)
 
     assert run.halted is True
