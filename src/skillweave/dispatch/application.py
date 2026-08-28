@@ -51,6 +51,14 @@ from skillweave.dispatch.profile_resolution import (
     resolve_dispatch_profile,
 )
 from skillweave.routing.harness import HarnessError
+from skillweave.trace.contracts import (
+    AppendOnlyReceiptLog,
+    RoundKind,
+    TerminalEnvelope,
+    TerminalState,
+    build_job_result_for_terminal,
+    new_append_only_round,
+)
 
 #: The legal execution-model vocabulary at the live consumer (contract
 #: carry-forward: ``cold``/``warm``/``resume``; ``hot`` is refused).
@@ -309,6 +317,22 @@ class DispatchRun:
     failures: list[dict[str, Any]] = field(default_factory=list)
     failure_policy: Optional[str] = None
     artifact_store: Optional[Any] = None
+    receipt_log: Optional[Any] = None
+
+    @property
+    def job_records(self) -> list[dict[str, Any]]:
+        """The append-only job records versioned during this run.
+
+        Every dispatch, correction, review and integration attempt is versioned
+        as an immutable ``JobRecord`` in the run's ``receipt_log``. Each record
+        carries a :class:`~skillweave.trace.contracts.JobResult` (process status,
+        task verdict, evidence availability and gate verdict as four separate
+        fields) and a :class:`~skillweave.trace.contracts.TerminalEnvelope`
+        binding the subject SHA, exact command and single machine outcome.
+        """
+        if self.receipt_log is None:
+            return []
+        return [r.to_dict() for r in self.receipt_log.records()]
 
     @property
     def resolver(self) -> Optional[Callable[[str], bytes]]:
@@ -338,6 +362,10 @@ class DispatchRun:
             # The configured wave failure policy (profile ``on_model_failure``)
             # is applied to the surface so unlike failures never collapse.
             "failure_policy": self.failure_policy,
+            # Versioned append-only job records (dispatch/correction/review/
+            # integration attempts), each with separated outcome dimensions and
+            # a binding terminal envelope.
+            "job_records": self.job_records,
             # Result metadata is explicit about the experimental, wave-scoped
             # nature of this command and makes no stable-transport claim.
             "experimental": True,
@@ -491,6 +519,7 @@ class OperatorDispatchApplication:
         )
         self._results: list[dict[str, Any]] = []
         self._failures: list[dict[str, Any]] = []
+        self._receipt_log = AppendOnlyReceiptLog()
         stream = DispatchEventStream(run_id, sink if sink is not None else sys.stdout)
         stream.wave_started(wave=wave)
 
@@ -623,6 +652,7 @@ class OperatorDispatchApplication:
             failures=self._failures,
             failure_policy=_failure_policy_of(resolved),
             artifact_store=self._active_store,
+            receipt_log=self._receipt_log,
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -740,6 +770,63 @@ class OperatorDispatchApplication:
             }
         )
 
+    def _record_job_attempt(
+        self,
+        lane: Lane,
+        children: list[Any],
+        *,
+        round_: int,
+    ) -> None:
+        """Version each child attempt into the run's append-only receipt log.
+
+        Every dispatch (round 0) and correction (round > 0) attempt is appended
+        as one immutable :class:`~skillweave.trace.contracts.JobRecord` whose
+        :class:`~skillweave.trace.contracts.JobResult` separates the four outcome
+        dimensions and whose terminal envelope binds subject SHA, command and the
+        single machine outcome. Prior digests remain unchanged (append-only).
+        """
+        for child in children:
+            job_id = getattr(child, "child_run_id", None)
+            outcome = _child_outcome(child)
+            process_result = getattr(child, "result", None)
+            exit_code = getattr(process_result, "exit_code", None)
+            signal = getattr(process_result, "signal", None)
+            termination = getattr(process_result, "termination", "exited")
+            stdout_bytes = getattr(child, "raw_bytes", None) or b""
+            command = getattr(child, "command", None) or []
+            refs = [r.artifact_id for r in _receipt_refs_of([child])]
+            required = _required_evidence_of(lane)
+
+            terminal_state = _terminal_state_for(child)
+            job_result = build_job_result_for_terminal(
+                terminal_state=terminal_state,
+                exit_code=exit_code,
+                signal=signal,
+                termination=termination,
+                stdout=stdout_bytes,
+                required_evidence=required,
+                artifact_refs=refs,
+            )
+            envelope = TerminalEnvelope(
+                subject_sha=lane.base or "",
+                command=list(command),
+                terminal_state=terminal_state,
+                exit_code=exit_code,
+                signal=signal,
+                timed_out=terminal_state is TerminalState.TIMED_OUT,
+                artifact_refs=list(refs),
+                declared_inputs=list(required) if required else [],
+            )
+            parent = self._receipt_log.latest()
+            new_append_only_round(
+                self._receipt_log,
+                parent_id=parent.record_id if parent is not None else None,
+                round_=round_,
+                kind=(RoundKind.CORRECTION if round_ else RoundKind.DISPATCH),
+                job_id=job_id,
+                result=job_result,
+                envelope=envelope,
+            )
     def _gate_required_evidence(
         self,
         lane: Lane,
@@ -814,6 +901,7 @@ class OperatorDispatchApplication:
         )
         children = _fanout_children(result)
         self._record_child_results(lane, children, round_=round_)
+        self._record_job_attempt(lane, children, round_=round_)
         received_refs = _receipt_refs_of(children)
 
         succeeded = _result_succeeded(result)
@@ -896,6 +984,7 @@ class OperatorDispatchApplication:
         for lane, child in zip(group, children):
             child_list = [child]
             self._record_child_results(lane, child_list, round_=round_)
+            self._record_job_attempt(lane, child_list, round_=round_)
             refs = _receipt_refs_of(child_list)
             succeeded = _child_succeeded(child)
             evidence_failed = False
@@ -1020,6 +1109,24 @@ def _child_outcome(child: Any) -> Optional[str]:
 def _first_outcome(children: list[Any]) -> Optional[str]:
     """The single machine outcome of the first child, or ``None`` when empty."""
     return _child_outcome(children[0]) if children else None
+
+
+def _terminal_state_for(child: Any) -> TerminalState:
+    """Map a child's machine outcome to its deterministic terminal state.
+
+    Heartbeat expiry, timeout, cancel and launch failure each map to a distinct
+    :class:`~skillweave.trace.contracts.TerminalState`; a clean exit maps to
+    ``completed``. This is the dispatcher's typed replacement for inferring the
+    child's fate from a raw exit code or log line.
+    """
+    outcome = _child_outcome(child)
+    if outcome == "timed_out":
+        return TerminalState.TIMED_OUT
+    if outcome == "signal":
+        return TerminalState.CANCELLED
+    if outcome == "launch_failed":
+        return TerminalState.LAUNCH_FAILED
+    return TerminalState.COMPLETED
 
 
 def _first_failure_message(children: list[Any]) -> str:
