@@ -1,19 +1,19 @@
 name: Mirror to GitHub
 
-# Forgejo ist kanonisch; GitHub (LangeVC/skillweave) ist der oeffentliche
-# read-only Mirror. Force-Push genau der Ref, die den Lauf ausgeloest hat,
-# damit GitHub Forgejo folgt.
+# Forgejo is canonical; GitHub (LangeVC/skillweave) is the public read-only
+# mirror. Force-push exactly the ref that triggered the run, so GitHub follows
+# Forgejo.
 #
-# Muster: exact-ref, festgelegt am 2026-07-28 unter LVC-MIR-G0 fuer die
-# langevc-Org. Dieses Repo lief bis heute auf dem alten main-plus-Bulk-Tags-
-# Muster, das dort ausdruecklich ersetzt wurde.
+# Pattern: exact-ref, agreed 2026-07-28 under LVC-MIR-G0 for the langevc org.
+# Until now this repo ran the old main-plus-bulk-tags pattern, explicitly
+# replaced there.
 on:
   push:
     branches: ["**"]
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Ref zum Nachspiegeln, z.B. refs/tags/v2.3.0'
+        description: 'Ref to mirror again, e.g. refs/tags/v2.3.0'
         required: true
         type: string
 
@@ -30,10 +30,9 @@ jobs:
           MIRROR_REF: ${{ inputs.ref || github.ref }}
         run: |
           remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/LangeVC/skillweave.git"
-          # Nur die ausloesende Ref spiegeln. Kein --prune, kein
-          # 'refs/heads/*'-Wildcard: Der CI-Checkout hat lokal nur diese eine
-          # Ref, ein prunender Wildcard-Push wuerde jeden ANDEREN Branch auf
-          # dem Mirror loeschen wollen — einschliesslich GitHubs Default-Branch
-          # (was GitHub ablehnt und den Job scheitern laesst) und jeden von
-          # GitHub verwalteten Branch wie gh-pages.
+          # Mirror only the triggering ref. No --prune, no 'refs/heads/*'
+          # wildcard: the CI checkout has only that one ref locally, so a pruning
+          # wildcard push would want to delete every OTHER branch on the mirror —
+          # including GitHub's default branch (which GitHub rejects, failing the
+          # job) and any GitHub-managed branch like gh-pages.
           git push --force "$remote" "+${MIRROR_REF}:${MIRROR_REF}"

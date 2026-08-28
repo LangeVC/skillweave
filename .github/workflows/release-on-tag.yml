@@ -1,18 +1,18 @@
 name: Release on Tag
 
-# SW-CI-003: ein Tag-Push loest etwas aus. Bisher haengen release.yml und
-# auto-release-notes.yml an `on: release` (Release-OBJEKT), nichts an `tags:`.
-# Ein von Forgejo gespiegelter v*-Tag laeuft hier ein und legt das
-# Release-Objekt an — ohne dass jemand auf GitHub von Hand draufklicken muss.
+# SW-CI-003: a tag push triggers something. Until now release.yml and
+# auto-release-notes.yml hang off `on: release` (release OBJECT), nothing on
+# `tags:`. A v*-tag mirrored from Forgejo lands here and creates the release
+# object — without anyone having to click it by hand on GitHub.
 #
-# Der Tag ist auf der kanonischen Seite (Forgejo) bereits durch
-# validate-release-tag.yml gegangen. Hier wird ihm vertraut: er wird NICHT
-# erneut gegen die 13 Mitgliedsmanifeste geprueft — das waere der Fehler, den
-# SW-CI-002-G korrigiert hat (die Mitgliedsversionen sind keine Orte der
-# Bundle-Release-Linie). Geprueft wird hier nur die Namenskonvention, die CI
-# (auto-tag-release.yml) und der Releasechain-Skill ohnehin fordern.
+# The tag has already passed validate-release-tag.yml on the canonical side
+# (Forgejo). Here it is trusted: it is NOT re-checked against the 13 member
+# manifests — that would be the error SW-CI-002-G fixed (member versions are
+# not locations of the bundle release line). Only the naming convention CI
+# (auto-tag-release.yml) and the releasechain skill already require is checked
+# here.
 #
-# github.server_url-Guard: laeuft nur auf GitHub, nie auf dem Forgejo-Runner.
+# github.server_url guard: runs only on GitHub, never on the Forgejo runner.
 on:
   push:
     tags:
@@ -39,7 +39,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           NAME="${RELEASE_NAME_PREFIX} ${TAG}"
           if ! echo "${NAME}" | grep -qE '^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "HARD GATE REJECTED — '${NAME}' passt nicht auf ^SkillWeave vX.Y.Z$"
+            echo "HARD GATE REJECTED — '${NAME}' does not match ^SkillWeave vX.Y.Z$"
             exit 1
           fi
           echo "${NAME}" > release-name.txt

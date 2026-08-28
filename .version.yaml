@@ -1,15 +1,15 @@
-# .version.yaml — deklariert die Versionsorte der BUNDLE-Release-Linie.
+# .version.yaml — declares the version locations of the BUNDLE release line.
 schema: 1
 
-# Die Wahrheitsquelle der Bundle-Release-Linie. pyproject.toml traegt die
-# eine Version, die der Bump als Referenz bekommt und der das Gate folgt.
+# The truth source of the bundle release line. pyproject.toml carries the one
+# version the bump uses as reference and the gate follows.
 source_of_truth: pyproject.toml
 
-# CHANGELOG.md traegt 1.3.0 in einer Ueberschrift ("## 1.3.0 — ..."). Ein
-# Bump per Regex schriebe dort Historie um. Prosa-Historie ist kein
-# Versionsort dieser Release-Linie; sie wird nicht automatisch gepflegt und
-# steht deshalb NICHT in der Liste. (Entscheidung nach dem readme.txt-Muster
-# aus elementeer-mcp: stillschweigend weglassen gilt nicht, also hier notiert.)
+# CHANGELOG.md carries 1.3.0 in a heading ("## 1.3.0 — ..."). A regex bump
+# would rewrite history there. Prose history is not a version location of this
+# release line; it is not auto-maintained and is therefore NOT in the list.
+# (Decision following the readme.txt pattern from elementeer-mcp: silently
+# omitting does not hold, so it is recorded here.)
 locations:
   - path: pyproject.toml
     pattern: '^version\s*=\s*"(\d+\.\d+\.\d+)"'
