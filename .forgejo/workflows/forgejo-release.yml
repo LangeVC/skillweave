@@ -9,6 +9,7 @@ on:
       tag_name:
         description: "Tag to create release for (e.g. v1.0.0)"
         required: true
+        type: string
 
 jobs:
   release:
