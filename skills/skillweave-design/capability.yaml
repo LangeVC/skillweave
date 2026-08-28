@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-design
-version: 1.3.9
+version: 1.3.10
 description: Analyze design briefs, derive UX principles and design tokens, and evaluate implementation quality.
 author: SkillWeave Team
 license: Apache-2.0
