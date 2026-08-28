@@ -378,3 +378,270 @@ def test_execute_seam_without_topology_fields_preserves_single_batch():
 
     execute_sequence(_seq_decl([a, b]), fanout=fake_fanout)
     assert batches == [["T1", "T2"]]
+
+
+# ── Live integration gate: enforced by the execute seam before fan-out ─────
+#
+# C1 wired manifest validation and collision serialization into the seam. The
+# remaining acceptance behaviors (4-9) must be *reachable* from the same live
+# entry point, not left as decision helpers in ``dispatch.integration``. These
+# tests drive ``execute_sequence`` (and its immediate ``gate_integration``) with
+# a typed ``IntegrationGateInput`` and prove fail-closed refusal before any
+# fan-out worker starts.
+
+
+_SHA = "c" * 40
+_TIP = "d" * 40
+
+
+def _integrating_lane(lane_id, *, base=_SHA, depends_on=None):
+    """A topology-governed parallel lane used as the integration subject."""
+    return _topo_lane(
+        lane_id,
+        write_scope=f"/repo/{lane_id}/**",
+        base=base,
+        depends_on=depends_on,
+    )
+
+
+def _gate_input(**kwargs):
+    from skillweave.promptchain.execute import IntegrationGateInput
+
+    defaults = dict(lane_id="lane-a")
+    defaults.update(kwargs)
+    return IntegrationGateInput(**defaults)
+
+
+def test_execute_seam_refuses_missing_post_rebase_verification():
+    # Criterion 4: rebase happened (SHA changed) but the controller did not
+    # rerun verification -> refuse before fan-out.
+    from skillweave.promptchain.execute import TopologyGateError, execute_sequence
+
+    a = _integrating_lane("lane-a")
+    called = []
+
+    def fake_fanout(lane_ids):
+        called.append(list(lane_ids))
+
+    with pytest.raises(TopologyGateError) as exc:
+        execute_sequence(
+            _seq_decl([a]),
+            fanout=fake_fanout,
+            integration_input=_gate_input(
+                candidate_sha=_SHA,
+                integration_tip_sha=_TIP,
+                reran_verification=False,
+                verification_passed=True,
+            ),
+        )
+    assert "verification" in str(exc.value)
+    assert called == [], "no worker may start without a post-rebase verification"
+
+
+def test_execute_seam_refuses_failed_post_rebase_verification():
+    from skillweave.promptchain.execute import TopologyGateError, execute_sequence
+
+    a = _integrating_lane("lane-a")
+    called = []
+
+    def fake_fanout(lane_ids):
+        called.append(list(lane_ids))
+
+    with pytest.raises(TopologyGateError):
+        execute_sequence(
+            _seq_decl([a]),
+            fanout=fake_fanout,
+            integration_input=_gate_input(
+                candidate_sha=_SHA,
+                integration_tip_sha=_TIP,
+                reran_verification=True,
+                verification_passed=False,
+            ),
+        )
+    assert called == []
+
+
+def test_execute_seam_refuses_stale_review_on_changed_sha():
+    # Criterion 5: the candidate moved to _TIP; a review bound to the old SHA is
+    # stale and refuses before any fan-out.
+    from skillweave.dispatch.integration import Review
+    from skillweave.promptchain.execute import TopologyGateError, execute_sequence
+
+    a = _integrating_lane("lane-a")
+    called = []
+
+    def fake_fanout(lane_ids):
+        called.append(list(lane_ids))
+
+    with pytest.raises(TopologyGateError) as exc:
+        execute_sequence(
+            _seq_decl([a]),
+            fanout=fake_fanout,
+            integration_input=_gate_input(
+                candidate_sha=_SHA,
+                integration_tip_sha=_TIP,
+                reran_verification=True,
+                verification_passed=True,
+                review=Review(lane_id="lane-a", reviewed_sha=_SHA, verdict="approved"),
+            ),
+        )
+    assert "review" in str(exc.value)
+    assert called == []
+
+
+def test_execute_seam_refuses_sibling_omission_in_receipt():
+    # Criterion 6: parent-b is expected but omitted from the receipt -> refuse.
+    from skillweave.dispatch.integration import (
+        IntegrationReceipt,
+        ParentReceipt,
+    )
+    from skillweave.promptchain.execute import TopologyGateError, execute_sequence
+
+    a = _integrating_lane("lane-a")
+    receipt = IntegrationReceipt(
+        lane_id="lane-a",
+        candidate_sha=_SHA,
+        parents={"parent-a": ParentReceipt(parent_sha=_SHA, outcome_present=True)},
+    )
+    called = []
+
+    def fake_fanout(lane_ids):
+        called.append(list(lane_ids))
+
+    with pytest.raises(TopologyGateError) as exc:
+        execute_sequence(
+            _seq_decl([a]),
+            fanout=fake_fanout,
+            integration_input=_gate_input(
+                receipt=receipt,
+                expected_parents=["parent-a", "parent-b"],
+            ),
+        )
+    assert "parent-b" in str(exc.value)
+    assert called == []
+
+
+def test_execute_seam_refuses_parent_outcome_absence_in_receipt():
+    from skillweave.dispatch.integration import (
+        IntegrationReceipt,
+        ParentReceipt,
+    )
+    from skillweave.promptchain.execute import TopologyGateError, execute_sequence
+
+    a = _integrating_lane("lane-a")
+    receipt = IntegrationReceipt(
+        lane_id="lane-a",
+        candidate_sha=_SHA,
+        parents={
+            "parent-a": ParentReceipt(parent_sha=_SHA, outcome_present=True),
+            "parent-b": ParentReceipt(parent_sha=_TIP, outcome_present=False),
+        },
+    )
+    called = []
+
+    def fake_fanout(lane_ids):
+        called.append(list(lane_ids))
+
+    with pytest.raises(TopologyGateError) as exc:
+        execute_sequence(
+            _seq_decl([a]),
+            fanout=fake_fanout,
+            integration_input=_gate_input(
+                receipt=receipt,
+                expected_parents=["parent-a", "parent-b"],
+            ),
+        )
+    assert "outcome" in str(exc.value)
+    assert called == []
+
+
+def test_execute_seam_refuses_unready_dependency():
+    # Criterion 9: lane-b depends on lane-a, but lane-a is not passed -> refuse.
+    from skillweave.promptchain.execute import TopologyGateError, execute_sequence
+
+    b = _integrating_lane("lane-b", depends_on=["lane-a"])
+    called = []
+
+    def fake_fanout(lane_ids):
+        called.append(list(lane_ids))
+
+    with pytest.raises(TopologyGateError) as exc:
+        execute_sequence(
+            _seq_decl([b]),
+            fanout=fake_fanout,
+            integration_input=_gate_input(
+                lane_id="lane-b",
+                passed_lane_ids=[],
+            ),
+        )
+    assert "pending" in str(exc.value)
+    assert called == []
+
+
+def test_gate_integration_yields_bounded_integrator_assignment():
+    # Criterion 7: a semantic conflict routes to an explicit Integrator with a
+    # bounded write scope, test contract and receipt — never a controller edit.
+    from skillweave.dispatch.integration import (
+        INTEGRATOR_ROLE,
+        IntegrationReceipt,
+        ParentReceipt,
+        resolve_semantic_conflict,
+    )
+    from skillweave.promptchain.execute import gate_integration
+
+    a = _integrating_lane("lane-a")
+    declaration = _seq_decl([a])
+    result = gate_integration(
+        declaration,
+        _gate_input(
+            semantic_conflict="overlapping semantics in src/foo.py",
+            conflict_write_scope=["/repo/lane-a/src/foo.py"],
+            conflict_test_contract=["tests/test_foo.py::test_resolution"],
+        ),
+    )
+    assignment = result.integrator_assignment
+    assert assignment is not None
+    assert assignment.integrator == INTEGRATOR_ROLE
+    assert assignment.write_scope == ["/repo/lane-a/src/foo.py"]
+    assert assignment.test_contract == ["tests/test_foo.py::test_resolution"]
+    assert assignment.conflict
+
+    # The controller records a resolution as a receipt; it performs no product
+    # edit — the write scope stays bounded to the conflict path.
+    receipt = resolve_semantic_conflict(
+        assignment,
+        candidate_sha=_SHA,
+        parents={"parent-a": ParentReceipt(parent_sha=_SHA, outcome_present=True)},
+    )
+    assert isinstance(receipt, IntegrationReceipt)
+    receipt.validate(expected_parents=["parent-a"])
+    assert assignment.write_scope == ["/repo/lane-a/src/foo.py"]
+
+
+def test_execute_seam_permits_complete_valid_integration_input():
+    # Criterion 4+6 combined: a complete, valid integration input permits the
+    # next action (fan-out runs exactly once for the non-colliding lane).
+    from skillweave.dispatch.integration import Review
+    from skillweave.promptchain.execute import execute_sequence
+
+    a = _integrating_lane("lane-a")
+    batches = []
+
+    def fake_fanout(lane_ids):
+        batches.append(list(lane_ids))
+
+    # Rebase moves candidate _SHA -> _TIP; the review is already bound to _TIP
+    # (fresh) and verification reran and passed.
+    plan = execute_sequence(
+        _seq_decl([a]),
+        fanout=fake_fanout,
+        integration_input=_gate_input(
+            candidate_sha=_SHA,
+            integration_tip_sha=_TIP,
+            reran_verification=True,
+            verification_passed=True,
+            review=Review(lane_id="lane-a", reviewed_sha=_TIP, verdict="approved"),
+        ),
+    )
+    assert plan.modes() == ["subagent"]
+    assert batches == [["lane-a"]]

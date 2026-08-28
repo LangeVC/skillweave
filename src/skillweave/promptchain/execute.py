@@ -77,6 +77,60 @@ class TopologyGateError(Exception):
 
 
 @dataclass
+class IntegrationGateInput:
+    """Typed integration facts the execution seam consumes before fan-out.
+
+    Each field is an *observed* fact supplied by the controller (SHAs, worktree
+    states, review binding, receipt, dependency pass-set, semantic conflict).
+    The gate fails closed on incomplete facts — a missing or non-full SHA, a
+    verification that was not rerun, or a receipt that omits a reviewed parent
+    all refuse rather than proceed. No field names a model, provider, gateway
+    or harness default, and nothing here performs a product edit.
+    """
+
+    #: The lane being integrated/rebased (matches a topology ``lane_id``).
+    lane_id: Optional[str] = None
+    #: The candidate's current head SHA (full 40-hex).
+    candidate_sha: Optional[str] = None
+    #: The current full integration-tip SHA the lane must rebase onto.
+    integration_tip_sha: Optional[str] = None
+    #: Whether the controller re-ran its verification after the rebase.
+    reran_verification: bool = False
+    #: Whether that post-rebase controller verification passed.
+    verification_passed: bool = False
+    #: The review bound to a specific candidate SHA (``dispatch.integration.Review``).
+    review: Optional[Any] = None
+    #: The multi-parent integration receipt (``dispatch.integration.IntegrationReceipt``).
+    receipt: Optional[Any] = None
+    #: The parent lane ids every reviewed outcome must be present for.
+    expected_parents: Optional[Sequence[str]] = None
+    #: The lane ids already independently passed and integrated (dependency gate).
+    passed_lane_ids: Optional[Sequence[str]] = None
+    #: A semantic conflict subject; when set, routes to the Integrator.
+    semantic_conflict: Optional[str] = None
+    #: The bounded write scope for a semantic-conflict Integrator assignment.
+    conflict_write_scope: Optional[Sequence[str]] = None
+    #: The test contract for a semantic-conflict Integrator assignment.
+    conflict_test_contract: Optional[Sequence[str]] = None
+
+
+@dataclass
+class IntegrationGateResult:
+    """The verdict of the integration gate (criterion 4-7, 9).
+
+    A refusal is signalled by :class:`TopologyGateError`; a result that
+    ``execute_sequence`` is handed continues. ``integrator_assignment`` carries
+    the bounded Integrator hand-off for a semantic conflict — the only output
+    the controller produces, never a product edit.
+    """
+
+    rebase: Optional[Any] = None
+    review: Optional[Any] = None
+    pending_lane_ids: List[str] = field(default_factory=list)
+    integrator_assignment: Optional[Any] = None
+
+
+@dataclass
 class Lane:
     """One lane as declared in a phase's ``parallel_lanes`` or
     ``serialized_lanes`` block."""
@@ -256,12 +310,148 @@ def gate_topology(
         raise TopologyGateError(str(exc)) from exc
 
 
+def _resolve_integrating_lane(
+    integration_input: IntegrationGateInput,
+    by_id: Mapping[str, Any],
+) -> Any:
+    """Resolve the :class:`~skillweave.dispatch.topology.LaneTopology` the gate
+    acts upon, fail-closed when it cannot be identified."""
+    lane_id = integration_input.lane_id
+    if lane_id and lane_id in by_id:
+        return by_id[lane_id]
+    if lane_id:
+        # A rebase/integration is always about a mutating lane; if its manifest
+        # was not derived then the integration facts are incomplete.
+        raise TopologyGateError(
+            f"integrating lane {lane_id!r} has no topology manifest"
+        )
+    # No lane id: the gate needs a concrete lane to rebase/route. Refuse rather
+    # than invent one.
+    raise TopologyGateError(
+        "integration facts name no integrating lane; refusing incomplete facts"
+    )
+
+
+def gate_integration(
+    declaration: SequenceDeclaration,
+    integration_input: Optional[IntegrationGateInput] = None,
+    *,
+    topologies: Optional[Sequence[Any]] = None,
+) -> IntegrationGateResult:
+    """Fail-closed integration gate consumed *before* any fan-out/integration.
+
+    Reuses :mod:`skillweave.dispatch.integration` decisions verbatim (rebase,
+    review invalidation, multi-parent receipt, dependency DAG, Integrator
+    assignment) — the gate only orders and *enforces* them at the live seam. On
+    any incomplete or failing fact it raises :class:`TopologyGateError` before a
+    worker starts; on success it returns an :class:`IntegrationGateResult` whose
+    ``integrator_assignment`` carries a bounded Integrator hand-off (never a
+    controller product edit).
+    """
+    from skillweave.dispatch.integration import (
+        IntegrationTip,
+        ReceiptError,
+        ReviewInvalidatedError,
+        SemanticConflictError,
+        assign_semantic_conflict,
+        build_dependency_graph,
+        plan_rebase,
+        require_fresh_review,
+    )
+
+    result = IntegrationGateResult()
+    if integration_input is None:
+        return result
+
+    resolved = list(topologies) if topologies is not None else derive_topologies(declaration)
+    by_id = {t.lane_id: t for t in resolved}
+
+    # Criterion 4: rebase onto the current full integration tip and a successful
+    # post-rebase controller verification. ``plan_rebase`` fails closed on a
+    # missing/non-full SHA; the gate additionally refuses a verification that was
+    # not rerun or did not pass.
+    rebase = None
+    has_rebase_facts = integration_input.candidate_sha is not None or (
+        integration_input.integration_tip_sha is not None
+    )
+    if has_rebase_facts:
+        lane = _resolve_integrating_lane(integration_input, by_id)
+        rebase = plan_rebase(
+            lane,
+            integration_input.candidate_sha,
+            IntegrationTip(tip_sha=integration_input.integration_tip_sha),
+        )
+        if not (integration_input.reran_verification and integration_input.verification_passed):
+            raise TopologyGateError(
+                "controller must rerun verification against the post-rebase SHA "
+                "and it must pass before integration"
+            )
+        result.rebase = rebase
+
+    # Criterion 5: a review bound to a pre-rebase SHA is stale once the candidate
+    # moved. ``require_fresh_review`` refuses unless the review SHA matches the
+    # current (post-rebase) candidate SHA.
+    if integration_input.review is not None or has_rebase_facts:
+        current_sha = (
+            rebase.post_rebase_sha
+            if rebase is not None
+            else integration_input.candidate_sha
+        )
+        try:
+            result.review = require_fresh_review(integration_input.review, current_sha)
+        except ReviewInvalidatedError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    # Criterion 6: a multi-parent receipt must contain every expected reviewed
+    # parent with its outcome present. ``validate`` refuses on sibling omission
+    # or an absent outcome even when the included parents passed.
+    if integration_input.receipt is not None:
+        try:
+            integration_input.receipt.validate(
+                list(integration_input.expected_parents or [])
+            )
+        except ReceiptError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    # Criterion 9: dependency readiness — a dependent stays pending until every
+    # required parent is independently passed and integrated. Refuse when any
+    # governed dependent is still pending.
+    if integration_input.passed_lane_ids is not None:
+        if resolved:
+            graph = build_dependency_graph(resolved)
+            pending = graph.dependents_pending(list(integration_input.passed_lane_ids))
+            result.pending_lane_ids = pending
+            if pending:
+                raise TopologyGateError(
+                    f"dependents pending until their required parents are passed: "
+                    f"{pending}"
+                )
+
+    # Criterion 7: a semantic conflict is routed to the explicit Integrator with
+    # a bounded write scope and test contract. The controller produces only the
+    # assignment — never a product edit.
+    if integration_input.semantic_conflict is not None:
+        lane = _resolve_integrating_lane(integration_input, by_id)
+        try:
+            result.integrator_assignment = assign_semantic_conflict(
+                lane,
+                conflict=integration_input.semantic_conflict,
+                write_scope=list(integration_input.conflict_write_scope or []),
+                test_contract=list(integration_input.conflict_test_contract or []),
+            )
+        except SemanticConflictError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    return result
+
+
 def execute_sequence(
     declaration: SequenceDeclaration,
     *,
     fanout: Optional[Any] = None,
     topologies: Optional[Sequence[Any]] = None,
     integration_lanes: Optional[Sequence[str]] = None,
+    integration_input: Optional[IntegrationGateInput] = None,
 ) -> DispatchPlan:
     """Validate, build the plan, and hand parallel lanes to the fan-out seam.
 
@@ -277,7 +467,20 @@ def execute_sequence(
     collision, and which frees parallel lanes in collision-free groups so two
     lanes that overlap in write scope, share an incompatible base, or claim the
     same harness namespace never launch in the same batch.
+
+    When ``integration_input`` is supplied, the integration gate
+    (:func:`gate_integration`) is consumed *before* any fan-out action: an
+    unverified or failed post-rebase verification, a stale review, an
+    incomplete multi-parent receipt, or a still-pending dependency refuses the
+    seam before a single worker starts. A semantic conflict is routed to a
+    bounded Integrator assignment (returned by the gate), never a controller
+    product edit.
     """
+    if integration_input is not None:
+        gate_integration(
+            declaration, integration_input, topologies=topologies
+        )
+
     plan = build_dispatch_plan(declaration)
 
     parallel_lanes = [e.lane_id for e in plan.entries if e.mode == SUBAGENT]
