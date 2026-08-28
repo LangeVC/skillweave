@@ -645,3 +645,330 @@ def test_execute_seam_permits_complete_valid_integration_input():
     )
     assert plan.modes() == ["subagent"]
     assert batches == [["lane-a"]]
+
+
+# ── Live operator dispatcher: the authoritative topology gate ─────────────
+#
+# C3 (SW1311-TOPOLOGY-001): the topology/integration gate is consumed by the
+# *real* operator dispatcher (``OperatorDispatchApplication.dispatch``) before
+# any workspace is provisioned or worker fanned out. These tests drive the real
+# application seam with an in-memory workspace and a fan-out recorder that reads
+# each batch's per-child launch context (``subject_repo``) to identify which
+# lane entered which batch — proving fail-closed manifest completeness, collision
+# serialization, Integrator routing, serialized-lane isolation, eligibility, and
+# non-mutating v1.3.10 compatibility.
+
+
+import io  # noqa: E402
+
+import yaml  # noqa: E402
+
+from pathlib import Path as _Path  # noqa: E402
+
+from skillweave.dispatch.application import (  # noqa: E402
+    OperatorDispatchApplication,
+    ProvisionedWorkspace,
+    TopologyGateError,
+    TopologyGateInput,
+    WorkspaceSeam,
+)
+from skillweave.dispatch.topology import WorktreeState  # noqa: E402
+
+_FIXTURES = _Path(__file__).resolve().parent.parent / "fixtures"
+_PROFILE = _FIXTURES / "dispatch-profile.yaml"
+_OP_SHA = "f" * 40
+
+
+def _lane_id_from_repo(repo):
+    return repo.rsplit("/", 1)[-1]
+
+
+class _FakeWorkspace(WorkspaceSeam):
+    def __init__(self):
+        self.provisions = []
+
+    def provision(self, lane, run_id):
+        self.provisions.append(lane.id)
+        return ProvisionedWorkspace(base_sha=lane.base or "", path=f"/tmp/{lane.id}")
+
+    def release(self, lane, run_id):
+        pass
+
+
+class _RecordingFanout:
+    """Records one fan-out batch per call, as the list of lane ids resolved from
+    each child's ``subject_repo`` launch context."""
+
+    def __init__(self):
+        self.batches = []
+        self.calls = 0
+
+    def __call__(self, commands, **kwargs):
+        self.calls += 1
+        contexts = kwargs.get("launch_contexts") or []
+        if contexts:
+            ids = [_lane_id_from_repo(c.subject_repo) for c in contexts]
+        else:
+            ids = [_lane_id_from_repo(kwargs.get("subject_repo") or "")]
+        self.batches.append(ids)
+        return _FakeResult(children=[_FakeChild() for _ in commands])
+
+
+class _FakeChild:
+    succeeded = True
+
+
+class _FakeResult:
+    def __init__(self, children):
+        self.children = children
+
+
+def _governed_lane(
+    lane_id,
+    *,
+    write_scope,
+    policy="independent",
+    depends_on=None,
+    repo=None,
+    branch=None,
+    worktree=None,
+    namespace=None,
+):
+    lane = {
+        "id": lane_id,
+        "role": "ops",
+        "repo": repo or f"skillweave/{lane_id}",
+        "base": _OP_SHA,
+        "execution_model": "cold",
+        "mutating": True,
+        "write_scope": write_scope if isinstance(write_scope, list) else [write_scope],
+        "worktree": worktree if worktree is not None else f"/tmp/{lane_id}",
+        "branch": branch if branch is not None else f"branch-{lane_id}",
+        "depends_on": depends_on or [],
+        "integration_policy": policy,
+    }
+    if namespace is not None:
+        lane["harness_state_namespace"] = namespace
+    return lane
+
+
+def _write_sequence(tmp_path, lanes):
+    seq = {
+        "session_boundary": "batch",
+        "profile": {"path": str(_PROFILE), "required": True},
+        "execution_model": "cold",
+        "max_correction_rounds_per_wave": 0,
+        "max_parallel": 8,
+        "lanes": lanes,
+    }
+    path = tmp_path / "governed-sequence.yaml"
+    path.write_text(yaml.safe_dump(seq), encoding="utf-8")
+    return str(path)
+
+
+def _dispatch(tmp_path, lanes, *, fanout, gate_input=None):
+    seq = _write_sequence(tmp_path, lanes)
+    ws = _FakeWorkspace()
+    app = OperatorDispatchApplication(workspace_seam=ws, fanout_seam=fanout)
+    run = app.dispatch(
+        seq, str(_PROFILE), wave="0", sink=io.StringIO(), gate_input=gate_input
+    )
+    return run, ws
+
+
+# F6: incomplete/absent mutating topology manifest fails closed before launch.
+def test_operator_dispatcher_fails_closed_on_partial_manifest(tmp_path):
+    bad = {
+        "id": "lane-a",
+        "role": "ops",
+        "repo": "skillweave/lane-a",
+        "base": _OP_SHA,
+        "execution_model": "cold",
+        "mutating": True,
+        "write_scope": ["/repo/lane-a/**"],
+        # worktree and branch omitted -> incomplete manifest.
+    }
+    fanout = _RecordingFanout()
+    with pytest.raises(TopologyGateError):
+        _dispatch(tmp_path, [bad], fanout=fanout)
+    assert fanout.calls == 0, "no worker may start on an incomplete manifest"
+
+
+# F6: a detached branch name is not a governable manifest.
+def test_operator_dispatcher_rejects_detached_branch_in_manifest(tmp_path):
+    bad = _governed_lane("lane-a", write_scope="/repo/a/**", branch="HEAD")
+    fanout = _RecordingFanout()
+    with pytest.raises(TopologyGateError):
+        _dispatch(tmp_path, [bad], fanout=fanout)
+    assert fanout.calls == 0
+
+
+# Criterion 2: overlapping write scope serializes (never one batch).
+def test_operator_dispatcher_serializes_overlapping_write_scope(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/shared/**")
+    b = _governed_lane("lane-b", write_scope="/shared/sub/**")
+    fanout = _RecordingFanout()
+    run, _ = _dispatch(tmp_path, [a, b], fanout=fanout)
+    assert fanout.batches == [["lane-a"], ["lane-b"]], (
+        f"colliding lanes must never share a fan-out batch, got {fanout.batches}"
+    )
+    assert run.halted is False
+
+
+# Criterion 2: shared harness state namespace serializes.
+def test_operator_dispatcher_serializes_shared_namespace(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/a/**", namespace="shared")
+    b = _governed_lane("lane-b", write_scope="/b/**", namespace="shared")
+    fanout = _RecordingFanout()
+    _dispatch(tmp_path, [a, b], fanout=fanout)
+    assert fanout.batches == [["lane-a"], ["lane-b"]]
+
+
+# F3: requires_integrator without an explicit eligible integrator refuses.
+def test_operator_dispatcher_requires_integrator_fails_closed(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    fanout = _RecordingFanout()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(tmp_path, [a], fanout=fanout, gate_input=TopologyGateInput())
+    assert "requires_integrator" in str(exc.value)
+    assert fanout.calls == 0
+
+
+# F3 (green): an explicit distinct integrator lane satisfies requires_integrator.
+def test_operator_dispatcher_requires_integrator_with_integrator_passes(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    integrator = _governed_lane("integrator", write_scope="/repo/integrator/**")
+    fanout = _RecordingFanout()
+    run, _ = _dispatch(
+        tmp_path,
+        [a, integrator],
+        fanout=fanout,
+        gate_input=TopologyGateInput(integration_lanes=["integrator"]),
+    )
+    # Both lanes are disjoint; the requires_integrator lane is released by the
+    # explicit integrator lane, so they share one collision-safe batch.
+    assert len(fanout.batches) == 1
+    assert sorted(fanout.batches[0]) == ["integrator", "lane-a"]
+    assert run.halted is False
+
+
+# F3 (red): naming only itself as the integrator does not satisfy the policy.
+def test_operator_dispatcher_requires_integrator_not_own_integrator(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    fanout = _RecordingFanout()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a], fanout=fanout,
+            gate_input=TopologyGateInput(integration_lanes=["lane-a"]),
+        )
+    assert "requires_integrator" in str(exc.value)
+    assert fanout.calls == 0
+
+
+# F2: a semantic conflict is removed from normal fan-out and routed to the
+# bounded Integrator — the controller launches no worker for the conflicted lane.
+def test_operator_dispatcher_routes_semantic_conflict_to_integrator(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**")
+    b = _governed_lane("lane-b", write_scope="/repo/b/**")
+    fanout = _RecordingFanout()
+    run, _ = _dispatch(
+        tmp_path,
+        [a, b],
+        fanout=fanout,
+        gate_input=TopologyGateInput(
+            semantic_conflict="lane-a",
+            conflict_write_scope=["/repo/a/src/foo.py"],
+            conflict_test_contract=["tests/test_foo.py::test_resolution"],
+        ),
+    )
+    # Only lane-b reached normal fan-out; lane-a was routed to the Integrator.
+    assert fanout.batches == [["lane-b"]], (
+        f"conflicted lane must not enter fan-out, got {fanout.batches}"
+    )
+    assignment = run.integrator_assignment
+    assert assignment is not None
+    assert assignment.integrator == "integrator"
+    assert assignment.lane_id == "lane-a"
+    assert assignment.write_scope == ["/repo/a/src/foo.py"]
+    assert assignment.test_contract == ["tests/test_foo.py::test_resolution"]
+
+
+# F5: dirty / detached candidates are refused before integration.
+def test_operator_dispatcher_refuses_ineligible_worktrees(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**")
+    fanout = _RecordingFanout()
+
+    dirty = WorktreeState(
+        committed_sha="c" * 40, detached=False, on_branch="branch-lane-a",
+        dirty_paths=["src/x.py"],
+    )
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a], fanout=fanout,
+            gate_input=TopologyGateInput(eligibility={"lane-a": dirty}),
+        )
+    assert "not eligible" in str(exc.value)
+    assert fanout.calls == 0
+
+    detached = WorktreeState(
+        committed_sha="c" * 40, detached=True, on_branch=None, dirty_paths=[]
+    )
+    with pytest.raises(TopologyGateError):
+        _dispatch(
+            tmp_path, [a], fanout=fanout,
+            gate_input=TopologyGateInput(eligibility={"lane-a": detached}),
+        )
+    assert fanout.calls == 0
+
+
+def test_operator_dispatcher_refuses_committed_but_wrong_branch(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**")
+    fanout = _RecordingFanout()
+    wrong_branch = WorktreeState(
+        committed_sha="c" * 40, detached=False,
+        on_branch="some-other-branch", dirty_paths=[],
+    )
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a], fanout=fanout,
+            gate_input=TopologyGateInput(eligibility={"lane-a": wrong_branch}),
+        )
+    assert "not eligible" in str(exc.value)
+    assert fanout.calls == 0
+
+
+# green: valid fully governed lanes run exactly once.
+def test_operator_dispatcher_valid_governed_lanes_run_once(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo-a/**")
+    b = _governed_lane("lane-b", write_scope="/repo-b/**")
+    fanout = _RecordingFanout()
+    run, ws = _dispatch(tmp_path, [a, b], fanout=fanout)
+    assert fanout.batches == [["lane-a", "lane-b"]], (
+        f"disjoint governed lanes run in one batch, got {fanout.batches}"
+    )
+    assert run.halted is False
+    assert set(ws.provisions) == {"lane-a", "lane-b"}
+
+
+# v1.3.10 compatibility: a non-mutating lane never enters the gate and never
+# launches.
+def test_operator_dispatcher_non_mutating_lane_is_not_governed(tmp_path):
+    non_mutating = {
+        "id": "observer",
+        "role": "observer",
+        "repo": "skillweave/observer",
+        "base": _OP_SHA,
+        "execution_model": "cold",
+        # mutating omitted -> False; no topology fields declared.
+    }
+    fanout = _RecordingFanout()
+    run, ws = _dispatch(tmp_path, [non_mutating], fanout=fanout)
+    assert ws.provisions == []
+    assert fanout.calls == 0
+    assert run.halted is False

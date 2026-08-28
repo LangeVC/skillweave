@@ -54,6 +54,9 @@ from .application import (  # noqa: F401
     OperatorDispatchError,
     ProfileLocationError,
     WorkspaceMismatchError,
+    TopologyGateError,
+    TopologyGateInput,
+    TopologyEnforcement,
     DispatchReport,
     LanePlan,
     DispatchRun,
@@ -61,6 +64,8 @@ from .application import (  # noqa: F401
     WorkspaceSeam,
     OperatorDispatchApplication,
     enforce_execution_model,
+    derive_topology_manifests,
+    enforce_topology,
     generate_run_id,
 )
 
@@ -98,6 +103,9 @@ __all__ = [
     "OperatorDispatchError",
     "ProfileLocationError",
     "WorkspaceMismatchError",
+    "TopologyGateError",
+    "TopologyGateInput",
+    "TopologyEnforcement",
     "DispatchReport",
     "LanePlan",
     "DispatchRun",
@@ -105,5 +113,7 @@ __all__ = [
     "WorkspaceSeam",
     "OperatorDispatchApplication",
     "enforce_execution_model",
+    "derive_topology_manifests",
+    "enforce_topology",
     "generate_run_id",
 ]
