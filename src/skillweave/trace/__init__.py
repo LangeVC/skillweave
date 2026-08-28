@@ -24,6 +24,11 @@ from .contracts import (  # noqa: F401
     PreflightError,
     IncompleteCompletionError,
     DuplicateDigestError,
+    blocked_input_result,
+    build_job_result_for_terminal,
+    classify_evidence,
+    derive_gate_verdict,
+    new_append_only_round,
 )
 
 __all__ = [
@@ -44,4 +49,9 @@ __all__ = [
     "PreflightError",
     "IncompleteCompletionError",
     "DuplicateDigestError",
+    "blocked_input_result",
+    "build_job_result_for_terminal",
+    "classify_evidence",
+    "derive_gate_verdict",
+    "new_append_only_round",
 ]

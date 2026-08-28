@@ -731,6 +731,52 @@ def _evidence_for(
     return EvidenceAvailability.RECORDED
 
 
+def classify_evidence(
+    *,
+    required: Optional[Sequence[str]],
+    refs: Optional[Sequence[Any]] = None,
+    resolver: Optional[Any] = None,
+) -> tuple[EvidenceAvailability, Optional[str]]:
+    """Classify the evidence availability of a completion, fail-closed.
+
+    Returns ``(availability, blocking_reason)`` — the reason is ``None`` only
+    when the completion is unblocked on the evidence dimension (criterion 7).
+    Three fail-closed cases produce a blocking reason:
+
+    * ``required`` is an *empty* declared list (nothing to satisfy) → ``MISSING``;
+    * a required stream carries no resolvable reference → ``MISSING``;
+    * a reference cannot resolve / fails integrity through ``resolver`` →
+      ``UNRESOLVABLE``.
+
+    ``resolver`` is optional and duck-typed: each ``ref`` is either resolved via
+    its own ``resolve`` (a :class:`~skillweave.fanout.dispatch.ReceiptReference`
+    verifies digest, length and encoding) or by ``resolver(ref)`` directly. A
+    resolver that raises on any reference marks the completion ``UNRESOLVABLE``,
+    and — because the caller binds this back into the gate verdict — such a
+    completion can never yield ``done``/``pass`` on the strength of an exit code
+    or non-empty stdout alone.
+    """
+    if required is None:
+        return EvidenceAvailability.UNDECLARED, None
+    if not required:
+        return EvidenceAvailability.MISSING, "required evidence list is empty"
+    refs = list(refs or [])
+    if not refs:
+        return EvidenceAvailability.MISSING, "required evidence has no resolvable receipt"
+    if resolver is not None:
+        for ref in refs:
+            try:
+                if hasattr(ref, "resolve"):
+                    ref.resolve(resolver)
+                else:
+                    resolver(ref)
+            except Exception:  # noqa: BLE001
+                return EvidenceAvailability.UNRESOLVABLE, (
+                    f"unresolvable artifact '{getattr(ref, 'artifact_id', ref)}'"
+                )
+    return EvidenceAvailability.RECORDED, None
+
+
 __all__ = [
     "TraceContractError",
     "BlockedInputError",
@@ -755,5 +801,6 @@ __all__ = [
     "blocked_input_result",
     "derive_gate_verdict",
     "build_job_result_for_terminal",
+    "classify_evidence",
     "content_id",
 ]
