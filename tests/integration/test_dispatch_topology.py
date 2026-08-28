@@ -267,3 +267,114 @@ def test_no_committed_work_not_eligible():
     )
     reasons = assess_eligibility(lane, state)
     assert any("no committed work" in r for r in reasons)
+
+
+# ── Live execution seam: topology is enforced before any worker launch ──────
+#
+# The decision helpers above are not enough on their own: the contract is that
+# the PromptChain execution seam (``skillweave.promptchain.execute``) refuses or
+# serializes invalid topology before a fan-out worker ever starts. These tests
+# exercise that entry point, not the helper modules in isolation.
+
+
+def _seq_decl(parallel_lanes, serialized_lanes=None):
+    """Build a minimal promptchain sequence declaration for the executor."""
+    from skillweave.promptchain.execute import load_sequence
+
+    phases = []
+    if parallel_lanes:
+        phases.append({"phase": "build", "parallel_lanes": parallel_lanes})
+    if serialized_lanes:
+        phases.append({"phase": "build", "serialized_lanes": serialized_lanes})
+    return load_sequence({"session_boundary": "batch", "phases": phases})
+
+
+def _topo_lane(lane_id, *, write_scope, base=_BASE_A, namespace=None, depends_on=None):
+    """A parallel lane declaration carrying the topology manifest fields."""
+    lane = {
+        "id": lane_id,
+        "base": base,
+        "depends_on": depends_on or [],
+        "write_scope": write_scope
+        if isinstance(write_scope, list)
+        else [write_scope],
+        "worktree": f"/tmp/{lane_id}",
+        "branch": f"branch-{lane_id}",
+        "integration_policy": "independent",
+    }
+    if namespace is not None:
+        lane["harness_state_namespace"] = namespace
+    return lane
+
+
+def test_execute_seam_serializes_overlapping_write_scope_before_fanout():
+    from skillweave.promptchain.execute import execute_sequence
+
+    a = _topo_lane("lane-a", write_scope="/shared/**")
+    b = _topo_lane("lane-b", write_scope="/shared/sub/**")
+    batches = []
+
+    def fake_fanout(lane_ids):
+        batches.append(list(lane_ids))
+
+    plan = execute_sequence(_seq_decl([a, b]), fanout=fake_fanout)
+    # Overlapping scopes must never share a batch: two fan-out calls.
+    assert len(batches) == 2, f"colliding lanes must serialize, got {batches}"
+    assert batches == [["lane-a"], ["lane-b"]]
+    assert plan.modes() == ["subagent", "subagent"]
+
+
+def test_execute_seam_keeps_disjoint_lanes_in_one_batch():
+    from skillweave.promptchain.execute import execute_sequence
+
+    a = _topo_lane("lane-a", write_scope="/repo-a/**")
+    b = _topo_lane("lane-b", write_scope="/repo-b/**")
+    batches = []
+
+    def fake_fanout(lane_ids):
+        batches.append(list(lane_ids))
+
+    execute_sequence(_seq_decl([a, b]), fanout=fake_fanout)
+    assert batches == [["lane-a", "lane-b"]]
+
+
+def test_execute_seam_fails_closed_on_incomplete_manifest_before_fanout():
+    from skillweave.promptchain.execute import TopologyGateError, execute_sequence
+
+    # A topology-governed lane missing its write scope is incomplete.
+    bad = {
+        "id": "lane-a",
+        "base": _BASE_A,
+        "depends_on": [],
+        "worktree": "/tmp/lane-a",
+        "branch": "branch-lane-a",
+        "integration_policy": "independent",
+        # write_scope omitted -> incomplete manifest
+    }
+    called = []
+
+    def fake_fanout(lane_ids):
+        called.append(list(lane_ids))
+
+    try:
+        execute_sequence(_seq_decl([bad]), fanout=fake_fanout)
+        assert False, "expected TopologyGateError"
+    except TopologyGateError as exc:
+        assert "write scope" in str(exc)
+    assert called == [], "no worker may start after an invalid topology declaration"
+
+
+def test_execute_seam_without_topology_fields_preserves_single_batch():
+    # No lane is topology-governed: the pre-existing single-batch behavior is
+    # preserved (one fan-out call with all parallel lane ids).
+    from skillweave.promptchain.execute import execute_sequence
+
+    a = {"id": "T1"}
+    b = {"id": "T2"}
+    batches = []
+
+    def fake_fanout(lane_ids):
+        batches.append(list(lane_ids))
+
+    execute_sequence(_seq_decl([a, b]), fanout=fake_fanout)
+    assert batches == [["T1", "T2"]]

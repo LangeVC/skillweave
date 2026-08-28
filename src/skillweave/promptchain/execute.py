@@ -60,6 +60,22 @@ class MissingSessionBoundaryError(Exception):
         self.detail = detail
 
 
+class TopologyGateError(Exception):
+    """Raised when a sequence's topology declarations are invalid or colliding.
+
+    The topology/integration contract (SW1311-TOPOLOGY-001) is fail-closed at
+    the execution seam: an incomplete manifest or a collision between two
+    mutating lanes that is not absorbed by an explicit integration lane stops
+    the seam before any worker (fan-out) or integration action. This is the
+    live counterpart to :class:`ManifestError` — the seam refuses rather than
+    launch, and never re-schedules or rewrites on its own.
+    """
+
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(f"topology gate refused: {detail}")
+
+
 @dataclass
 class Lane:
     """One lane as declared in a phase's ``parallel_lanes`` or
@@ -68,6 +84,11 @@ class Lane:
     id: str
     #: ``"parallel"`` or ``"serialized"``, from which block the lane came.
     kind: str
+    #: The raw lane declaration, retained so the topology gate can derive a
+    #: :class:`~skillweave.dispatch.topology.LaneTopology` manifest from the
+    #: same file the seam already consumes (write scope, base, dependency set,
+    #: worktree, branch, integration policy, harness namespace).
+    manifest: Optional[Mapping[str, Any]] = None
 
 
 @dataclass
@@ -125,9 +146,9 @@ def load_sequence(declaration: Mapping[str, Any]) -> SequenceDeclaration:
     serialized: List[Lane] = []
     for phase in declaration.get("phases", []) or []:
         for lane in phase.get("parallel_lanes", []) or []:
-            parallel.append(Lane(id=lane.get("id"), kind="parallel"))
+            parallel.append(Lane(id=lane.get("id"), kind="parallel", manifest=lane))
         for lane in phase.get("serialized_lanes", []) or []:
-            serialized.append(Lane(id=lane.get("id"), kind="serialized"))
+            serialized.append(Lane(id=lane.get("id"), kind="serialized", manifest=lane))
 
     return SequenceDeclaration(
         session_boundary=session_boundary,
@@ -157,10 +178,90 @@ def build_dispatch_plan(
     return DispatchPlan(entries=entries)
 
 
+#: The topology fields a lane may declare that mark it as topology-governed.
+_TOPOLOGY_KEYS = (
+    "base",
+    "depends_on",
+    "write_scope",
+    "worktree",
+    "branch",
+    "integration_policy",
+    "harness_state_namespace",
+)
+
+
+def _is_topology_governed(lane: Lane) -> bool:
+    manifest = lane.manifest or {}
+    return any(key in manifest for key in _TOPOLOGY_KEYS)
+
+
+def derive_topologies(declaration: SequenceDeclaration) -> List[Any]:
+    """Build :class:`~skillweave.dispatch.topology.LaneTopology` manifests from
+    the lanes whose declarations carry topology fields.
+
+    Only lanes that declare any topology key are governed; a lane with no
+    topology declaration is left to the session-boundary-only path unchanged.
+    The import is deferred so this module's eager import closure stays free of
+    the dispatch application surface (GLE-020).
+    """
+    from skillweave.dispatch.topology import LaneTopology
+
+    result: List[Any] = []
+    for lane in declaration.all_lanes():
+        if not _is_topology_governed(lane):
+            continue
+        manifest = dict(lane.manifest or {})
+        # The promptchain lane declaration names the lane ``id``; the topology
+        # manifest names it ``lane_id``. Map the field so the two seams agree on
+        # which governed lane is which.
+        if "lane_id" not in manifest and lane.id:
+            manifest["lane_id"] = lane.id
+        result.append(LaneTopology.from_dict(manifest))
+    return result
+
+
+def gate_topology(
+    declaration: SequenceDeclaration,
+    *,
+    topologies: Optional[Sequence[Any]] = None,
+    integration_lanes: Optional[Sequence[str]] = None,
+) -> List[List[str]]:
+    """Fail-closed topology gate applied *before* any worker launch.
+
+    Derives (or accepts) the lane topology manifests, validates every governed
+    manifest, and returns the serialization plan's groups as parallel-batch
+    boundaries. A manifest that is incomplete or malformed, or a collision
+    between two governed lanes that is not absorbed by an explicit integration
+    lane, raises :class:`TopologyGateError` — the seam refuses rather than
+    launch. The returned groups mean colliding lanes never share a fan-out
+    batch; separate groups are fanned out sequentially.
+    """
+    from skillweave.dispatch.topology import (
+        ManifestError,
+        build_serialization_plan,
+    )
+
+    resolved = list(topologies) if topologies is not None else derive_topologies(declaration)
+    if not resolved:
+        return []
+
+    try:
+        return [
+            list(group)
+            for group in build_serialization_plan(
+                resolved, integration_lanes=integration_lanes
+            ).groups
+        ]
+    except ManifestError as exc:
+        raise TopologyGateError(str(exc)) from exc
+
+
 def execute_sequence(
     declaration: SequenceDeclaration,
     *,
     fanout: Optional[Any] = None,
+    topologies: Optional[Sequence[Any]] = None,
+    integration_lanes: Optional[Sequence[str]] = None,
 ) -> DispatchPlan:
     """Validate, build the plan, and hand parallel lanes to the fan-out seam.
 
@@ -168,6 +269,14 @@ def execute_sequence(
     ``skillweave.fanout.dispatch.fan_out_dispatch`` is used for the parallel
     lanes; serialized lanes stay inline. The plan is returned regardless, so a
     caller (or a test) can inspect every decision.
+
+    When the sequence's lanes are topology-governed (they declare a write
+    scope, base, dependency set, worktree, branch, integration policy or
+    harness namespace), the collision-safe serialization plan is applied first:
+    a gate that fails closed on any incomplete manifest or unabsorbed
+    collision, and which frees parallel lanes in collision-free groups so two
+    lanes that overlap in write scope, share an incompatible base, or claim the
+    same harness namespace never launch in the same batch.
     """
     plan = build_dispatch_plan(declaration)
 
@@ -178,11 +287,23 @@ def execute_sequence(
             from skillweave.fanout.dispatch import fan_out_dispatch
 
             dispatcher = fan_out_dispatch
-        # Hand the parallel lane ids to the fan-out seam. The seam is the
-        # subagent execution unit; the concrete commands/tool/model a caller
-        # resolves stay the caller's concern, but the decision that parallel
-        # lanes move through fan-out — and never inline — is owned here.
-        dispatcher(list(parallel_lanes))
+
+        # Topology gate: colliding or incomplete governed lanes stop here,
+        # before any fan-out call. When guaranteed safe, the gate returns
+        # collision-free groups that each become one fan-out batch, so
+        # colliding parallel lanes are serialized rather than launched together.
+        groups = gate_topology(
+            declaration, topologies=topologies, integration_lanes=integration_lanes
+        )
+        if groups:
+            for group in groups:
+                dispatcher(list(group))
+        else:
+            # Hand the parallel lane ids to the fan-out seam. The seam is the
+            # subagent execution unit; the concrete commands/tool/model a caller
+            # resolves stay the caller's concern, but the decision that parallel
+            # lanes move through fan-out — and never inline — is owned here.
+            dispatcher(list(parallel_lanes))
 
     return plan
 
