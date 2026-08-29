@@ -1104,8 +1104,19 @@ class OperatorDispatchApplication:
         if adapter is not None:
             controller.reconcile_authority(adapter)
             controller.observe_actual_digests(adapter, observed)
-        # A SkillWeave dispatch attempt is always recorded; a bypass would have
-        # raised in ``record_attempt`` above strict SkillWeave requirement.
+            # Every active bypass the adapter declares is consumed here, before
+            # any provisioning: ``record_attempt`` raises (BypassNotRecordedError)
+            # when strict mode requires SkillWeave dispatch, so a foreign
+            # hand-off never reaches a workspace provision or worker launch.
+            for bypass in adapter.bypass_flags():
+                controller.record_attempt(
+                    kind=bypass,
+                    detail=f"{bypass} dispatch attempt by adapter '{adapter.name}'",
+                    adapter=adapter,
+                )
+        # A SkillWeave dispatch attempt is always recorded after the declared
+        # bypasses were consumed; a refused bypass raises above before this
+        # line, so no provisioning follows a foreign hand-off.
         controller.record_attempt(kind="skillweave", detail="wave dispatch", adapter=adapter)
 
     def dispatch(

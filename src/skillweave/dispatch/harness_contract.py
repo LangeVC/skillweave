@@ -352,7 +352,7 @@ class StrictController:
             missing.append("validated sequence")
         if profile is None:
             missing.append("resolved profile")
-        if task_brief is None:
+        if task_brief is None or not task_brief:
             missing.append("exact task brief")
         if skill_digests is None or not skill_digests:
             missing.append("installed skill digests")

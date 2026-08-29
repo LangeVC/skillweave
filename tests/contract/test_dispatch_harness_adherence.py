@@ -137,6 +137,21 @@ def test_strict_binding_requires_exact_task_brief():
     assert "exact task brief" in str(exc.value)
 
 
+def test_strict_binding_rejects_empty_task_brief():
+    # F-HARNESS-002: the real dispatch default is work=b"" — an empty bytes or
+    # string brief is a missing exact task brief, refused like None.
+    c = StrictController()
+    for empty in (b"", ""):
+        with pytest.raises(StrictControllerError) as exc:
+            c.bind(
+                sequence=object(),
+                profile=object(),
+                task_brief=empty,
+                skill_digests={"skill": "x"},
+            )
+        assert "exact task brief" in str(exc.value)
+
+
 def test_strict_binding_requires_installed_skill_digests():
     c = StrictController()
     with pytest.raises(StrictControllerError) as exc:

@@ -46,6 +46,7 @@ from skillweave.dispatch.harness_contract import (  # noqa: E402
     STATUS_PRODUCTION,
     HarnessAdapterProfile,
     StrictController,
+    StrictControllerError,
     load_adapter_profiles,
 )
 
@@ -260,6 +261,93 @@ def test_strict_pre_launch_seam_refuses_before_launch_on_stale_digest():
         )
     assert exc.value.asset == first
     assert ws.provisions == []
+
+
+def test_dispatch_level_native_delegation_bypass_records_and_refuses_before_launch():
+    # F-HARNESS-001: the adapter's declared native-delegation bypass must be
+    # consumed by the real pre-launch seam. app.dispatch records and refuses it
+    # before any workspace is provisioned or any worker launches.
+    profiles = _profiles()
+    adapter = profiles["antigravity"]
+    assert "native-delegation" in adapter.bypass_flags()
+    ws = _FakeWorkspace()
+    inline = _RecordingInline()
+    fanout = _RecordingFanout()
+    app = OperatorDispatchApplication(
+        workspace_seam=ws,
+        fanout_seam=fanout,
+        inline_seam=inline,
+    )
+    app._strict_controller = StrictController(require_skillweave_dispatch=True)
+    with pytest.raises(BypassNotRecordedError) as exc:
+        app.dispatch(
+            str(_SEQUENCE), str(_PROFILE), wave="0", sink=io.StringIO(),
+            work=b"the exact task brief",
+            strict_adapter=adapter,
+            strict_skill_digests=dict(adapter.skill_digests),
+        )
+    assert exc.value.asset == "antigravity"
+    assert "native-delegation" in str(exc.value)
+    assert ws.provisions == []
+    assert inline.calls == 0
+    assert fanout.calls == 0
+
+
+def test_dispatch_level_direct_shell_bypass_refuses_before_launch():
+    # F-HARNESS-001: an adapter declaring a direct-shell bypass is recorded and
+    # refused by the real pre-launch seam before any provisioning or launch.
+    adapter = HarnessAdapterProfile(
+        name="direct-shell-harness",
+        authority={"role": "controller"},
+        delegation={"skillweave-dispatch": True, "direct-shell": True},
+        skill_digests={"skillweave-promptchain": "deadbeef"},
+    )
+    ws = _FakeWorkspace()
+    inline = _RecordingInline()
+    fanout = _RecordingFanout()
+    app = OperatorDispatchApplication(
+        workspace_seam=ws,
+        fanout_seam=fanout,
+        inline_seam=inline,
+    )
+    app._strict_controller = StrictController(require_skillweave_dispatch=True)
+    with pytest.raises(BypassNotRecordedError) as exc:
+        app.dispatch(
+            str(_SEQUENCE), str(_PROFILE), wave="0", sink=io.StringIO(),
+            work=b"the exact task brief",
+            strict_adapter=adapter,
+            strict_skill_digests=dict(adapter.skill_digests),
+        )
+    assert "direct-shell" in str(exc.value)
+    assert ws.provisions == []
+    assert inline.calls == 0
+    assert fanout.calls == 0
+
+
+def test_strict_dispatch_refuses_empty_task_brief_before_launch():
+    # F-HARNESS-002: the real dispatch default is work=b"" — an empty brief is
+    # a missing exact task brief, refused before any provisioning.
+    profiles = _profiles()
+    adapter = profiles["opencode"]
+    ws = _FakeWorkspace()
+    inline = _RecordingInline()
+    fanout = _RecordingFanout()
+    app = OperatorDispatchApplication(
+        workspace_seam=ws,
+        fanout_seam=fanout,
+        inline_seam=inline,
+    )
+    app._strict_controller = StrictController(require_skillweave_dispatch=True)
+    with pytest.raises(StrictControllerError) as exc:
+        app.dispatch(
+            str(_SEQUENCE), str(_PROFILE), wave="0", sink=io.StringIO(),
+            strict_adapter=adapter,
+            strict_skill_digests=dict(adapter.skill_digests),
+        )
+    assert "exact task brief" in str(exc.value)
+    assert ws.provisions == []
+    assert inline.calls == 0
+    assert fanout.calls == 0
 
 
 def test_adapter_native_delegation_bypass_fails_closed_and_recorded():
