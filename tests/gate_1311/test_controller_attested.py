@@ -94,13 +94,18 @@ def attest_dual_review(evidence: dict) -> dict:
 
     Two diverse reviewers (Pro-class and Flash-class) inspect identical
     immutable subjects concurrently; both must return REVIEW_PASS with no
-    material contradiction.
+    material contradiction, and every reviewer's subject must be exactly the
+    candidate SHA the attestation is about. A dual pass bound to any other
+    commit cannot attest the candidate.
     """
     reviewers = _require(evidence, "reviewers", evidence)
     if not isinstance(reviewers, list) or len(reviewers) != 2:
         raise AttestationError(
             f"dual review requires exactly two reviewers, got {reviewers!r}"
         )
+    candidate = _require(evidence, "candidate_sha", evidence)
+    if not _FULL_SHA.match(str(candidate)):
+        raise AttestationError(f"candidate_sha is not a full 40-hex SHA: {candidate!r}")
 
     tiers = []
     subject_shas = []
@@ -131,6 +136,12 @@ def attest_dual_review(evidence: dict) -> dict:
     if len(set(subject_shas)) != 1:
         raise AttestationError(
             f"reviewers must inspect identical immutable subjects, got {subject_shas}"
+        )
+    # The attested subject is the candidate under attestation.
+    if subject_shas[0] != candidate:
+        raise AttestationError(
+            f"reviewers attested subject {subject_shas[0]} but the candidate "
+            f"under attestation is {candidate}"
         )
     # No material contradiction.
     if "contradiction" in evidence and evidence["contradiction"]:
@@ -200,12 +211,15 @@ def test_criterion_11_gate_report_binds_shas_commands_exits_reviewer_identity():
 
 def test_criterion_12_dual_diverse_reviewers_both_return_pass():
     """Controller-attested: one Pro and one Flash reviewer inspect identical
-    immutable subjects and both return REVIEW_PASS with no contradiction.
+    immutable subjects and both return REVIEW_PASS with no contradiction, and
+    that subject is the candidate SHA under attestation.
 
     Well-formed evidence passes; a non-pro/flash pair, differing subjects, a
-    non-PASS verdict or a recorded contradiction all fail closed.
+    non-PASS verdict, a recorded contradiction or (critically) a dual pass
+    agreeing on a subject that is not the candidate all fail closed.
     """
     well_formed = {
+        "candidate_sha": "c" * 40,
         "reviewers": [
             {
                 "reviewer_id": "pro-reviewer",
@@ -223,6 +237,9 @@ def test_criterion_12_dual_diverse_reviewers_both_return_pass():
     }
     assert attest_dual_review(well_formed) is well_formed
 
+    # Missing candidate SHA -> fail closed.
+    with pytest.raises(AttestationError):
+        attest_dual_review({k: v for k, v in well_formed.items() if k != "candidate_sha"})
     # Non-diverse (both pro) -> fail closed.
     with pytest.raises(AttestationError):
         rv = dict(well_formed)
@@ -250,6 +267,16 @@ def test_criterion_12_dual_diverse_reviewers_both_return_pass():
     # A material contradiction -> fail closed.
     with pytest.raises(AttestationError):
         attest_dual_review(dict(well_formed, contradiction=True))
+    # A well-formed dual pass whose subject is not the candidate -> fail closed.
+    # Pins the MF-B defect: two reviewers agreeing on the wrong commit must not
+    # attest the candidate.
+    wrong_subject = dict(well_formed)
+    wrong_subject["reviewers"] = [
+        dict(well_formed["reviewers"][0], subject_sha="e" * 40),
+        dict(well_formed["reviewers"][1], subject_sha="e" * 40),
+    ]
+    with pytest.raises(AttestationError):
+        attest_dual_review(wrong_subject)
 
 
 def test_criterion_13_no_reviewer_or_worker_merge_push_tag_release_publish():
