@@ -230,26 +230,26 @@ class CouncilProvider:
 # and refused in Council profile data by ``validate_council_model_ids``.
 ROUTER_PROFILES = {
     "default": {
-        "models": ["sonnet", "gpt-4o", "gemini-pro", "deepseek-v4"],
-        "chairman": "sonnet",
+        "models": ["deepseek-v4-pro", "deepseek-v4-flash", "gemini-flash", "kilo-sonnet"],
+        "chairman": "deepseek-v4-pro",
         "mode": "standard",
         "temperature": 0.5,
     },
     "quick": {
-        "models": ["gpt-4o-mini", "haiku"],
-        "chairman": "gpt-4o-mini",
+        "models": ["deepseek-v4-flash", "gemini-flash-lite"],
+        "chairman": "deepseek-v4-flash",
         "mode": "quick",
         "temperature": 0.3,
     },
     "deep": {
-        "models": ["sonnet", "gpt-4o", "gemini-pro", "deepseek-v4", "llama-4", "mistral"],
-        "chairman": "opus",
+        "models": ["deepseek-v4-pro", "deepseek-v4-flash", "gemini-flash", "gemini-flash-lite", "kilo-sonnet", "kilo-opus"],
+        "chairman": "kilo-opus",
         "mode": "full",
         "temperature": 0.5,
     },
     "expert": {
-        "models": ["opus", "gpt-4o", "gemini-pro", "deepseek-v4"],
-        "chairman": "opus",
+        "models": ["kilo-opus", "kilo-sonnet", "deepseek-v4-pro", "gemini-flash"],
+        "chairman": "kilo-opus",
         "mode": "full",
         "temperature": 0.4,
     },
@@ -259,7 +259,7 @@ ROUTER_PROFILES = {
 #: and per phase by the engine so a run record can tell which profile revision
 #: produced it. This is a DATA revision, not a bundle version: the release that
 #: ships this revision is gate-tagged by the release readiness gate, not here.
-COUNCIL_PROFILE_VERSION = "1.3.11"
+COUNCIL_PROFILE_VERSION = "1.3.12"
 
 
 # ── Provider Detection ──────────────────────────────────────────────
@@ -738,10 +738,12 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     keep their own job — casting the council (chairman + model pool + mode) per
     tier — and are not repurposed as an availability registry. The roster is
     the best reachable availability signal but is not proof of what Faigate
-    actually answers: measured, a listed id (``gemini-pro``) is still silently
-    substituted for ``deepseek-v4-flash``. Judging an answer against the
-    requested model is therefore out of scope here (SW-COUNCIL-001); this gate
-    only refuses an id whose absence Faigate itself reports via the roster.
+    actually answers: measured, a listed id (``kilo-sonnet``) is still answered
+    by the underlying ``anthropic/claude-sonnet-4.6``, and several ``openai-*``
+    aliases silently collapse onto ``deepseek-v4-flash``. Judging an answer
+    against the requested model is therefore out of scope here (SW-COUNCIL-001);
+    this gate only refuses an id whose absence Faigate itself reports via the
+    roster.
 
     The availability outcome is one of three: a model Faigate confirms it
     serves proceeds; a model Faigate confirms it does NOT serve is refused
@@ -777,9 +779,10 @@ def _check_unavailable_models(profile: "RoutingProfile") -> None:
 
     A role's ``model`` and ``pin`` name a concrete model id. ``ROUTER_PROFILES``
     (``known_model_ids()``) keep their own job — casting the council's seats — so
-    a cast id is admitted as-is and is never live-gated: ``sonnet``, ``gpt-4o``,
-    ``opus``, ``deepseek-v4`` and the rest are council aliases, not a claim about
-    Faigate's live roster.
+    a cast id is admitted as-is and is never live-gated: ``deepseek-v4-pro``,
+    ``deepseek-v4-flash``, ``gemini-flash``, ``gemini-flash-lite``, ``kilo-sonnet``
+    and ``kilo-opus`` are Faigate's own roster ids, not a claim the council makes
+    about availability.
 
     Every id outside that cast is an explicit override (for example
     ``deepseek-v4-pro``), and its availability is resolved against what Faigate

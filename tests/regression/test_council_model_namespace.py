@@ -193,3 +193,75 @@ def test_dispatch_qualified_syntax_still_valid_but_not_in_council_data():
     assert translate_model_id(dispatch_id) == "deepseek-v4-pro"  # dispatch: valid
     with pytest.raises(ModelNamespaceError):  # council data: invalid
         validate_council_model_ids(models=[dispatch_id], chairman=None, source="council")
+
+
+# ── SW1311-COUNCIL-001 — proven live roster identifiers (criterion 6) ───────
+# The correction of ``ROUTER_PROFILES`` is grounded in a live Faidate roster
+# proof, not in a guessed alias. These fixtures lock the proven ids in: the
+# profile data must name real ``GET /v1/models`` roster ids (provider-native,
+# unprefixed) that yield at least two distinct answering models. The answered
+# models are asserted as data — a later edit that swaps in a stale alias
+# (``sonnet``, ``gpt-4o``, ``deepseek-v4``) fails here before any live call.
+
+#: Each roster id mapped to the model Faidate measured it answers as
+#: (``requested -> answering``), from the live proof at
+#: ``http://127.0.0.1:8090/v1``. ``deepseek-v4-pro`` and ``deepseek-v4-flash``
+#: answer as themselves; the ``kilo-*`` and ``gemini-*`` ids answer as their
+#: underlying provider-qualified model. All are distinct answering models.
+PROVEN_ROSTER = {
+    "deepseek-v4-pro": "deepseek-v4-pro",
+    "deepseek-v4-flash": "deepseek-v4-flash",
+    "gemini-flash": "gemini-2.5-flash",
+    "gemini-flash-lite": "gemini-2.5-flash-lite",
+    "kilo-sonnet": "anthropic/claude-sonnet-4.6",
+    "kilo-opus": "anthropic/claude-opus-4.6",
+}
+
+#: The self-answering roster ids (requested == answering). The live gate counts
+#: distinct answering models among answered seats; these two hold the >=2 gate.
+SELF_ANSWERING_ROSTER = {mid for mid, ans in PROVEN_ROSTER.items() if mid == ans}
+
+
+def test_profiles_cast_only_proven_live_roster_ids():
+    # No cast id may drift back to a stale alias; every id in ROUTER_PROFILES must
+    # be one of the proven live roster ids measured at the correction.
+    for preset in ROUTER_PROFILES.values():
+        for mid in list(preset["models"]) + [preset["chairman"]]:
+            assert mid in PROVEN_ROSTER, (
+                f"{mid!r} is not a proven live Faidate roster id; use a real "
+                f"/v1/models id, not a council alias"
+            )
+
+
+def test_default_profile_yields_at_least_two_self_answering_models():
+    # The live gate requests the ``default`` preset's models and demands >=2
+    # distinct answering models among answered seats. Proven: the default cast
+    # contains both self-answering deepseek ids.
+    default = ROUTER_PROFILES["default"]
+    self_answering = [m for m in default["models"] if m in SELF_ANSWERING_ROSTER]
+    assert len(self_answering) >= 2, (
+        f"default profile lacks >=2 self-answering roster models; "
+        f"found {self_answering}"
+    )
+
+
+def test_default_profile_at_least_two_distinct_answering_models():
+    # Across the whole default cast (models + chairman), the measured answering
+    # set is at least two distinct models, so the minimum-distinct gate holds.
+    default = ROUTER_PROFILES["default"]
+    seats = default["models"] + ([default["chairman"]] if default.get("mode") == "full" else [])
+    answering = {PROVEN_ROSTER[m] for m in seats if m in PROVEN_ROSTER}
+    assert len(answering) >= 2, f"default profile answering set too small: {answering}"
+
+
+def test_v139_and_v1310_guards_still_hold_against_new_profiles():
+    # The historical prefix relapse and the silent-collapse guards remain intact
+    # against the corrected profiles: no id carries a gateway namespace, and no
+    # ``faigate/`` prefix appears anywhere in Council profile data. The corrected
+    # casts reuse native bodies (e.g. ``deepseek-v4-pro``) that v1.3.9 had wrongly
+    # prefixed — the body is right, only the prefix was the relapse, and the
+    # no-prefix guard above still refuses any re-adoption.
+    for preset in ROUTER_PROFILES.values():
+        for mid in list(preset["models"]) + [preset["chairman"]]:
+            assert "/" not in mid and ":" not in mid
+            assert "faigate" not in mid
