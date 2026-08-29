@@ -31,6 +31,9 @@
       "type": "integer",
       "minimum": 1
     },
+    "model_policy": {
+      "$ref": "#/$defs/modelPolicy"
+    },
     "lanes": {
       "type": "array",
       "minItems": 1,
@@ -41,6 +44,40 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "modelPolicy": {
+      "type": "object",
+      "description": "The provider-neutral model-policy declaration: capability/minimum tier, architectural risk, cost ceiling and fallback, without any vendor/gateway prefix. The minimum tier is flash or pro (capability classes, not product names).",
+      "properties": {
+        "minimum_tier": {
+          "type": "string",
+          "enum": ["flash", "pro"]
+        },
+        "architectural_risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "cost_ceiling": {
+          "type": "number"
+        },
+        "fallback": {
+          "type": "string",
+          "enum": ["block", "escalate"]
+        },
+        "requires": {
+          "type": "object",
+          "properties": {
+            "architecture": { "type": "boolean" },
+            "high_blast_radius": { "type": "boolean" },
+            "migration": { "type": "boolean" },
+            "security": { "type": "boolean" },
+            "causal_verification": { "type": "boolean" },
+            "ambiguous_rework": { "type": "boolean" },
+            "critical_review": { "type": "boolean" }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "profileReference": {
       "type": "object",
       "required": ["path"],
