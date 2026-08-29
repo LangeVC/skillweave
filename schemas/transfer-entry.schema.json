@@ -41,7 +41,8 @@
     },
     "contraindications": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": { "type": "string" },
+      "description": "Required entry-contract property. The key must be present; an explicitly present empty array is allowed (no minItems)."
     },
     "limitations": {
       "type": "array",

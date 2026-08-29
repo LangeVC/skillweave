@@ -55,13 +55,16 @@ criteria:
    negative-authority layers.
 
 8. **Export is redacted by artifact policy.** :func:`export` applies an
-   :class:`ArtifactPolicy` and can never expose private prompts, secrets or
-   hidden reasoning; artifact content above the allowed sensitivity level is
-   redacted. Restricted-field matching is normalization-aware so case and
-   separator variants (``API_KEY``, ``api-key``, ``Private_Prompt``),
-   compound variants that embed a restricted token (``secret_token``,
-   ``api_key_token``) and nested/list forms are all redacted, while ordinary
-   words that merely contain a restricted token (``secretary_name``) are not.
+    :class:`ArtifactPolicy` and can never expose private prompts, secrets or
+    hidden reasoning; artifact content above the allowed sensitivity level is
+    redacted. Restricted-field matching is normalization-aware so case and
+    separator variants (``API_KEY``, ``api-key``, ``Private_Prompt``),
+    compound variants that embed a restricted token (``secret_token``,
+    ``api_key_token``), common secret-bearing names (``password``, ``passwd``,
+    ``credential(s)``, ``private_key``, ``access_key``, client/auth secret
+    variants) and digit-adjacent tokens (``secret2``, ``apiKey2Value``) are all
+    redacted, while ordinary words that merely contain a restricted token
+    (``secretary_name``, ``tokenizer_config``) are not.
 """
 
 from __future__ import annotations
@@ -607,6 +610,18 @@ class Entry:
         else:
             supersedes = None
 
+        # ``contraindications`` is a required entry-contract property (schema
+        # ``required``): an entry where the key is absent fails closed. An
+        # explicitly present empty array is allowed, matching the schema (which
+        # imposes no ``minItems``). A null value is rejected like the schema.
+        contra_raw = data.get("contraindications")
+        if "contraindications" not in data or contra_raw is None:
+            raise CatalogValidationError(
+                "contraindications is required; an explicitly present empty "
+                "array is allowed"
+            )
+        contraindications = _require_str_list(contra_raw, "contraindications")
+
         metadata_raw = data.get("metadata")
         if metadata_raw is not None and not isinstance(metadata_raw, Mapping):
             raise CatalogValidationError(
@@ -622,9 +637,7 @@ class Entry:
             observed_scope=scope,
             confidence=_require_str(data.get("confidence", ""), "confidence"),
             limitations=_require_str_list(data.get("limitations"), "limitations"),
-            contraindications=_require_str_list(
-                data.get("contraindications"), "contraindications"
-            ),
+            contraindications=contraindications,
             status=_require_str(data.get("status", ""), "status"),
             review_date=review_date,
             validity_window=validity_window,
@@ -1505,6 +1518,16 @@ DEFAULT_RESTRICTED_FIELDS: frozenset[str] = frozenset(
         "api_key",
         "token",
         "chain_of_thought",
+        "password",
+        "passwd",
+        "credential",
+        "credentials",
+        "private_key",
+        "access_key",
+        "client_secret",
+        "client_token",
+        "auth_secret",
+        "auth_token",
     }
 )
 
@@ -1525,13 +1548,17 @@ def _normalize_field_name(name: str) -> str:
 def _field_name_tokens(name: str) -> tuple[str, ...]:
     """Split a field name into lowercase semantic words.
 
-    Separators and camelCase boundaries are treated as word boundaries so
-    ``private_prompt``, ``Private_Prompt``, ``PRIVATE-PROMPT`` and
-    ``privatePrompt`` all yield ``("private", "prompt")``. A word that merely
-    *contains* a restricted token (``secretary``) stays one token and never
-    matches the standalone ``secret`` token.
+    Separators, camelCase boundaries and letter/digit boundaries are treated as
+    word boundaries so ``private_prompt``, ``Private_Prompt``, ``PRIVATE-PROMPT``
+    and ``privatePrompt`` all yield ``("private", "prompt")``, and digits do not
+    hide a restricted token: ``secret2`` yields ``("secret", "2")`` and
+    ``apiKey2Value`` yields ``("api", "key", "2", "value")``. A word that merely
+    *contains* a restricted token (``secretary``, ``tokenizer``) stays one token
+    and never matches the standalone ``secret``/``token`` token.
     """
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", str(name))
+    s = re.sub(r"(?<=[A-Za-z])(?=[0-9])", " ", s)
+    s = re.sub(r"(?<=[0-9])(?=[A-Za-z])", " ", s)
     words = re.split(r"[^a-zA-Z0-9]+", s)
     return tuple(w.lower() for w in words if w)
 

@@ -988,6 +988,186 @@ def test_evidence_digest_mismatch_recorded_invalid(tmp_path):
     assert any("does not match" in p for _, ps in catalog.invalid for p in ps)
 
 
+# ── C3 binding corrections ──────────────────────────────────────────────────
+#
+# 1. ``contraindications`` is a required entry-contract property: the key must
+#    be present (absent/null rejected by schema and runtime alike), while an
+#    explicitly present empty array stays valid.
+# 2. Criterion-8 hardening: the default policy covers common secret-bearing
+#    names (password, passwd, credential(s), private_key, access_key, client/
+#    auth secret variants), and restricted tokens adjacent to digits
+#    (``secret2``, ``apiKey2Value``) cannot bypass redaction, while near-matches
+#    (``secretary_name``, ``tokenizer_config``, unrelated numeric fields) stay.
+
+
+# ── C3.1: contraindications required entry-contract ─────────────────────────
+
+
+def test_contraindications_present_empty_array_is_valid():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["contraindications"] = []
+    entry = Entry.from_dict(raw)
+    assert entry.contraindications == ()
+    assert not validate_entry(entry)
+
+
+def test_contraindications_absent_key_rejected_at_runtime():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    del raw["contraindications"]
+    with pytest.raises(CatalogValidationError):
+        Entry.from_dict(raw)
+
+
+def test_contraindications_null_value_rejected_at_runtime():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["contraindications"] = None
+    with pytest.raises(CatalogValidationError):
+        Entry.from_dict(raw)
+
+
+def test_contraindications_absent_key_recorded_invalid_at_load(tmp_path):
+    doc = _document()
+    del doc["entries"][0]["contraindications"]
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    assert any(
+        "contraindications" in p
+        for _, ps in catalog.invalid
+        for p in ps
+    )
+
+
+def test_contraindications_absent_key_excluded_from_retrieval(tmp_path):
+    doc = _document()
+    del doc["entries"][0]["contraindications"]
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    missing_id = "sw1311-model-001"
+    # the "sw1311-model-001" entry is the first fixture entry and now lacks
+    # contraindications, so it must never be returned.
+    context = RetrievalContext(task="implementation-vs-architecture", risk="high")
+    result = retrieve(catalog, context, repo_root=_REPO_ROOT)
+    returned = {o.entry_id for o in result.advisory} | {
+        o.entry_id for o in result.superseded
+    }
+    assert missing_id not in returned
+
+
+def test_contraindications_schema_requires_key():
+    if jsonschema is None:
+        pytest.skip("jsonschema not installed")
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert "contraindications" in schema["required"]
+    validator = jsonschema.Draft202012Validator(schema)
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    del raw["contraindications"]
+    missing = list(validator.iter_errors(raw))
+    assert any("contraindications" in p for e in missing for p in list(e.path) + [e.message])
+    # explicitly present empty array is accepted by the schema.
+    raw_ok = catalog_entry_for("sw1311-model-001").to_dict()
+    raw_ok["contraindications"] = []
+    assert list(validator.iter_errors(raw_ok)) == []
+
+
+# ── C3.2: criterion-8 secret-export hardening ───────────────────────────────
+
+
+def test_export_redacts_common_secret_field_names():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "password": "p-1",
+        "passwd": "p-2",
+        "credential": "c-1",
+        "credentials": "c-2",
+        "private_key": "k-1",
+        "access_key": "k-2",
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    for secret in ("p-1", "p-2", "c-1", "c-2", "k-1", "k-2"):
+        assert secret not in exported
+    assert exported.count("***REDACTED***") >= 6
+
+
+def test_export_redacts_client_auth_secret_variants():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "client_secret": "cs-1",
+        "auth_secret": "as-1",
+        "client_token": "ct-1",
+        "auth_token": "at-1",
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    for secret in ("cs-1", "as-1", "ct-1", "at-1"):
+        assert secret not in exported
+
+
+def test_export_redacts_digit_adjacent_restricted_tokens():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "secret2": "v1",
+        "2secret": "v2",
+        "apiKey2Value": "v3",
+        "access_key2": "v4",
+        "password_123": "v5",
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    for secret in ("v1", "v2", "v3", "v4", "v5"):
+        assert secret not in exported
+    assert exported.count("***REDACTED***") >= 5
+
+
+def test_export_preserves_numeric_and_near_match_safety():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "secretary_name": "susan",
+        "tokenizer_config": "cl100k_base",
+        "tokens_processed": 128,
+        "access_level": "public",
+        "port_443": 443,
+        "pool_size_8": 8,
+        "keyboard_layout": "qwerty",
+    }
+    entry = Entry.from_dict(raw)
+    exported = export([entry])[0]
+    metadata = exported["metadata"]
+    assert metadata["secretary_name"] == "susan"
+    assert metadata["tokenizer_config"] == "cl100k_base"
+    assert metadata["tokens_processed"] == 128
+    assert metadata["access_level"] == "public"
+    assert metadata["port_443"] == 443
+    assert metadata["pool_size_8"] == 8
+    assert metadata["keyboard_layout"] == "qwerty"
+    assert "***REDACTED***" not in json.dumps(metadata)
+
+
+def test_export_redacts_digit_boundary_forms_inside_lists():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {"notes": [{"password2": "leaked-1"}, {"clientSecret": "leaked-2"}]}
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    assert "leaked-1" not in exported
+    assert "leaked-2" not in exported
+
+
+def test_export_custom_policy_does_not_redact_unrestricted_fields():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "password": "secret",
+        "ordinary_field": "keep-me",
+    }
+    entry = Entry.from_dict(raw)
+    narrow = ArtifactPolicy(restricted_fields=frozenset({"api_key"}))
+    exported = export([entry], policy=narrow)[0]
+    # custom policy has no password restriction: it is exported verbatim.
+    assert exported["metadata"]["password"] == "secret"
+    assert exported["metadata"]["ordinary_field"] == "keep-me"
+
+
 def _run_all() -> int:
     """Run the fixtures that need no pytest fixtures (standalone fallback)."""
     import tempfile
