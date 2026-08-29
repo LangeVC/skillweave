@@ -1,515 +1,604 @@
-[
-  {
-    "entry_id": "sw1311-model-001",
-    "category": "model",
-    "claim": "Flash is cost-effective for bounded implementation and hygiene; Pro is stronger for architecture, state, migration and adversarial review. These are scoped capability-tier strengths, not hardcoded vendor defaults.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "learning-traceability.md",
-        "sensitivity": "internal"
+{
+  "entries": [
+    {
+      "entry_id": "sw1311-model-001",
+      "category": "model",
+      "claim": "Flash is cost-effective for bounded implementation and hygiene; Pro is stronger for architecture, state, migration and adversarial review. These are scoped capability-tier strengths, not hardcoded vendor defaults.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "learning-traceability.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        },
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "source_name": "2026-08-28 final-gate execution-state.json",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-execution-state"
+        }
+      ],
+      "observed_scope": {
+        "task": "implementation-vs-architecture",
+        "risk": "high",
+        "profile": "",
+        "model_tiers": [
+          "flash",
+          "pro"
+        ],
+        "process": "dispatch"
       },
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-        "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
-        "source_name": "2026-08-28 final-gate execution-state.json",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "implementation-vs-architecture",
-      "risk": "high",
-      "profile": "",
-      "model_tiers": ["flash", "pro"],
-      "process": "dispatch"
+      "confidence": "medium",
+      "contraindications": [
+        "Tier strength is scoped and provider-neutral; never treat flash/pro as a permanent vendor enum"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger; research statements are observations, not universal truth",
+        "Not a live-pricing claim; allocation remains risk-shaped, never size-shaped"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "medium",
-    "contraindications": [
-      "Tier strength is scoped and provider-neutral; never treat flash/pro as a permanent vendor enum"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger; research statements are observations, not universal truth",
-      "Not a live-pricing claim; allocation remains risk-shaped, never size-shaped"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-model-002",
-    "category": "model",
-    "claim": "Complementary error profiles: Flash favors bug and edge-case recall, Pro favors breadth and factual and causal verification, with material Pro run-to-run variance.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "learning-traceability.md",
-        "sensitivity": "internal"
+    {
+      "entry_id": "sw1311-model-002",
+      "category": "model",
+      "claim": "Complementary error profiles: Flash favors bug and edge-case recall, Pro favors breadth and factual and causal verification, with material Pro run-to-run variance.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "learning-traceability.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        },
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "source_name": "2026-08-28 final-gate execution-state.json",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-execution-state"
+        }
+      ],
+      "observed_scope": {
+        "task": "review-and-discovery",
+        "risk": "medium",
+        "model_tiers": [
+          "flash",
+          "pro"
+        ],
+        "process": "dispatch"
       },
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-        "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
-        "source_name": "2026-08-28 final-gate execution-state.json",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "review-and-discovery",
-      "risk": "medium",
-      "model_tiers": ["flash", "pro"],
-      "process": "dispatch"
+      "confidence": "medium",
+      "contraindications": [
+        "Do not hardwire recall/precision to a permanent model name"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger",
+        "Run-to-run variance is an observed envelope, not a fixed property"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "medium",
-    "contraindications": [
-      "Do not hardwire recall/precision to a permanent model name"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger",
-      "Run-to-run variance is an observed envelope, not a fixed property"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-model-003",
-    "category": "model",
-    "claim": "Flash can become literal, pedantic or stall on architecture rework; escalate after a bounded non-progress or fail budget rather than looping indefinitely.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "learning-traceability.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "architecture-rework",
-      "risk": "high",
-      "model_tiers": ["flash"],
-      "process": "dispatch"
-    },
-    "confidence": "medium",
-    "contraindications": [
-      "Escalation must remain bounded and cost-ceiling aware"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-harness-001",
-    "category": "harness",
-    "claim": "Native delegation tools can outcompete the SkillWeave flow, especially in Antigravity; a bypass attempt must be visible and fail closed, with tool names kept as adapter data.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "2026-08-28-antigravity-vs-skillweave-harness.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "harness-adherence",
-      "risk": "high",
-      "harness": {
-        "capabilities": ["native-tool"],
-        "control_surfaces": ["delegation"]
+    {
+      "entry_id": "sw1311-model-003",
+      "category": "model",
+      "claim": "Flash can become literal, pedantic or stall on architecture rework; escalate after a bounded non-progress or fail budget rather than looping indefinitely.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "learning-traceability.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "architecture-rework",
+        "risk": "high",
+        "model_tiers": [
+          "flash"
+        ],
+        "process": "dispatch"
       },
-      "process": "dispatch"
+      "confidence": "medium",
+      "contraindications": [
+        "Escalation must remain bounded and cost-ceiling aware"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "medium",
-    "contraindications": [
-      "Tool names are adapter data only; never hardcode a harness-specific command in core"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger; real proof status remains per harness and machine"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-harness-002",
-    "category": "harness",
-    "claim": "Stale installed skill assets can make a correct harness run an old contract; bind installed skill and capability digests into preflight and refuse a mismatch.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "2026-08-28-skillweave-138-fixes.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "preflight-digest-binding",
-      "risk": "high",
-      "harness": {
-        "capabilities": ["installed-skill-digest"]
+    {
+      "entry_id": "sw1311-harness-001",
+      "category": "harness",
+      "claim": "Native delegation tools can outcompete the SkillWeave flow, especially in Antigravity; a bypass attempt must be visible and fail closed, with tool names kept as adapter data.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "2026-08-28-antigravity-vs-skillweave-harness.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "harness-adherence",
+        "risk": "high",
+        "harness": {
+          "capabilities": [
+            "native-tool"
+          ],
+          "control_surfaces": [
+            "delegation"
+          ]
+        },
+        "process": "dispatch"
       },
-      "process": "dispatch"
+      "confidence": "medium",
+      "contraindications": [
+        "Tool names are adapter data only; never hardcode a harness-specific command in core"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger; real proof status remains per harness and machine"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "medium",
-    "contraindications": [
-      "A missing or stale digest must refuse a worker launch"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-harness-003",
-    "category": "harness",
-    "claim": "Claude Desktop, Codex, Antigravity and OpenCode expose different native control surfaces; describe capabilities (native_tool, external_process, in_place, status/cancel) rather than hardcoded commands, with stable parity deferred.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "2026-08-28-model-diversity-granularity.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "harness-control-surface",
-      "risk": "medium",
-      "harness": {
-        "capabilities": ["native-tool", "external-process", "in-place", "status", "cancel"],
-        "names": ["Claude Desktop", "Codex", "Antigravity", "OpenCode"]
-      }
-    },
-    "confidence": "medium",
-    "contraindications": [
-      "Harness names here are opaque adapter data, never core behavior"
-    ],
-    "limitations": [
-      "Real proof status remains per harness and machine; stable transport parity stays deferred"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-process-001",
-    "category": "process",
-    "claim": "Shell, PID and log grepping is fragile; exit code alone cannot express completion, so a structured append-only child-job contract with separate technical status, task verdict, evidence state and gate verdict is used.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "2026-08-28-dispatch-workflow.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "child-job-contract",
-      "risk": "medium",
-      "process": "dispatch"
-    },
-    "confidence": "high",
-    "contraindications": [
-      "Never infer completion from exit code alone"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-process-002",
-    "category": "process",
-    "claim": "Headless OpenCode processes can wait for input indefinitely; noninteractive jobs declare stdin policy and an input request becomes a typed failure with heartbeat expiry and timeout producing deterministic termination receipts.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "2026-08-28-skillweave-dispatch-workflow.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "headless-lifecycle",
-      "risk": "medium",
-      "harness": {
-        "capabilities": ["stdin", "status"]
+    {
+      "entry_id": "sw1311-harness-002",
+      "category": "harness",
+      "claim": "Stale installed skill assets can make a correct harness run an old contract; bind installed skill and capability digests into preflight and refuse a mismatch.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "2026-08-28-skillweave-138-fixes.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "preflight-digest-binding",
+        "risk": "high",
+        "harness": {
+          "capabilities": [
+            "installed-skill-digest"
+          ]
+        },
+        "process": "dispatch"
       },
-      "process": "dispatch"
+      "confidence": "medium",
+      "contraindications": [
+        "A missing or stale digest must refuse a worker launch"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "medium",
-    "contraindications": [
-      "Heartbeat expiry and timeout are deterministic terminations, not review failures"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-review-001",
-    "category": "review",
-    "claim": "A reviewer can state an incorrect digest while still finding a valid defect; findings receive independent dispositions and adjudication can uphold one finding and reject or narrow another without accepting or rejecting the whole narrative.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-        "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
-        "source_name": "final-controller-gate.md",
-        "sensitivity": "restricted"
+    {
+      "entry_id": "sw1311-harness-003",
+      "category": "harness",
+      "claim": "Claude Desktop, Codex, Antigravity and OpenCode expose different native control surfaces; describe capabilities (native_tool, external_process, in_place, status/cancel) rather than hardcoded commands, with stable parity deferred.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "2026-08-28-model-diversity-granularity.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "harness-control-surface",
+        "risk": "medium",
+        "harness": {
+          "capabilities": [
+            "native-tool",
+            "external-process",
+            "in-place",
+            "status",
+            "cancel"
+          ],
+          "names": [
+            "Claude Desktop",
+            "Codex",
+            "Antigravity",
+            "OpenCode"
+          ]
+        }
       },
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-        "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
-        "source_name": "2026-08-28 final-gate execution-state.json",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "review-disposition",
-      "risk": "high",
-      "review": {
-        "kind": "adjudication"
-      },
-      "process": "review"
+      "confidence": "medium",
+      "contraindications": [
+        "Harness names here are opaque adapter data, never core behavior"
+      ],
+      "limitations": [
+        "Real proof status remains per harness and machine; stable transport parity stays deferred"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "high",
-    "contraindications": [
-      "Findings never collapse into one verdict"
-    ],
-    "limitations": [
-      "The incorrect digest finding did not invalidate the upheld empty-group probe"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-review-002",
-    "category": "review",
-    "claim": "One reviewer can miss an edge case even after lane tests pass; critical final gates use two independent reviewers on identical immutable subjects, both must pass, and material contradictions block.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-        "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
-        "source_name": "final-controller-gate.md",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "critical-final-gate",
-      "risk": "critical",
-      "review": {
-        "kind": "final_gauntlet",
-        "reviewer_tiers": ["flash", "pro"]
+    {
+      "entry_id": "sw1311-process-001",
+      "category": "process",
+      "claim": "Shell, PID and log grepping is fragile; exit code alone cannot express completion, so a structured append-only child-job contract with separate technical status, task verdict, evidence state and gate verdict is used.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "2026-08-28-dispatch-workflow.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "child-job-contract",
+        "risk": "medium",
+        "process": "dispatch"
       },
-      "process": "review"
+      "confidence": "high",
+      "contraindications": [
+        "Never infer completion from exit code alone"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "high",
-    "contraindications": [
-      "Final gates use negative real-process fixtures; green unit tests alone are insufficient"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-topology-001",
-    "category": "topology",
-    "claim": "Worktree isolation enabled large parallel gains but moves conflicts to late integration; parallel lanes require preflight write-set collisions, declared integration order and rebase to the current integration tip.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "2026-08-28-methodology-gauntlet-ralph-loop.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "parallel-topology",
-      "risk": "high",
-      "topology": {
-        "mode": "worktree",
-        "parallelism": true
+    {
+      "entry_id": "sw1311-process-002",
+      "category": "process",
+      "claim": "Headless OpenCode processes can wait for input indefinitely; noninteractive jobs declare stdin policy and an input request becomes a typed failure with heartbeat expiry and timeout producing deterministic termination receipts.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "2026-08-28-skillweave-dispatch-workflow.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "headless-lifecycle",
+        "risk": "medium",
+        "harness": {
+          "capabilities": [
+            "stdin",
+            "status"
+          ]
+        },
+        "process": "dispatch"
       },
-      "process": "dispatch"
+      "confidence": "medium",
+      "contraindications": [
+        "Heartbeat expiry and timeout are deterministic terminations, not review failures"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "high",
-    "contraindications": [
-      "Full parallelism must never ignore semantic dependency"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-benchmark-001",
-    "category": "process",
-    "claim": "The supplied research's Reddit benchmark is a single-codebase prior, not a universal ranking or price claim; SkillWeave must replace priors with its own receipt-bound observations.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-        "sha256": "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e",
-        "source_name": "learning-traceability.md",
-        "sensitivity": "internal"
-      }
-    ],
-    "observed_scope": {
-      "task": "benchmark-limitation",
-      "risk": "low",
-      "process": "research"
-    },
-    "confidence": "high",
-    "contraindications": [
-      "A single-codebase benchmark must never be treated as universal truth or live pricing"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-finalgate-empty-group-001",
-    "category": "review",
-    "claim": "The final 1.3.8 Pro/Flash Gauntlet found an empty dispatch_order.criteria edge case missed earlier; it was upheld, while the overbroad interpretation that a valid all-nonempty regrouping must fail was rejected.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-        "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
-        "source_name": "final-controller-gate.md",
-        "sensitivity": "restricted"
+    {
+      "entry_id": "sw1311-review-001",
+      "category": "review",
+      "claim": "A reviewer can state an incorrect digest while still finding a valid defect; findings receive independent dispositions and adjudication can uphold one finding and reject or narrow another without accepting or rejecting the whole narrative.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
+          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "source_name": "final-controller-gate.md",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-final-controller-gate"
+        },
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "source_name": "2026-08-28 final-gate execution-state.json",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-execution-state"
+        }
+      ],
+      "observed_scope": {
+        "task": "review-disposition",
+        "risk": "high",
+        "review": {
+          "kind": "adjudication"
+        },
+        "process": "review"
       },
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-        "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
-        "source_name": "2026-08-28 final-gate execution-state.json",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "empty-dispatch-group",
-      "risk": "critical",
-      "review": {
-        "kind": "final_gauntlet",
-        "reviewer_tiers": ["flash", "pro"]
-      },
-      "process": "review"
+      "confidence": "high",
+      "contraindications": [
+        "Findings never collapse into one verdict"
+      ],
+      "limitations": [
+        "The incorrect digest finding did not invalidate the upheld empty-group probe"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "high",
-    "contraindications": [
-      "Exactly-once and nonempty dispatch groups remain mandatory"
-    ],
-    "limitations": [
-      "The incorrect-digest finding reported by Flash did not invalidate the upheld empty-group probe"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active"
-  },
-  {
-    "entry_id": "sw1311-finalgate-supersession-001",
-    "category": "review",
-    "claim": "Earlier 1.3.8 final-gate-001 remediation evidence is superseded by the R2 dual-gauntlet evidence on identical immutable SHAs.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-        "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
-        "source_name": "2026-08-28 final-gate execution-state.json",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "final-gate-evolution",
-      "risk": "high",
-      "review": {
-        "kind": "final_gauntlet",
-        "reviewer_tiers": ["flash", "pro"]
+    {
+      "entry_id": "sw1311-review-002",
+      "category": "review",
+      "claim": "One reviewer can miss an edge case even after lane tests pass; critical final gates use two independent reviewers on identical immutable subjects, both must pass, and material contradictions block.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
+          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "source_name": "final-controller-gate.md",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-final-controller-gate"
+        }
+      ],
+      "observed_scope": {
+        "task": "critical-final-gate",
+        "risk": "critical",
+        "review": {
+          "kind": "final_gauntlet",
+          "reviewer_tiers": [
+            "flash",
+            "pro"
+          ]
+        },
+        "process": "review"
       },
-      "process": "review"
+      "confidence": "high",
+      "contraindications": [
+        "Final gates use negative real-process fixtures; green unit tests alone are insufficient"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "medium",
-    "contraindications": [
-      "Retained and queryable history; never overwrite the earlier evidence"
-    ],
-    "limitations": [
-      "This entry is a tracked version relation, not a product change"
-    ],
-    "review_date": "2026-08-28",
-    "status": "superseded",
-    "supersedes": null,
-    "disposition": "Superseded by sw1311-finalgate-r2-001; retained for history with this disposition and date."
-  },
-  {
-    "entry_id": "sw1311-finalgate-r2-001",
-    "category": "review",
-    "claim": "Final Gauntlet R2 on identical immutable triples: independent concurrent Pro and Flash reviews both returned exact REVIEW_PASS with no material contradiction.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-        "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
-        "source_name": "final-controller-gate.md",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "critical-final-gate",
-      "risk": "critical",
-      "review": {
-        "kind": "final_gauntlet",
-        "reviewer_tiers": ["flash", "pro"]
+    {
+      "entry_id": "sw1311-topology-001",
+      "category": "topology",
+      "claim": "Worktree isolation enabled large parallel gains but moves conflicts to late integration; parallel lanes require preflight write-set collisions, declared integration order and rebase to the current integration tip.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "2026-08-28-methodology-gauntlet-ralph-loop.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "parallel-topology",
+        "risk": "high",
+        "topology": {
+          "mode": "worktree",
+          "parallelism": true
+        },
+        "process": "dispatch"
       },
-      "process": "review"
+      "confidence": "high",
+      "contraindications": [
+        "Full parallelism must never ignore semantic dependency"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "high",
-    "contraindications": [
-      "Advance only on controller PASS plus a separate cold REVIEW_PASS"
-    ],
-    "limitations": [
-      "Represented through the repository-contained learning ledger"
-    ],
-    "review_date": "2026-08-28",
-    "status": "active",
-    "supersedes": "sw1311-finalgate-supersession-001"
-  },
-  {
-    "entry_id": "sw1311-finalgate-digest-001",
-    "category": "review",
-    "claim": "Flash reported a noncanonical mirror digest in the 1.3.8 final gauntlet; the controller and Pro independently observed the canonical digest, so the incorrect digest did not invalidate the upheld empty-group probe.",
-    "provenance_artifacts": [
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-        "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
-        "source_name": "2026-08-28 final-gate execution-state.json",
-        "sensitivity": "restricted"
+    {
+      "entry_id": "sw1311-benchmark-001",
+      "category": "process",
+      "claim": "The supplied research's Reddit benchmark is a single-codebase prior, not a universal ranking or price claim; SkillWeave must replace priors with its own receipt-bound observations.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "source_name": "learning-traceability.md",
+          "sensitivity": "internal",
+          "evidence_id": "ev-learning-traceability"
+        }
+      ],
+      "observed_scope": {
+        "task": "benchmark-limitation",
+        "risk": "low",
+        "process": "research"
       },
-      {
-        "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-        "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
-        "source_name": "final-controller-gate.md",
-        "sensitivity": "restricted"
-      }
-    ],
-    "observed_scope": {
-      "task": "digest-verification",
-      "risk": "high",
-      "review": {
-        "kind": "adjudication"
+      "confidence": "high",
+      "contraindications": [
+        "A single-codebase benchmark must never be treated as universal truth or live pricing"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
+    },
+    {
+      "entry_id": "sw1311-finalgate-empty-group-001",
+      "category": "review",
+      "claim": "The final 1.3.8 Pro/Flash Gauntlet found an empty dispatch_order.criteria edge case missed earlier; it was upheld, while the overbroad interpretation that a valid all-nonempty regrouping must fail was rejected.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
+          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "source_name": "final-controller-gate.md",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-final-controller-gate"
+        },
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "source_name": "2026-08-28 final-gate execution-state.json",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-execution-state"
+        }
+      ],
+      "observed_scope": {
+        "task": "empty-dispatch-group",
+        "risk": "critical",
+        "review": {
+          "kind": "final_gauntlet",
+          "reviewer_tiers": [
+            "flash",
+            "pro"
+          ]
+        },
+        "process": "review"
       },
-      "process": "review"
+      "confidence": "high",
+      "contraindications": [
+        "Exactly-once and nonempty dispatch groups remain mandatory"
+      ],
+      "limitations": [
+        "The incorrect-digest finding reported by Flash did not invalidate the upheld empty-group probe"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active"
     },
-    "confidence": "high",
-    "contraindications": [
-      "An inaccurate reviewer digest must never invalidate a separately upheld finding"
-    ],
-    "limitations": [
-      "Canonical mirror digest 76b8dbb3f4e4ca395f803373e21e64044b2983f3dee0e2bba8c5b9bc0320cc6a"
-    ],
-    "validity_window": {
-      "start": "2026-08-28",
-      "end": null
+    {
+      "entry_id": "sw1311-finalgate-supersession-001",
+      "category": "review",
+      "claim": "Earlier 1.3.8 final-gate-001 remediation evidence is superseded by the R2 dual-gauntlet evidence on identical immutable SHAs.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "source_name": "2026-08-28 final-gate execution-state.json",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-execution-state"
+        }
+      ],
+      "observed_scope": {
+        "task": "final-gate-evolution",
+        "risk": "high",
+        "review": {
+          "kind": "final_gauntlet",
+          "reviewer_tiers": [
+            "flash",
+            "pro"
+          ]
+        },
+        "process": "review"
+      },
+      "confidence": "medium",
+      "contraindications": [
+        "Retained and queryable history; never overwrite the earlier evidence"
+      ],
+      "limitations": [
+        "This entry is a tracked version relation, not a product change"
+      ],
+      "review_date": "2026-08-28",
+      "status": "superseded",
+      "supersedes": null,
+      "disposition": "Superseded by sw1311-finalgate-r2-001; retained for history with this disposition and date."
     },
-    "status": "active"
-  }
-]
+    {
+      "entry_id": "sw1311-finalgate-r2-001",
+      "category": "review",
+      "claim": "Final Gauntlet R2 on identical immutable triples: independent concurrent Pro and Flash reviews both returned exact REVIEW_PASS with no material contradiction.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
+          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "source_name": "final-controller-gate.md",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-final-controller-gate"
+        }
+      ],
+      "observed_scope": {
+        "task": "critical-final-gate",
+        "risk": "critical",
+        "review": {
+          "kind": "final_gauntlet",
+          "reviewer_tiers": [
+            "flash",
+            "pro"
+          ]
+        },
+        "process": "review"
+      },
+      "confidence": "high",
+      "contraindications": [
+        "Advance only on controller PASS plus a separate cold REVIEW_PASS"
+      ],
+      "limitations": [
+        "Represented through the repository-contained learning ledger"
+      ],
+      "review_date": "2026-08-28",
+      "status": "active",
+      "supersedes": "sw1311-finalgate-supersession-001"
+    },
+    {
+      "entry_id": "sw1311-finalgate-digest-001",
+      "category": "review",
+      "claim": "Flash reported a noncanonical mirror digest in the 1.3.8 final gauntlet; the controller and Pro independently observed the canonical digest, so the incorrect digest did not invalidate the upheld empty-group probe.",
+      "provenance_artifacts": [
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "source_name": "2026-08-28 final-gate execution-state.json",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-execution-state"
+        },
+        {
+          "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
+          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "source_name": "final-controller-gate.md",
+          "sensitivity": "restricted",
+          "evidence_id": "ev-final-controller-gate"
+        }
+      ],
+      "observed_scope": {
+        "task": "digest-verification",
+        "risk": "high",
+        "review": {
+          "kind": "adjudication"
+        },
+        "process": "review"
+      },
+      "confidence": "high",
+      "contraindications": [
+        "An inaccurate reviewer digest must never invalidate a separately upheld finding"
+      ],
+      "limitations": [
+        "Canonical mirror digest 76b8dbb3f4e4ca395f803373e21e64044b2983f3dee0e2bba8c5b9bc0320cc6a"
+      ],
+      "validity_window": {
+        "start": "2026-08-28",
+        "end": null
+      },
+      "status": "active"
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "ev-execution-state",
+      "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+      "content": "Provider-neutral execution-state observation (redacted): a structured append-only child-job contract records technical status, task verdict, evidence state and gate verdict separately; deterministic termination receipts are produced on heartbeat expiry or timeout. Redacted of private prompts, secrets and hidden reasoning.",
+      "source_name": "2026-08-28 final-gate execution-state.json",
+      "source_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+      "sensitivity": "restricted"
+    },
+    {
+      "evidence_id": "ev-final-controller-gate",
+      "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+      "content": "Provider-neutral review-gate observation (redacted): independent review may state an incorrect digest while still finding a valid defect; findings carry separate dispositions and adjudication may uphold one finding and reject another. Redacted of private prompts, secrets and hidden reasoning.",
+      "source_name": "final-controller-gate.md",
+      "source_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
+      "sensitivity": "restricted"
+    },
+    {
+      "evidence_id": "ev-learning-traceability",
+      "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+      "content": "Provider-neutral learning observation (redacted): Flash and Pro capability tiers show complementary, scoped strengths across bounded implementation, architecture, state, migration, adversarial review and bug/edge-case recall. Private prompts, secrets and hidden reasoning are redacted from this snapshot.",
+      "source_name": "learning-traceability.md",
+      "source_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
+      "sensitivity": "internal"
+    }
+  ]
+}

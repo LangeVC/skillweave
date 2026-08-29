@@ -67,6 +67,7 @@ from skillweave.transfer.catalog import (  # noqa: E402
     assert_catalog_authority,
     entry_resolution_status,
     export,
+    resolve_provenance,
     retrieve,
     validate_catalog,
     validate_entry,
@@ -82,13 +83,22 @@ _FIXTURE_PATH = (
     / "2026-08-28-dispatch-learnings.json"
 )
 
-_TRACEABILITY_SHA = "c2356b7eed846ebf5ae152ff6fa93a7172396b8f297472706a9f5ba6bd5edb9e"
-_FINAL_GATE_SHA = "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25"
-_EXEC_STATE_SHA = "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b"
+_TRACEABILITY_SHA = "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124"
+_FINAL_GATE_SHA = "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30"
+_EXEC_STATE_SHA = "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a"
+
+
+def _document() -> dict:
+    """The full fixture document: ``{"entries": [...], "evidence": [...]}``."""
+    return json.loads(_FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
 def _fixture() -> list[dict]:
-    return json.loads(_FIXTURE_PATH.read_text(encoding="utf-8"))
+    return _document()["entries"]
+
+
+def _evidence() -> list[dict]:
+    return _document()["evidence"]
 
 
 def _catalog() -> Catalog:
@@ -144,6 +154,11 @@ def test_schema_accepts_provider_neutral_observation():
     for item in _fixture():
         errors = list(validator.iter_errors(item))
         assert errors == [], (item.get("entry_id"), [e.message for e in errors])
+    # shipped evidence items also conform to the evidence_item definition.
+    evidence_validator = jsonschema.Draft202012Validator(schema["$defs"]["evidence_item"])
+    for item in _evidence():
+        errors = list(evidence_validator.iter_errors(item))
+        assert errors == [], (item.get("evidence_id"), [e.message for e in errors])
 
 
 def test_catalog_accepts_all_category_kind_observations():
@@ -316,7 +331,7 @@ def test_missing_provenance_fails_validation():
 
 def test_unresolvable_provenance_is_excluded_from_retrieval(tmp_path):
     with (tmp_path / "catalog.json").open("w", encoding="utf-8") as handle:
-        json.dump(_fixture(), handle)
+        json.dump(_document(), handle)
     catalog = Catalog.load(tmp_path / "catalog.json")
     fake_artifact = ProvenanceArtifact(artifact_path="missing/path.txt", sha256="")
     unresolved = Entry(
@@ -487,10 +502,10 @@ def test_unknown_categories_and_tiers_are_rejected():
 
 
 def test_non_mapping_catalog_item_is_excluded_not_dropped(tmp_path):
-    data = _fixture()
-    data.append("garbage-item")
+    doc = _document()
+    doc["entries"].append("garbage-item")
     path = tmp_path / "catalog-with-invalid.json"
-    path.write_text(json.dumps(data), encoding="utf-8")
+    path.write_text(json.dumps(doc), encoding="utf-8")
     catalog = Catalog.load(path)
     assert catalog.invalid
     # garbage is not an Entry, so not retrieved; valid entries still retrievable.
@@ -507,6 +522,387 @@ def test_validate_catalog_reports_invalid_and_valid():
     assert {e.entry_id for e in report.valid} == {
         e.entry_id for e in _catalog().entries
     }
+
+
+# ── C1 binding corrections ──────────────────────────────────────────────────
+#
+# F-01..F-06 plus duplicate ids, supersession, ordering, calendar dates,
+# malformed artifact/snapshot, digest mismatch and invalid-entry exclusion.
+
+
+# F-01: provenance resolution must never escape repo_root ───────────────────
+
+
+def test_provenance_rejects_parent_directory_escape(tmp_path):
+    artifact = ProvenanceArtifact(artifact_path="../../etc/passwd", sha256="0" * 64)
+    res = entry_resolution_status(
+        Entry(
+            entry_id="e",
+            category="process",
+            claim="c",
+            provenance_artifacts=(artifact,),
+            observed_scope=ObservedScope(task="t", risk="low"),
+            confidence="low",
+            limitations=("l",),
+            contraindications=(),
+            status="active",
+            review_date="2026-08-28",
+        ),
+        tmp_path,
+    )
+    assert res == ResolutionStatus.UNRESOLVED
+
+
+def test_provenance_rejects_absolute_path_escape(tmp_path):
+    artifact = ProvenanceArtifact(artifact_path="/etc/passwd", sha256="0" * 64)
+    res = resolve_provenance(artifact, tmp_path)
+    assert res.status == ResolutionStatus.UNRESOLVED
+    assert "escape" in res.note
+
+
+def test_provenance_rejects_symlink_escape(tmp_path):
+    # A symlink whose resolved target is a real file *outside* repo_root must
+    # still be rejected as an escape, even though the file exists.
+    outside_dir = tmp_path.parent / "outside-root"
+    outside_dir.mkdir(exist_ok=True)
+    outside_file = outside_dir / "outside.txt"
+    outside_file.write_text("secret", encoding="utf-8")
+    (tmp_path / "sneaky").symlink_to(outside_file)
+    artifact = ProvenanceArtifact(artifact_path="sneaky", sha256="0" * 64)
+    res = resolve_provenance(artifact, tmp_path)
+    assert res.status == ResolutionStatus.UNRESOLVED
+    assert "escape" in res.note
+
+
+def test_provenance_rejects_symlink_pointing_outside(tmp_path):
+    sys_tmp = Path("/tmp")
+    (tmp_path / "sys-link").symlink_to(sys_tmp / "definitely-missing-outside")
+    artifact = ProvenanceArtifact(artifact_path="sys-link", sha256="0" * 64)
+    res = resolve_provenance(artifact, tmp_path)
+    assert res.status == ResolutionStatus.UNRESOLVED
+
+
+# F-02: malformed nested types fail closed as recorded invalid entries ──────
+
+
+def test_malformed_review_type_is_recorded_invalid(tmp_path):
+    doc = _document()
+    doc["entries"][0]["observed_scope"]["review"] = "oops"
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    assert any("review" in p for _, ps in catalog.invalid for p in ps) or catalog.invalid
+
+
+def test_malformed_topology_list_is_recorded_invalid(tmp_path):
+    doc = _document()
+    doc["entries"][0]["observed_scope"]["topology"] = ["not", "object"]
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    assert catalog.invalid
+
+
+def test_one_bad_entry_does_not_abort_catalog(tmp_path):
+    doc = _document()
+    doc["entries"].append(
+        {
+            "entry_id": "bad",
+            "category": "model",
+            "claim": "c",
+            # malformed nested type: model_tiers must be an array
+            "observed_scope": {
+                "task": "t",
+                "risk": "low",
+                "model_tiers": "flash",
+            },
+            "confidence": "low",
+            "limitations": ["l"],
+            "contraindications": [],
+            "status": "active",
+            "review_date": "2026-08-28",
+        }
+    )
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    assert catalog.invalid
+    assert len(catalog.entries) == len(_fixture())
+
+
+def test_no_uncaught_type_error_for_scalar_mismatch():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["confidence"] = True  # bool instead of string
+    with pytest.raises(CatalogValidationError):
+        Entry.from_dict(raw)
+
+
+# F-03: normalization-aware restricted-field matching ────────────────────────
+
+
+def test_export_redacts_separator_and_case_variants():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "API_KEY": "v1",
+        "api-key": "v2",
+        "Private_Prompt": "v3",
+        "hidden reason ing": "v4",
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    for secret in ("v1", "v2", "v3", "v4"):
+        assert secret not in exported
+    assert "***REDACTED***" in exported
+
+
+def test_export_redacts_restricted_fields_inside_lists():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {"notes": [{"api_key": "leaked-1"}, {"API_KEY": "leaked-2"}]}
+    entry = Entry.from_dict(raw)
+    exported = export([entry])[0]
+    flat = json.dumps(exported)
+    assert "leaked-1" not in flat
+    assert "leaked-2" not in flat
+
+
+def test_export_redacts_restricted_top_level_field():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {"chain_of_thought": "reasoning"}
+    entry = Entry.from_dict(raw)
+    exported = export([entry], fields=["metadata"])[0]
+    assert exported["metadata"]["chain_of_thought"] == "***REDACTED***"
+
+
+# F-04: runtime validation agrees with schema (no bool/number coercion) ──────
+
+
+def test_runtime_rejects_bool_review_date_like_schema():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["review_date"] = True
+    with pytest.raises(CatalogValidationError):
+        Entry.from_dict(raw)
+
+
+def test_runtime_rejects_numeric_entry_id_like_schema():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["entry_id"] = 123
+    with pytest.raises(CatalogValidationError):
+        Entry.from_dict(raw)
+
+
+def test_runtime_rejects_bool_as_number_topology_parallelism():
+    if jsonschema is None:
+        pytest.skip("jsonschema not installed")
+    raw = catalog_entry_for("sw1311-topology-001").to_dict()
+    raw["observed_scope"]["topology"]["parallelism"] = 1  # bool-as-number
+    with pytest.raises(CatalogValidationError):
+        Entry.from_dict(raw)
+    # JSON Schema also rejects it (boolean expected).
+    schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = list(validator.iter_errors(raw))
+    assert errors
+
+
+def test_runtime_rejects_unknown_key_like_schema():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["made_up_field"] = "x"
+    entry = Entry.from_dict(raw)
+    assert any("unknown field" in p for p in validate_entry(entry))
+
+
+def test_schema_and_runtime_agree_on_validity_window():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["validity_window"] = {"start": "2026-13-45", "end": None}
+    entry = Entry.from_dict(raw)
+    assert any("start" in p for p in validate_entry(entry))
+
+
+# F-05: value immutability, no shallow aliasing ──────────────────────────────
+
+
+def test_source_dict_mutation_does_not_affect_entry():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {"stable": "value"}
+    raw["observed_scope"]["review"] = {"kind": "final_gauntlet"}
+    entry = Entry.from_dict(raw)
+    raw["metadata"]["injected"] = "mutated"
+    raw["observed_scope"]["review"]["kind"] = "adjudication"
+    assert "injected" not in entry.metadata
+    assert entry.observed_scope.review.get("kind") != "adjudication"
+
+
+def test_nested_mutation_through_entry_surface_raises():
+    entry = catalog_entry_for("sw1311-review-001")
+    with pytest.raises(TypeError):
+        entry.observed_scope.review["kind"] = "adjudication"  # type: ignore[index]
+
+
+def test_to_dict_returns_copy_not_alias():
+    entry = catalog_entry_for("sw1311-review-001")
+    data = entry.to_dict()
+    data["observed_scope"]["review"]["kind"] = "mutated"
+    assert entry.observed_scope.review.get("kind") != "mutated"
+
+
+# F-06: verifiable, redacted, content-addressed evidence ─────────────────────
+
+
+def test_evidence_snapshot_digest_matches_embedded_content():
+    catalog = _catalog()
+    for item in catalog.evidence.items:
+        assert item.verify(), item.evidence_id
+
+
+def test_bare_digest_without_evidence_is_unresolved(tmp_path):
+    artifact = ProvenanceArtifact(artifact_path="missing.txt", sha256="0" * 64)
+    res = resolve_provenance(artifact, tmp_path, evidence=_catalog().evidence)
+    assert res.status == ResolutionStatus.UNRESOLVED
+
+
+def test_digest_mismatch_against_evidence_is_excluded(tmp_path):
+    artifact = ProvenanceArtifact(
+        artifact_path=".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
+        sha256="0" * 64,
+        evidence_id="ev-execution-state",
+    )
+    res = resolve_provenance(artifact, tmp_path, evidence=_catalog().evidence)
+    assert res.status == ResolutionStatus.MISMATCH
+
+
+def test_missing_evidence_reference_is_excluded(tmp_path):
+    doc = _document()
+    doc["entries"].append(
+        {
+            "entry_id": "bad-evidence",
+            "category": "process",
+            "claim": "c",
+            "provenance_artifacts": [
+                {
+                    "artifact_path": "p.txt",
+                    "sha256": "0" * 64,
+                    "evidence_id": "ev-does-not-exist",
+                }
+            ],
+            "observed_scope": {"task": "t", "risk": "low"},
+            "confidence": "low",
+            "limitations": ["l"],
+            "contraindications": [],
+            "status": "active",
+            "review_date": "2026-08-28",
+        }
+    )
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    context = RetrievalContext(task="t", risk="low")
+    result = retrieve(catalog, context, repo_root=tmp_path)
+    assert "bad-evidence" not in {o.entry_id for o in result.advisory}
+    assert "bad-evidence" not in {o.entry_id for o in result.superseded}
+
+
+def test_evidence_content_is_redacted_no_secrets():
+    doc = _document()
+    for item in doc["evidence"]:
+        content = item["content"]
+        # no real secret material: no key-shaped values, no prompt bodies.
+        for pattern in ("sk-", "AKIA", "BEGIN PRIVATE", "key=", "token=", "password="):
+            assert pattern not in content, item["evidence_id"]
+
+
+# Additional coverage ────────────────────────────────────────────────────────
+
+
+def test_duplicate_entry_ids_are_rejected(tmp_path):
+    doc = _document()
+    doc["entries"].append(catalog_entry_for("sw1311-model-001").to_dict())
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    report = validate_catalog(catalog, repo_root=_REPO_ROOT)
+    assert any("duplicate entry_id" in p for _, ps in report.invalid for p in ps)
+
+
+def test_missing_supersession_target_is_rejected(tmp_path):
+    doc = _document()
+    doc["entries"].append(
+        {
+            "entry_id": "orphan-superseder",
+            "category": "review",
+            "claim": "c",
+            "provenance_artifacts": [
+                {
+                    "artifact_path": "x.txt",
+                    "sha256": "0" * 64,
+                    "evidence_id": "ev-learning-traceability",
+                }
+            ],
+            "observed_scope": {"task": "t", "risk": "low"},
+            "confidence": "low",
+            "limitations": ["l"],
+            "contraindications": [],
+            "status": "active",
+            "review_date": "2026-08-28",
+            "supersedes": "does-not-exist",
+        }
+    )
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    report = validate_catalog(catalog, repo_root=_REPO_ROOT)
+    assert any("does not exist" in p for _, ps in report.invalid for p in ps)
+
+
+def test_supersession_cycle_is_rejected(tmp_path):
+    doc = _document()
+    entry_a = catalog_entry_for("sw1311-model-001").to_dict()
+    entry_a["entry_id"] = "cycle-a"
+    entry_a["supersedes"] = "cycle-b"
+    entry_b = catalog_entry_for("sw1311-model-001").to_dict()
+    entry_b["entry_id"] = "cycle-b"
+    entry_b["supersedes"] = "cycle-a"
+    doc["entries"].extend([entry_a, entry_b])
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    report = validate_catalog(catalog, repo_root=_REPO_ROOT)
+    assert any("cycle" in p for _, ps in report.invalid for p in ps)
+
+
+def test_retrieval_order_is_deterministic():
+    context = RetrievalContext(task="review-and-discovery", risk="medium")
+    first = retrieve(_catalog(), context, repo_root=_REPO_ROOT)
+    second = retrieve(_catalog(), context, repo_root=_REPO_ROOT)
+    assert [o.entry_id for o in first.advisory] == [o.entry_id for o in second.advisory]
+    assert [o.entry_id for o in first.superseded] == [o.entry_id for o in second.superseded]
+
+
+def test_invalid_calendar_dates_rejected():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["review_date"] = "2026-02-30"
+    assert any("date" in p for p in validate_entry(Entry.from_dict(raw)))
+    raw2 = catalog_entry_for("sw1311-model-001").to_dict()
+    raw2.pop("review_date")
+    raw2["validity_window"] = {"start": "2026-12-31", "end": "2026-01-01"}
+    assert any("after" in p for p in validate_entry(Entry.from_dict(raw2)))
+
+
+def test_malformed_artifact_data_recorded_invalid(tmp_path):
+    doc = _document()
+    doc["entries"][0]["provenance_artifacts"] = "not-a-list"
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    assert catalog.invalid
+
+
+def test_evidence_digest_mismatch_recorded_invalid(tmp_path):
+    doc = _document()
+    doc["evidence"][0]["sha256"] = "0" * 64
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    catalog = Catalog.load(path)
+    assert any("does not match" in p for _, ps in catalog.invalid for p in ps)
 
 
 def _run_all() -> int:

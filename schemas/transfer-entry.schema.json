@@ -108,16 +108,20 @@
         "sha256": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$",
-          "description": "Content address of the immutable artifact; makes provenance resolvable even when the file is not checked out."
+          "description": "Content address of the immutable artifact; makes provenance resolvable even when the file is not checked out. Must be verifiable against the referenced evidence item's embedded redacted content, not a bare assertion."
         },
         "source_name": {
           "type": "string",
-          "description": "Explicit source name retained as-is (e.g. the 2026-08-28 report filename)."
+          "description": "Explicit source name retained as-is (e.g. the 2026-08-28 report filename). Non-authoritative label only."
         },
         "sensitivity": {
           "type": "string",
           "enum": ["public", "internal", "confidential", "restricted"],
           "description": "Artifact sensitivity; export applies the artifact policy and redacts content above the allowed level."
+        },
+        "evidence_id": {
+          "type": "string",
+          "description": "Identifier of a redacted, content-addressed evidence item in the catalog evidence store. When present, provenance is verified by recomputing the evidence digest from its embedded content; a bare digest alone is not sufficient."
         }
       }
     },
@@ -195,6 +199,41 @@
             },
             "parallelism": { "type": "boolean" }
           }
+        }
+      }
+    },
+    "evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "sha256", "content"],
+      "description": "A redacted, content-addressed evidence snapshot. ``content`` never embeds private prompts, secrets or hidden reasoning; ``sha256`` must equal the canonical SHA-256 of ``content``.",
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier referenced by provenance artifacts."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 of the canonical redacted content; recomputable for verification."
+        },
+        "content": {
+          "type": "string",
+          "description": "Deterministic, redacted representation of the referenced evidence. Never secrets, private prompts or hidden reasoning."
+        },
+        "source_name": {
+          "type": "string",
+          "description": "Explicit source name retained as a non-authoritative label."
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Repository-relative source path retained as a non-authoritative label."
+        },
+        "sensitivity": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "Sensitivity of the evidence snapshot; export redacts content above the allowed level."
         }
       }
     }
