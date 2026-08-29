@@ -31,7 +31,7 @@ _src = Path(__file__).resolve().parent.parent.parent / "src"
 if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
-from skillweave.dispatch import (  # noqa: E402
+from skillweave.dispatch.model_policy import (  # noqa: E402
     AllocationError,
     AllocationSignals,
     ESCALATION_THRESHOLD,
