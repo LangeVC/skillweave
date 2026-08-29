@@ -1394,4 +1394,3 @@ def test_disjoint_lanes_without_integration_declaration_need_no_eligibility(tmp_
     assert fanout.batches == [["lane-a", "lane-b"]]
     assert inline.calls == 0
     assert run.halted is False
-
