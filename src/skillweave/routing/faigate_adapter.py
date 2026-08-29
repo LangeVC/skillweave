@@ -85,6 +85,43 @@ def _extract_answer(envelope: dict, requested_model: str) -> AttributedResponse:
     return AttributedResponse(content, requested_model=requested_model, answering_model=answering_model)
 
 
+FAIGATE_MAP = {
+    "sonnet": "anthropic-sonnet",
+    "claude-sonnet-4-5": "anthropic-sonnet",
+    "haiku": "anthropic-haiku",
+    "claude-haiku-3-5": "anthropic-haiku",
+    "opus": "anthropic-claude",
+    "claude-opus-4": "anthropic-claude",
+    "gpt-4o": "openai-gpt4o",
+    "gpt-4o-mini": "gemini-flash",
+    "gemini-pro": "gemini-pro",
+    "gemini-2-5-pro": "gemini-pro",
+    "deepseek-v4": "deepseek-v4-pro",
+    "deepseek-v4-pro": "deepseek-v4-pro",
+    "llama-4": "openrouter-fallback",
+    "llama-4-maverick": "openrouter-fallback",
+    "mistral": "anthropic-claude",
+    "mistral-large": "anthropic-claude",
+}
+
+OPENROUTER_MAP = {
+    "sonnet": "anthropic/claude-3.5-sonnet",
+    "claude-sonnet-4-5": "anthropic/claude-3.5-sonnet",
+    "haiku": "anthropic/claude-3-haiku",
+    "claude-haiku-3-5": "anthropic/claude-3-haiku",
+    "opus": "anthropic/claude-3-opus",
+    "claude-opus-4": "anthropic/claude-3-opus",
+    "gpt-4o": "openai/gpt-4o",
+    "gpt-4o-mini": "openai/gpt-4o-mini",
+    "gemini-pro": "google/gemini-pro-1.5",
+    "gemini-2-5-pro": "google/gemini-pro-1.5",
+    "deepseek-v4": "deepseek/deepseek-coder",
+    "deepseek-v4-pro": "deepseek/deepseek-coder",
+    "llama-4": "meta-llama/llama-3-70b-instruct",
+    "llama-4-maverick": "meta-llama/llama-3-70b-instruct",
+    "mistral": "mistralai/mistral-large",
+    "mistral-large": "mistralai/mistral-large",
+}
 class CouncilProvider:
     """Abstract base: all providers implement query + availability."""
 
@@ -295,7 +332,7 @@ class FaigateProvider(CouncilProvider):
         return -1.0  # Faigate doesn't expose credit checking — defer to availability
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
-        clean_model = model.replace("faigate:", "")
+        clean_model = FAIGATE_MAP.get(model.replace("faigate:", ""), model.replace("faigate:", ""))
         body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", "POST", body) if timeout is None
@@ -341,7 +378,8 @@ class OpenRouterProvider(CouncilProvider):
 
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
-        body = {"model": model, "messages": messages, "temperature": temperature}
+        clean_model = OPENROUTER_MAP.get(model, model)
+        body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", body) if timeout is None
                      else self._req("/chat/completions", body, timeout=timeout)))
@@ -358,7 +396,11 @@ class OpenRouterProvider(CouncilProvider):
                 lambda: self._req("/models", method="GET")
             )
             available_ids = {m.get("id", "") for m in result.get("data", [])}
-            return {m: (m in available_ids or any(m in a for a in available_ids)) for m in models}
+            results = {}
+            for m in models:
+                clean_m = OPENROUTER_MAP.get(m, m)
+                results[m] = (clean_m in available_ids or any(clean_m in a for a in available_ids))
+            return results
         except Exception:
             return {m: True for m in models}
 
@@ -393,7 +435,8 @@ class GenericRouterProvider(CouncilProvider):
 
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
-        body = {"model": model, "messages": messages, "temperature": temperature}
+        clean_model = OPENROUTER_MAP.get(model, model)
+        body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", body) if timeout is None
                      else self._req("/chat/completions", body, timeout=timeout)))
