@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillweave.dev/schemas/dispatch-handoff/v1",
+  "title": "DispatchHandoff",
+  "description": "Immutable typed operational handoffs and controller checkpoints (SW1311-HANDOFF-001). Five distinct variants (ops, review, correction, integration, controller_resume) each bind the destination role, exact base and subject SHAs, dependencies, allowed/forbidden scope, required inputs, criteria, commands, a correction budget and the expected receipt type. A controller checkpoint preserves frozen candidates, bases, verdicts, accepted findings, correction budgets, the current batch and active-job status. Names no concrete provider, model or harness.",
+  "type": "object",
+  "required": [
+    "id",
+    "kind",
+    "source_receipt_id",
+    "destination_role",
+    "base_sha",
+    "subject_sha",
+    "scope",
+    "required_inputs",
+    "criteria",
+    "commands",
+    "correction_budget",
+    "expected_receipt_type",
+    "digest"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "kind": {
+      "type": "string",
+      "enum": ["ops", "review", "correction", "integration", "controller_resume"]
+    },
+    "source_receipt_id": { "type": "string", "minLength": 1 },
+    "destination_role": {
+      "type": "string",
+      "enum": ["ops", "reviewer", "producer", "integrator", "controller"]
+    },
+    "base_sha": { "type": "string", "minLength": 40 },
+    "subject_sha": { "type": "string", "minLength": 40 },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "required_inputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "criteria": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "commands": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "correction_budget": { "type": "integer", "minimum": 0 },
+    "expected_receipt_type": {
+      "type": "string",
+      "enum": ["dispatch", "correction", "review", "integration", "ops", "controller_resume"]
+    },
+    "digest": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "required": ["allowed_paths"],
+      "properties": {
+        "allowed_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "forbidden_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "frozenCandidate": {
+      "type": "object",
+      "required": ["candidate_sha", "base_sha"],
+      "properties": {
+        "candidate_sha": { "type": "string", "minLength": 40 },
+        "base_sha": { "type": "string", "minLength": 40 }
+      },
+      "additionalProperties": false
+    },
+    "controllerCheckpoint": {
+      "type": "object",
+      "required": [
+        "checkpoint_id",
+        "frozen_candidates",
+        "latest_verdict",
+        "accepted_finding_ids",
+        "correction_budgets",
+        "current_batch",
+        "active_job"
+      ],
+      "properties": {
+        "checkpoint_id": { "type": "string", "minLength": 1 },
+        "frozen_candidates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/frozenCandidate" }
+        },
+        "latest_verdict": {
+          "type": ["string", "null"],
+          "enum": ["REVIEW_PASS", "REVIEW_FAIL", null]
+        },
+        "accepted_finding_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "correction_budgets": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "current_batch": { "type": "integer", "minimum": 0 },
+        "active_job": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "nextAction": {
+      "type": "object",
+      "required": [
+        "action",
+        "next_batch",
+        "rationale",
+        "disclaims_autonomous_recovery",
+        "disclaims_persistent_observer_resume"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["integrate", "correct", "dispatch_next_batch", "await_job", "review", "complete"]
+        },
+        "next_batch": { "type": "integer", "minimum": 0 },
+        "rationale": { "type": "string" },
+        "disclaims_autonomous_recovery": { "type": "boolean" },
+        "disclaims_persistent_observer_resume": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "opsHandoff": {
+      "$ref": "#"
+    },
+    "reviewHandoff": {
+      "$ref": "#"
+    },
+    "correctionHandoff": {
+      "$ref": "#"
+    },
+    "integrationHandoff": {
+      "$ref": "#"
+    },
+    "controllerResumeHandoff": {
+      "$ref": "#"
+    }
+  }
+}
