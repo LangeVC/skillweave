@@ -124,6 +124,10 @@ class DispatchEventStream:
         self._sequence = start_sequence
         self._lock = RLock()
         self._children: dict[str, _ChildState] = {}
+        # The typed in-memory window: every emitted event is also appended here
+        # as a dict, so a live observer can read a new event within one
+        # heartbeat without polling a log file size or a process id (SW1311).
+        self._typed_events: List[dict[str, Any]] = []
 
     # -- sequence ----------------------------------------------------------
 
@@ -150,6 +154,7 @@ class DispatchEventStream:
         """
         self._sink.write(_encode_event(event) + "\n")
         self._sink.flush()
+        self._typed_events.append(_encode_event_dict(event))
         return event
 
     def emit(
@@ -180,6 +185,7 @@ class DispatchEventStream:
                 bad = _has_raw_output(payload)
                 if bad:
                     _refuse_raw_output(bad)
+                _looks_like_polling_payload(payload)
                 merged.update(payload)
 
             event = DispatchEvent(
@@ -337,6 +343,21 @@ class DispatchEventStream:
             task_status=task_status,
         )
 
+    # -- typed-event visibility (SW1311-OBSERVER-001) -------------------------
+
+    def typed_events_since(self, after_sequence: int = 0) -> List[dict[str, Any]]:
+        """Return typed events emitted after ``after_sequence``, in order.
+
+        The observer reads a new typed event directly from this window — no
+        log-file-size probing and no process-id polling (criterion 5). The
+        window is append-only and never carries the raw stdout/stderr bytes.
+        """
+        with self._lock:
+            return [
+                dict(e) for e in self._typed_events
+                if int(e.get("sequence", 0)) > after_sequence
+            ]
+
     # -- terminal idempotency (criterion 4) ----------------------------------
 
     def emit_terminal_once(
@@ -470,11 +491,29 @@ def _encode_event(event: DispatchEvent) -> str:
     only, whereas the stream must also carry metadata-only extras (criterion
     group, exit code, signal) that the contract does not declare a column for.
     """
+    return json.dumps(_encode_event_dict(event), sort_keys=True)
+
+
+def _encode_event_dict(event: DispatchEvent) -> dict[str, Any]:
+    """Encode an event as its typed dict (incl. metadata extras)."""
     data = event.to_dict()
     extras = getattr(event, "_stream_metadata", None)
     if extras:
         data.update(extras)
-    return json.dumps(data, sort_keys=True)
+    return data
+
+
+def _looks_like_polling_payload(payload: Optional[dict[str, Any]]) -> None:
+    """Refuse state inferred from log-file size or a process id (criterion 5).
+
+    The observer must see a typed event directly, never ``log_size`` or ``pid``
+    fields, which are polling artefacts and never part of a typed event.
+    """
+    if not payload:
+        return
+    for key in ("log_size", "log_file_size", "pid", "process_id"):
+        if key in payload:
+            _refuse_raw_output(key)
 
 
 __all__ = [
