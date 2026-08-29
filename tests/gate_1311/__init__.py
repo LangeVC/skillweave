@@ -41,13 +41,15 @@ DISPATCH_ORDER: tuple[tuple[str, tuple[int, ...]], ...] = (
 )
 
 #: The module (test file stem) each dispatch_order group is implemented in.
+#: Each stem is prefixed ``test_`` so the module matches pytest's default
+#: ``python_files`` pattern and is collected without any config override.
 GROUP_MODULE: Dict[int, str] = {
-    1: "rounds_child_truth",
-    2: "parallel_integration",
-    3: "review_harness",
-    4: "model_observer",
-    5: "transfer_release",
-    6: "controller_attested",
+    1: "test_rounds_child_truth",
+    2: "test_parallel_integration",
+    3: "test_review_harness",
+    4: "test_model_observer",
+    5: "test_transfer_release",
+    6: "test_controller_attested",
 }
 
 # ── The thirteen acceptance criteria, abridged ───────────────────────────────

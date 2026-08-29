@@ -14,6 +14,9 @@ asserts the mapping is a bijection over criteria 1..13 and the six groups.
 from __future__ import annotations
 
 import importlib
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -66,3 +69,47 @@ def test_every_group_module_is_collectable():
         module = importlib.import_module(f"tests.gate_1311.{CRITERION_MODULE[criterion]}")
         test_name = CRITERION_TO_TEST[criterion]
         assert callable(getattr(module, test_name))
+
+
+def _default_collected_node_ids() -> set[str]:
+    """The node ids pytest collects from this directory under default config.
+
+    Runs ``python3 -m pytest tests/gate_1311 --collect-only -q`` under the
+    repository root with no ``python_files`` override. This reproduces exactly
+    the default collection that ``python3 -m pytest tests/gate_1311 -q``
+    performs, so a criterion test that is present but silently uncollected
+    becomes a hard failure instead of hiding in the suite.
+    """
+    root = Path(__file__).resolve().parents[2]
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/gate_1311", "--collect-only", "-q"],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    collected: set[str] = set()
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("tests/gate_1311/") and "::" in line:
+            collected.add(line)
+    return collected
+
+
+def test_every_criterion_test_is_reached_by_default_collection():
+    """No criterion test may be present yet unreachable under default config.
+
+    Every declared criterion->test mapping must resolve to a node id that
+    ``python3 -m pytest tests/gate_1311 -q`` (default ``python_files``, no
+    override) actually collects. This closes the defect where a criterion test
+    lives in a file that default collection never touches.
+    """
+    node_ids = _default_collected_node_ids()
+    for criterion in range(1, 14):
+        module = CRITERION_MODULE[criterion]
+        test_name = CRITERION_TO_TEST[criterion]
+        node = f"tests/gate_1311/{module}.py::{test_name}"
+        assert node in node_ids, (
+            f"criterion {criterion} test {test_name!r} ({node}) is not collected "
+            f"under the default pytest configuration"
+        )
