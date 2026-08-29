@@ -615,6 +615,28 @@ class SessionState:
         }
 
 
+def resume_batch_command(
+    state: SessionState,
+    *,
+    lane_id: str,
+) -> Optional[BatchCommand]:
+    """Return the batch command for ``lane_id`` in a cold session state.
+
+    This is the handoff seam for a controller recomputing which command a lane
+    should run from the state file alone (SW1311-HANDOFF-001, controller-resume):
+    a controller that derived the next batch index from a checkpoint reads the
+    state file once and resolves the lane's command here, rather than from any
+    transcript. ``None`` means the lane is not part of this state's single batch
+    (or the resolved command is absent), so a resume cannot invent work.
+    """
+    if not state.session_boundary:
+        raise MissingSessionBoundaryError()
+    for command in state.commands:
+        if command.lane_id == lane_id:
+            return command
+    return None
+
+
 def load_state_file(path: str) -> SessionState:
     """Load the state file a cold session receives.
 
