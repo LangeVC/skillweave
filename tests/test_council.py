@@ -386,7 +386,7 @@ class TestProviderProfiles:
         assert "models" in default
         assert "chairman" in default
         assert "mode" in default
-        assert len(default["models"]) == 4
+        assert len(default["models"]) == 2
 
     def test_get_profile_copy(self):
         from skillweave.council.faigate_adapter import get_profile

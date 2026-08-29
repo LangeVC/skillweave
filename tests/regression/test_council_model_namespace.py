@@ -196,13 +196,12 @@ def test_dispatch_qualified_syntax_still_valid_but_not_in_council_data():
 
 
 # ── SW1311-COUNCIL-001 — proven live roster identifiers (criterion 6) ───────
-# The council's seat resolution is grounded in a live Faidate roster proof, not
-# in a guessed alias. These fixtures lock the proven ids in: the symbolic cast
-# in ``ROUTER_PROFILES`` stays the routing lane's contract (declared seat
-# intents), and ``resolve_council_seats`` maps those intents to real
-# ``GET /v1/models`` roster ids that self-answer. A later edit that makes the
-# resolution return a non-self-answering id (or fewer than two distinct
-# self-answering ids for the default preset) fails here before any live call.
+# The council's seat set is grounded in a live Faidate roster proof, not in a
+# guessed alias. ``ROUTER_PROFILES`` names those proven ids directly: the two
+# provider-native roster ids measured to self-answer (requested == answering in
+# the response envelope). A later edit that inserts a non-self-answering id, or
+# leaves the default preset with fewer than two distinct self-answering ids, fails
+# here before any live call.
 
 #: The distinct self-answering roster ids measured live at
 #: ``http://127.0.0.1:8090/v1`` — requested == answering from the response
@@ -211,66 +210,61 @@ def test_dispatch_qualified_syntax_still_valid_but_not_in_council_data():
 PROVEN_SELF_ANSWERING = {"deepseek-v4-pro", "deepseek-v4-flash"}
 
 
-def test_seat_resolution_yields_only_self_answering_roster_ids():
-    # Every declared seat (across all presets) must resolve to one of the proven
-    # self-answering roster ids — never to a stale alias that collapses silently.
-    from skillweave.routing.faigate_adapter import resolve_council_seats
+def test_default_profile_models_are_self_answering_roster_ids():
+    # The default preset's models must name provider-native roster ids that
+    # answer as themselves — never a stale alias that collapses silently.
+    assert set(ROUTER_PROFILES["default"]["models"]) <= PROVEN_SELF_ANSWERING, (
+        f"default preset models are not all proven self-answering roster ids: "
+        f"{ROUTER_PROFILES['default']['models']}"
+    )
+
+
+def test_every_preset_names_only_self_answering_roster_ids():
+    # Every declared seat (across all presets) must be one of the proven
+    # self-answering roster ids.
     for preset in ROUTER_PROFILES.values():
-        resolved = resolve_council_seats(preset["models"])
-        for mid in resolved:
+        for mid in list(preset["models"]) + [preset["chairman"]]:
             assert mid in PROVEN_SELF_ANSWERING, (
                 f"{mid!r} is not a proven self-answering Faidate roster id; "
-                f"resolve symbolic seats to a real /v1/models id"
+                f"name a real /v1/models id that self-answers"
             )
 
 
-def test_default_profile_yields_at_least_two_self_answering_models():
+def test_default_profile_yields_at_least_two_distinct_models():
     # The live gate requests the ``default`` preset's seats and demands >=2
-    # distinct answering models among answered seats. Proven: the default cast's
-    # resolution contains both self-answering deepseek ids.
-    from skillweave.routing.faigate_adapter import resolve_council_seats
+    # distinct answering models among answered seats. Proven: the default cast
+    # names both self-answering deepseek ids.
     default = ROUTER_PROFILES["default"]
-    resolved = resolve_council_seats(default["models"])
-    self_answering = [m for m in resolved if m in PROVEN_SELF_ANSWERING]
-    assert len(set(self_answering)) >= 2, (
-        f"default profile resolution lacks >=2 self-answering roster models; "
-        f"found {self_answering}"
+    assert len(set(default["models"])) >= 2, (
+        f"default profile lacks >=2 distinct self-answering roster models; "
+        f"found {default['models']}"
     )
 
 
 def test_default_profile_at_least_two_distinct_answering_models():
-    # Across the whole default cast (models + chairman), the resolved seat set is
-    # at least two distinct self-answering models, so the minimum-distinct gate
-    # holds.
-    from skillweave.routing.faigate_adapter import resolve_council_seats
+    # Across the whole default cast (models + chairman in full mode), the seat
+    # set is at least two distinct self-answering models, so the minimum-distinct
+    # gate holds.
     default = ROUTER_PROFILES["default"]
     seats = default["models"] + ([default["chairman"]] if default.get("mode") == "full" else [])
-    resolved = resolve_council_seats(seats)
-    assert len(set(resolved)) >= 2, f"default profile resolved seat set too small: {resolved}"
+    assert len(set(seats)) >= 2, f"default profile seat set too small: {seats}"
 
 
-def test_cast_stays_symbolic_while_resolution_is_roster():
-    # The declared cast (the routing lane's contract) is symbolic — it never
-    # names a roster id directly; the roster ids live only in the resolution.
-    # ``deepseek-v4`` stays a declared seat; ``deepseek-v4-pro`` is a resolved
-    # roster id, not a cast entry.
-    from skillweave.routing.faigate_adapter import known_model_ids, resolve_council_seats
-    assert "deepseek-v4" in known_model_ids()
-    assert "deepseek-v4-pro" not in known_model_ids()
-    assert "deepseek-v4-pro" in resolve_council_seats(ROUTER_PROFILES["default"]["models"])
+def test_cast_is_provider_native_not_symbolic():
+    # ``ROUTER_PROFILES`` names provider-native roster ids directly. ``deepseek-v4``
+    # is a symbolic alias and must NOT appear in the cast; ``deepseek-v4-pro`` /
+    # ``deepseek-v4-flash`` are the only declared seats.
+    from skillweave.routing.faigate_adapter import known_model_ids
+    assert "deepseek-v4" not in known_model_ids()
+    assert "deepseek-v4-pro" in known_model_ids()
+    assert "deepseek-v4-flash" in known_model_ids()
 
 
 def test_v139_and_v1310_guards_still_hold_against_new_profiles():
     # The historical prefix relapse and the silent-collapse guards remain intact
     # against the corrected profiles: no id carries a gateway namespace, and no
-    # ``faigate/`` prefix appears anywhere in Council profile data. The resolution
-    # reuses native bodies (``deepseek-v4-pro``) that v1.3.9 had wrongly prefixed —
-    # the body is right, only the prefix was the relapse, and the no-prefix guard
-    # above still refuses any re-adoption.
-    from skillweave.routing.faigate_adapter import resolve_council_seats
+    # ``faigate/`` prefix appears anywhere in Council profile data.
     for preset in ROUTER_PROFILES.values():
         for mid in list(preset["models"]) + [preset["chairman"]]:
             assert "/" not in mid and ":" not in mid
             assert "faigate" not in mid
-    for resolved in resolve_council_seats(ROUTER_PROFILES["default"]["models"]):
-        assert "/" not in resolved and ":" not in resolved
