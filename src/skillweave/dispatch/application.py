@@ -31,7 +31,7 @@ import importlib
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 import yaml
 
@@ -121,6 +121,318 @@ class WorkspaceMismatchError(OperatorDispatchError):
         super().__init__(
             f"lane '{lane_id}' base mismatch: declared {declared!r}, attested {attested!r}"
         )
+
+
+class TopologyGateError(OperatorDispatchError):
+    """The topology/integration gate refused a wave before any launch.
+
+    This is the live, authoritative counterpart to
+    :class:`~skillweave.dispatch.topology.ManifestError`: the operator dispatcher
+    refuses an incomplete/absent topology manifest, an unabsorbed collision, a
+    ``requires_integrator`` lane without an eligible integrator, a semantic
+    conflict that must route to the bounded Integrator, or an ineligible
+    (detached/uncommitted/wrong-branch/product-dirty) candidate — never launches
+    through the bad state, and never re-schedules or rewrites on its own.
+    """
+
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(f"topology gate refused: {detail}")
+
+
+def _lane_is_topology_governed(lane: Lane) -> bool:
+    """True when ``lane`` carries any topology manifest field.
+
+    Note: governed-ness here is *declaration-presence*, not the launch policy.
+    Every mutating lane must be governed (carry the complete manifest); a
+    non-mutating lane is never governed and keeps its pre-governance behavior.
+    The mutating-lane completeness obligation is enforced in
+    :func:`derive_topology_manifests`, not here.
+    """
+    return bool(
+        lane.write_scope is not None
+        or lane.worktree
+        or lane.branch
+        or lane.harness_state_namespace
+        or (lane.integration_policy is not None)
+        or (lane.depends_on is not None)
+    )
+
+
+@dataclass
+class TopologyGateInput:
+    """Observed topology/integration facts the operator dispatcher consumes.
+
+    Each field is an *observed* fact supplied by the operator (explicit
+    integration lanes, a semantic-conflict subject and its bounded scope/contract,
+    and per-lane worktree eligibility). The gate fails closed on incomplete facts
+    and never performs a product edit itself.
+    """
+
+    #: Lane ids explicitly declared as integration lanes that may absorb a
+    #: collision or satisfy a ``requires_integrator`` lane.
+    integration_lanes: Optional[Sequence[str]] = None
+    #: The lane id in a semantic conflict (routed to the bounded Integrator).
+    semantic_conflict: Optional[str] = None
+    #: Bounded write scope for the semantic-conflict Integrator assignment.
+    conflict_write_scope: Optional[Sequence[str]] = None
+    #: Test contract for the semantic-conflict Integrator assignment.
+    conflict_test_contract: Optional[Sequence[str]] = None
+    #: Per-lane worktree state (``dispatch.topology.WorktreeState``) assessed for
+    #: integration eligibility before launch.
+    eligibility: Optional[Mapping[str, Any]] = None
+    #: Optional cache allowlist overriding the module default for eligibility.
+    cache_allowlist: Optional[Sequence[str]] = None
+
+
+@dataclass
+class TopologyEnforcement:
+    """The authoritative topology/integration verdict.
+
+    ``groups`` are the collision-safe serialization batches (lane ids) in
+    dispatch order; ``governed`` lists every governed mutating lane id in
+    declaration order; ``removed_lane_ids`` names lanes removed from normal
+    fan-out (a semantic conflict) so they are routed to the Integrator, not
+    launched by the controller; ``integrator_assignment`` is the bounded
+    Integrator hand-off (never a controller product edit).
+    """
+
+    groups: list[list[str]] = field(default_factory=list)
+    governed: list[str] = field(default_factory=list)
+    removed_lane_ids: list[str] = field(default_factory=list)
+    integrator_assignment: Optional[Any] = None
+
+
+def derive_topology_manifests(declaration: SequenceDeclaration) -> list[Any]:
+    """Build :class:`~skillweave.dispatch.topology.LaneTopology` manifests.
+
+    Every *mutating* lane must carry the complete topology manifest: a lane with
+    zero (or partial) topology fields raises :class:`TopologyGateError` before
+    any workspace is provisioned or worker launched (F6). Only a **non-mutating**
+    lane bypasses governance — there is no legacy path that lets a mutating lane
+    skip its manifest. The contract lane's ``id`` maps to the manifest's
+    ``lane_id`` so the two seams agree. The import is deferred so this module's
+    own import closure stays free of any optional subpackage.
+    """
+    from skillweave.dispatch.topology import LaneTopology
+
+    manifests: list[Any] = []
+    for lane in declaration.mutating_lanes():
+        if not _lane_is_topology_governed(lane):
+            raise TopologyGateError(
+                f"mutating lane {lane.id!r} declares no topology manifest; every "
+                "mutating lane must declare a complete topology manifest "
+                "(depends_on, write_scope, worktree, branch, integration_policy)"
+            )
+        manifests.append(
+            LaneTopology(
+                lane_id=lane.id,
+                base=lane.base or "",
+                depends_on=list(lane.depends_on or []),
+                write_scope=list(lane.write_scope or []),
+                worktree=lane.worktree,
+                branch=lane.branch,
+                integration_policy=lane.integration_policy or "independent",
+                harness_state_namespace=lane.harness_state_namespace,
+            )
+        )
+    return manifests
+
+
+def enforce_topology(
+    declaration: SequenceDeclaration,
+    *,
+    gate_input: Optional[TopologyGateInput] = None,
+) -> TopologyEnforcement:
+    """The authoritative topology/integration gate consumed *before* launch.
+
+    Reuses :mod:`skillweave.dispatch.topology` and
+    :mod:`skillweave.dispatch.integration` decisions verbatim — it only orders and
+    enforces them at the operator dispatcher's live seam:
+
+    * every governed mutating lane's manifest is complete (F6): a partial or
+      absent field raises :class:`TopologyGateError` before any worker starts;
+    * overlapping write scope / incompatible base / shared harness state namespace
+      serialize into separate batches (acceptance criterion 2);
+    * a ``requires_integrator`` lane without an explicit eligible integrator fails
+      closed (F3);
+    * a semantic conflict removes the conflicted lane from normal fan-out and
+      returns a bounded Integrator assignment (F2);
+    * a dirty/detached/wrong-branch/uncommitted candidate is refused before
+      integration (F5).
+
+    The returned :class:`TopologyEnforcement` drives the actual fan-out grouping;
+    nothing here edits product paths.
+    """
+    from skillweave.dispatch.topology import (
+        CycleError,
+        ManifestError,
+        assess_eligibility,
+        build_serialization_plan,
+    )
+    from skillweave.dispatch.integration import (
+        SemanticConflictError,
+        assign_semantic_conflict,
+    )
+
+    gate_input = gate_input or TopologyGateInput()
+    manifests = derive_topology_manifests(declaration)
+    by_id = {m.lane_id: m for m in manifests}
+
+    for manifest in manifests:
+        try:
+            manifest.validate()
+        except ManifestError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    integration_ids = list(gate_input.integration_lanes or [])
+    eligibility = dict(gate_input.eligibility or {})
+    eligibility_supplied = gate_input.eligibility is not None
+
+    # F3: every declared integration lane must be a real, declared governed
+    # lane — an arbitrary id in ``integration_lanes`` does not release
+    # ``requires_integrator``.
+    for iid in integration_ids:
+        if iid not in by_id:
+            raise TopologyGateError(
+                f"integration lane {iid!r} is not a declared lane in the wave"
+            )
+
+    requires = [
+        manifest
+        for manifest in manifests
+        if manifest.integration_policy == "requires_integrator"
+    ]
+
+    for manifest in requires:
+        lid = manifest.lane_id
+        # A lane declaring ``requires_integrator`` must be folded by a *distinct,
+        # declared, ordered-after* integration lane: an integrator declares the
+        # requiring lane in its own ``depends_on`` (matching dependency/policy
+        # semantics). Self, unknown, concurrent, dependency-mismatched, or a
+        # missing/ failing eligibility observation all fail closed.
+        candidates = [
+            iid
+            for iid in integration_ids
+            if iid != lid and lid in (by_id[iid].depends_on or [])
+        ]
+        if not candidates:
+            raise TopologyGateError(
+                f"lane {lid!r} declares requires_integrator but no distinct "
+                "declared integration lane is ordered after it (a matching "
+                "depends_on) to fold it"
+            )
+        for iid in candidates:
+            if by_id[iid].integration_policy != "independent":
+                raise TopologyGateError(
+                    f"integration lane {iid!r} must declare integration_policy "
+                    f"'independent' to fold lane {lid!r}, got "
+                    f"{by_id[iid].integration_policy!r}"
+                )
+
+    # CTRL-C4-INTEGRATION-GRAPH: an explicit integration lane must integrate at
+    # least one in-wave dependency, and every dependency it names for integration
+    # must exist in the declared wave. A mere ``integration_lanes`` label without
+    # the dependency relation grants no fail-open exception.
+    for iid in integration_ids:
+        deps = list(by_id[iid].depends_on or [])
+        in_wave = [d for d in deps if d in by_id]
+        if not in_wave:
+            raise TopologyGateError(
+                f"integration lane {iid!r} declares no in-wave dependency to "
+                "integrate; a mere integration-lane label does not grant an "
+                "exception"
+            )
+        missing = [d for d in deps if d not in by_id]
+        if missing:
+            raise TopologyGateError(
+                f"integration lane {iid!r} depends on undeclared lane(s) "
+                f"{sorted(missing)}; dependencies used for integration must "
+                "exist in the wave"
+            )
+
+    # F5: eligibility is fail-closed at the pre-integration boundary. An
+    # observed (non-``None``) eligibility map must cover *every* governed lane —
+    # a governed lane whose state is absent is refused, not skipped. A
+    # ``requires_integrator`` lane (and its integrator) must always carry a
+    # present, passing observation, even when no map was supplied at all.
+    def _require_eligible(lane_id: str) -> None:
+        manifest = by_id[lane_id]
+        state = eligibility.get(lane_id)
+        if state is None:
+            raise TopologyGateError(
+                f"lane {lane_id!r} has no observed worktree state before integration"
+            )
+        reasons = assess_eligibility(
+            manifest, state, cache_allowlist=gate_input.cache_allowlist
+        )
+        if reasons:
+            raise TopologyGateError(
+                f"lane {lane_id!r} is not eligible to integrate: " + "; ".join(reasons)
+            )
+
+    if eligibility_supplied:
+        for manifest in manifests:
+            _require_eligible(manifest.lane_id)
+    else:
+        # Even when no eligibility map was supplied, a pre-integration boundary
+        # cannot release: every explicit integration lane and every in-wave lane
+        # it integrates must carry a present, passing observation. Merely naming
+        # ``integration_lanes`` never grants a fail-open exception, whether or
+        # not any lane declares ``requires_integrator``.
+        observed: list[str] = []
+        seen: set[str] = set()
+        for iid in integration_ids:
+            if iid not in seen:
+                seen.add(iid)
+                observed.append(iid)
+            for dep in by_id[iid].depends_on or []:
+                if dep in by_id and dep not in seen:
+                    seen.add(dep)
+                    observed.append(dep)
+        for lid in observed:
+            _require_eligible(lid)
+
+    # F2: a semantic conflict is routed out of normal fan-out to the bounded
+    # Integrator. The controller launches no worker for the conflicted lane and
+    # performs no product edit — it only produces the assignment.
+    removed: list[str] = []
+    integrator_assignment = None
+    if gate_input.semantic_conflict is not None:
+        conflict_id = gate_input.semantic_conflict
+        lane = by_id.get(conflict_id)
+        if lane is None:
+            raise TopologyGateError(
+                f"semantic conflict names lane {conflict_id!r} with no topology manifest"
+            )
+        try:
+            integrator_assignment = assign_semantic_conflict(
+                lane,
+                conflict=f"semantic conflict in lane {conflict_id}",
+                write_scope=list(gate_input.conflict_write_scope or []),
+                test_contract=list(gate_input.conflict_test_contract or []),
+            )
+        except SemanticConflictError as exc:
+            raise TopologyGateError(str(exc)) from exc
+        removed.append(conflict_id)
+
+    remaining = [m for m in manifests if m.lane_id not in removed]
+    groups: list[list[str]] = []
+    if remaining:
+        try:
+            plan = build_serialization_plan(remaining, integration_lanes=integration_ids)
+        except ManifestError as exc:
+            raise TopologyGateError(str(exc)) from exc
+        except CycleError as exc:
+            raise TopologyGateError(str(exc)) from exc
+        groups = [list(group) for group in plan.groups]
+
+    return TopologyEnforcement(
+        groups=groups,
+        governed=[m.lane_id for m in manifests],
+        removed_lane_ids=removed,
+        integrator_assignment=integrator_assignment,
+    )
 
 
 class ProfileLocationError(OperatorDispatchError):
@@ -314,6 +626,106 @@ def _pare_lanes(lanes: Sequence[Lane], max_parallel: int) -> list[list[Lane]]:
     return groups
 
 
+def _group_for_launch(
+    mutating: Sequence[Lane],
+    max_parallel: int,
+    enforcement: TopologyEnforcement,
+) -> list[list[Lane]]:
+    """Choose the launch batches for the mutating lanes.
+
+    When the wave is topology-governed (:attr:`enforcement.governed` non-empty),
+    the collision-safe serialization groups drive fan-out: every governed lane is
+    placed in its serialization batch so two colliding lanes never share a
+    fan-out call, and serialized (colliding) lanes each get their own single-lane
+    batch. Non-governed lanes keep the legacy repo-exclusivity grouping. When
+    nothing is governed, the legacy :func:`_pare_lanes` path is preserved
+    unchanged (v1.3.10 compatibility).
+    """
+    if not enforcement.governed:
+        return _pare_lanes(list(mutating), max_parallel)
+
+    by_id = {lane.id: lane for lane in mutating}
+    governed_ids = set(enforcement.governed)
+    groups: list[list[Lane]] = []
+    for group_ids in enforcement.groups:
+        lane_group = [by_id[lid] for lid in group_ids if lid in by_id]
+        if lane_group:
+            groups.append(lane_group)
+
+    non_governed = [lane for lane in mutating if lane.id not in governed_ids]
+    if non_governed:
+        groups.extend(_pare_lanes(non_governed, max_parallel))
+    return groups
+
+
+def _default_inline_seam(
+    command: Sequence[str],
+    *,
+    run_id: str,
+    subject_repo: str,
+    subject_commit: str,
+    tool: str,
+    model: str,
+    cwd: Optional[str] = None,
+    timeout: Optional[float] = None,
+    artifact_store: Optional[Any] = None,
+) -> Any:
+    """Run a single lane through the single-process seam, never the fan-out path.
+
+    This is the default transport for serialized/INLINE lanes: it launches
+    exactly one process via ``runtime.runner_adapter.run_command`` (one blocking
+    child, no start-before-reap overlap) and wraps the resulting
+    :class:`ProcessResult` into the same :class:`FanOutChild` shape the multi-child
+    fan-out path produces, so callers record child outcomes and receipt
+    references uniformly without the fan-out wiring. The single process is
+    launched synchronously — it is a distinct seam from ``fan_out_dispatch`` and
+    must never be reached for a lane that belongs to a parallel group.
+    """
+    from skillweave.routing.modelspec import from_value
+    from skillweave.routing.faigate_adapter import resolve_model_spec
+    from skillweave.fanout.dispatch import (
+        FanOutChild,
+        FanOutResult,
+        _make_receipt_reference,
+        _resolve_outcome,
+        _store_child_bytes,
+    )
+
+    runner_adapter = importlib.import_module("skillweave.runtime.runner_adapter")
+
+    child_run_id = f"{run_id}-0"
+    resolved_model = resolve_model_spec(from_value(model))
+    result = runner_adapter.run_command(
+        list(command),
+        run_id=child_run_id,
+        subject_repo=subject_repo,
+        subject_commit=subject_commit,
+        tool=tool,
+        model=resolved_model,
+        timeout=timeout,
+        cwd=cwd,
+    )
+    outcome = _resolve_outcome(result)
+    child = FanOutChild(
+        child_run_id=child_run_id,
+        command=list(command),
+        result=result,
+        model=resolved_model,
+        subject_repo=subject_repo,
+        subject_commit=subject_commit,
+        tool=tool,
+        cwd=cwd,
+        raw_bytes=result.stdout or b"",
+        stderr_bytes=result.stderr or b"",
+        outcome=outcome,
+        stdout_ref=_make_receipt_reference(result.stdout_receipt, stream="stdout"),
+        stderr_ref=_make_receipt_reference(result.stderr_receipt, stream="stderr"),
+    )
+    if artifact_store is not None:
+        _store_child_bytes(artifact_store, child)
+    return FanOutResult(children=[child], overlapped=False)
+
+
 # ── The application ─────────────────────────────────────────────────────────
 
 
@@ -343,6 +755,7 @@ class DispatchRun:
     failure_policy: Optional[str] = None
     artifact_store: Optional[Any] = None
     receipt_log: Optional[Any] = None
+    integrator_assignment: Optional[Any] = None
 
     @property
     def job_records(self) -> list[dict[str, Any]]:
@@ -482,6 +895,13 @@ class DispatchRun:
             # integration attempts), each with separated outcome dimensions and
             # a binding terminal envelope.
             "job_records": self.job_records,
+            # A semantic conflict routed to the bounded Integrator is surfaced as
+            # a hand-off, never a controller product edit.
+            "integrator_assignment": (
+                self.integrator_assignment.to_dict()
+                if self.integrator_assignment is not None
+                else None
+            ),
             # Result metadata is explicit about the experimental, wave-scoped
             # nature of this command and makes no stable-transport claim.
             "experimental": True,
@@ -511,6 +931,7 @@ class OperatorDispatchApplication:
         *,
         workspace_seam: Optional[WorkspaceSeam] = None,
         fanout_seam: Optional[Callable[..., Any]] = None,
+        inline_seam: Optional[Callable[..., Any]] = None,
         repo_root: Optional[str] = None,
         cwd: Optional[str] = None,
         artifact_store: Optional[Any] = None,
@@ -518,6 +939,7 @@ class OperatorDispatchApplication:
     ):
         self._workspace_seam = workspace_seam
         self._fanout_seam = fanout_seam
+        self._inline_seam = inline_seam
         self._repo_root = repo_root
         self._cwd = cwd
         self._artifact_store = artifact_store
@@ -537,6 +959,19 @@ class OperatorDispatchApplication:
         from skillweave.fanout.dispatch import fan_out_dispatch
 
         return fan_out_dispatch
+
+    def _inline(self) -> Callable[..., Any]:
+        """The single-lane execution seam (never the multi-child fan-out path).
+
+        A serialized/INLINE lane runs exactly once through this distinct seam;
+        only a parallel, subagent-safe group enters :func:`_fanout`. The default
+        launches a single process through the single-process runner primitive
+        (``run_command``), wrapping it into the same child shape the fan-out
+        path yields, so a recording seam can tell ``inline`` from ``fanout``.
+        """
+        if self._inline_seam is not None:
+            return self._inline_seam
+        return _default_inline_seam
 
     def _workspace(self) -> WorkspaceSeam:
         if self._workspace_seam is not None:
@@ -628,18 +1063,30 @@ class OperatorDispatchApplication:
         required_criteria: Optional[Sequence[int]] = None,
         sink: Optional[Any] = None,
         work: bytes = b"",
+        gate_input: Optional[TopologyGateInput] = None,
     ) -> DispatchRun:
         """Execute one wave and return a machine-readable run identifier.
 
         ``sink`` is the JSONL text stream the event stream appends to (defaults
         to ``sys.stdout``). Returns a :class:`DispatchRun` whose ``run_id`` is
         the machine-readable identifier.
+
+        ``gate_input`` (optional) carries the observed topology/integration facts
+        (explicit integration lanes, a semantic conflict, per-lane eligibility).
+        When supplied, :func:`enforce_topology` runs *before* any workspace is
+        provisioned or worker launched; a governed mutating lane with an
+        incomplete manifest, an unabsorbed collision, a missing eligible
+        integrator, a semantic conflict, or an ineligible worktree refuses the
+        wave fail-closed.
         """
         import sys
 
         declaration, resolved, report = self.load(
             sequence_path, profile_path, required_criteria=required_criteria
         )
+        enforcement = enforce_topology(declaration, gate_input=gate_input)
+        removed = set(enforcement.removed_lane_ids)
+
         run_id = self._generate_run_id()
         self._last_success = {}
         self._typed_failure = {}
@@ -658,7 +1105,9 @@ class OperatorDispatchApplication:
         stream.wave_started(wave=wave)
 
         ws = self._workspace()
-        mutating = declaration.mutating_lanes()
+        mutating = [
+            lane for lane in declaration.mutating_lanes() if lane.id not in removed
+        ]
 
         # Provision + attest every mutating lane; a base mismatch blocks before
         # any child starts (criterion 4). The materialised path is retained
@@ -670,7 +1119,7 @@ class OperatorDispatchApplication:
             if (lane.base or "") != pw.base_sha:
                 raise WorkspaceMismatchError(lane.id, lane.base or "", pw.base_sha)
 
-        groups = _pare_lanes(mutating, declaration.max_parallel)
+        groups = _group_for_launch(mutating, declaration.max_parallel, enforcement)
         halted = False
         halt_reason: Optional[str] = None
         rounds = 0
@@ -787,6 +1236,7 @@ class OperatorDispatchApplication:
             failure_policy=_failure_policy_of(resolved),
             artifact_store=self._active_store,
             receipt_log=self._receipt_log,
+            integrator_assignment=enforcement.integrator_assignment,
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -1188,9 +1638,10 @@ class OperatorDispatchApplication:
             return False
 
         role = resolved.role(lane.role)
-        fanout = self._fanout()
-        result = fanout(
-            [command],
+        inline = self._inline()
+        provisioned = provisioned or {}
+        result = inline(
+            command,
             run_id=run_id,
             subject_repo=lane.repo or "",
             subject_commit=lane.base or "",

@@ -21,6 +21,12 @@ lanes:
     base: 953aab4ec8f7babf0857c0033fd7731c8dc16e92
     execution_model: cold
     mutating: true
+    depends_on: []
+    write_scope:
+      - skillweave/fixture-repo-a/**
+    worktree: /tmp/lane-ops-a
+    branch: branch-lane-ops-a
+    integration_policy: independent
     criterion_groups:
       - criteria: [1, 2, 3]
       - criteria: [4, 5]
@@ -30,6 +36,12 @@ lanes:
     base: 953aab4ec8f7babf0857c0033fd7731c8dc16e92
     execution_model: cold
     mutating: true
+    depends_on: []
+    write_scope:
+      - skillweave/fixture-repo-b/**
+    worktree: /tmp/lane-ops-b
+    branch: branch-lane-ops-b
+    integration_policy: independent
     criterion_groups:
       - criteria: [1, 2, 3]
       - criteria: [4, 5]
@@ -39,6 +51,12 @@ lanes:
     base: 953aab4ec8f7babf0857c0033fd7731c8dc16e92
     execution_model: cold
     mutating: true
+    depends_on: []
+    write_scope:
+      - skillweave/fixture-repo-a/**
+    worktree: /tmp/lane-ops-c
+    branch: branch-lane-ops-c
+    integration_policy: independent
     criterion_groups:
       - criteria: [1, 2, 3]
       - criteria: [4, 5]

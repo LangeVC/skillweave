@@ -279,11 +279,11 @@ def test_completion_with_resolvable_evidence_succeeds():
 # ── Reachable dispatch-run integration (SW1311-RECEIPT-001 correction C1) ─────
 
 
-def _run_dispatch_with(app, tmp_path, *, lanes, fanout_seam):
+def _run_dispatch_with(app, tmp_path, *, lanes, seam):
     """Build a minimal sequence+profile and dispatch through ``app``.
 
-    Returns ``(run, fanout_seam)``. The fan-out seam is injected so no real
-    process launches; the sequence/profile are written to ``tmp_path``.
+    Returns ``(run, seam)``. The recording seam is injected so no real process
+    launches; the sequence/profile are written to ``tmp_path``.
     """
     import yaml
 
@@ -330,7 +330,7 @@ def _run_dispatch_with(app, tmp_path, *, lanes, fanout_seam):
         encoding="utf-8",
     )
     run = app.dispatch(str(seq), str(prof), wave="0", sink=__import__("io").StringIO())
-    return run, fanout_seam
+    return run, seam
 
 
 def _noop_workspace():
@@ -358,6 +358,14 @@ def _lanes(ids):
                 "base": base,
                 "execution_model": "cold",
                 "mutating": True,
+                # Complete topology manifest: mutating lanes must declare
+                # dependency scope, write scope, worktree, branch and policy
+                # before dispatch (SW1311-TOPOLOGY-001 criterion 1).
+                "depends_on": [],
+                "write_scope": [f"/repo/{lid}/**"],
+                "worktree": f"/tmp/{lid}",
+                "branch": f"branch-{lid}",
+                "integration_policy": "independent",
                 "criterion_groups": [{"criteria": [1]}],
             }
         )
@@ -420,14 +428,21 @@ def _resolving_fanout(children):
     return _Fanout()
 
 
-class _RecordingFanout:
-    """Fan-out seam that records invocations and returns a fixed child list."""
+class _RecordingInline:
+    """Inline (single-lane) seam that records invocations and returns a fixed
+    child result.
+
+    A single governed lane dispatches through the distinct inline seam, so this
+    recorder is injected via ``inline_seam=`` and its ``__call__`` accepts the
+    single command plus keyword arguments, returning a result carrying the same
+    ``children``/``succeeded`` surface the lane recorder consumes.
+    """
 
     def __init__(self, children=None):
         self.calls = 0
         self._children = children or []
 
-    def __call__(self, commands, **kwargs):
+    def __call__(self, command, **kwargs):
         self.calls += 1
         return type("_R", (), {"children": list(self._children), "succeeded": True})()
 
@@ -437,9 +452,9 @@ def test_blocked_input_fails_before_child_launch(tmp_path):
 
     lanes = _lanes(["lane-a"])
     lanes[0]["interactive"] = True
-    recorder = _RecordingFanout([])
-    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), fanout_seam=recorder)
-    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, fanout_seam=recorder)
+    recorder = _RecordingInline([])
+    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), inline_seam=recorder)
+    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, seam=recorder)
 
     # The child must never launch (fan-out seam never invoked).
     assert recorder.calls == 0
@@ -459,7 +474,7 @@ def test_namespace_collision_fails_preflight_before_child_launch(tmp_path):
     # Pre-seed a collision: the registry already holds lane-a's namespace, so
     # the application's claim must fail preflight before any child launches.
     lanes = _lanes(["lane-a"])
-    recorder = _RecordingFanout([])
+    recorder = _RecordingInline([])
     registry = StateNamespaceRegistry()
     registry.claim(
         JobStateNamespace(
@@ -467,12 +482,12 @@ def test_namespace_collision_fails_preflight_before_child_launch(tmp_path):
         )
     )
     app = OperatorDispatchApplication(
-        workspace_seam=_noop_workspace(), fanout_seam=recorder, namespace_registry=registry
+        workspace_seam=_noop_workspace(), inline_seam=recorder, namespace_registry=registry
     )
     # Force a deterministic run id so the derived namespace collides with the
     # pre-seeded claim above.
     app._generate_run_id = lambda: "run"  # type: ignore[assignment]
-    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, fanout_seam=recorder)
+    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, seam=recorder)
 
     assert recorder.calls == 0
     records = run.job_records
@@ -511,9 +526,9 @@ def test_unresolvable_evidence_cannot_yield_pass_in_dispatch_run(tmp_path):
         stdout_ref=missing_ref,  # does not resolve in a fresh store
         stderr_ref=None,
     )
-    recorder = _RecordingFanout([child])
-    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), fanout_seam=recorder)
-    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, fanout_seam=recorder)
+    recorder = _RecordingInline([child])
+    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), inline_seam=recorder)
+    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, seam=recorder)
 
     records = run.job_records
     assert records
@@ -535,9 +550,9 @@ def test_clean_run_job_records_match_shipped_schema(tmp_path):
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     lanes = _lanes(["lane-a"])
-    recorder = _RecordingFanout([_clean_child()])
-    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), fanout_seam=recorder)
-    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, fanout_seam=recorder)
+    recorder = _RecordingInline([_clean_child()])
+    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), inline_seam=recorder)
+    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, seam=recorder)
 
     records = run.job_records
     assert records
@@ -586,9 +601,9 @@ def test_heartbeat_expiry_is_a_reachable_terminal_state(tmp_path):
         child_run_id="c0", command=["python3", "-c", "pass"], result=pr,
         model="m", outcome="heartbeat_expired",
     )
-    rec = _RecordingFanout([child])
-    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), fanout_seam=rec)
-    run, _ = _run_dispatch_with(app, tmp_path, lanes=_lanes(["lane-a"]), fanout_seam=rec)
+    rec = _RecordingInline([child])
+    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), inline_seam=rec)
+    run, _ = _run_dispatch_with(app, tmp_path, lanes=_lanes(["lane-a"]), seam=rec)
 
     records = run.job_records
     assert records
@@ -600,9 +615,9 @@ def test_review_and_integration_are_reachable_and_append_lineage(tmp_path):
     from skillweave.dispatch.application import OperatorDispatchApplication
 
     lanes = _lanes(["lane-a"])
-    recorder = _RecordingFanout([_clean_child()])
-    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), fanout_seam=recorder)
-    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, fanout_seam=recorder)
+    recorder = _RecordingInline([_clean_child()])
+    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), inline_seam=recorder)
+    run, _ = _run_dispatch_with(app, tmp_path, lanes=lanes, seam=recorder)
 
     before = len(run.job_records)
 
