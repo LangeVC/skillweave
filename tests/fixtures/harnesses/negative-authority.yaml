@@ -1,0 +1,29 @@
+# Negative authority fixtures (SW1311-HARNESS-001, criterion 6).
+#
+# The five authorities (controller, ops, reviewer, observer, integrator) are
+# distinct capabilities. These fixtures pin, for every adapter, the set of
+# authorities it MUST NOT hold, together with a concrete negative profile that
+# asserts an attempted foreign authority is refused. Core dispatch reads these
+# as data and falls closed: a role that tries to hold a role it does not own is
+# not silently granted one.
+#
+# negative-authority-profiles_: one malformed profile per adapter, each claiming
+# a second (foreign) role alongside its real one, which reconcile_authority must
+# reject. This proves authority is not conflated for any adapter.
+
+negative-authority-profiles:
+  claude-code:
+    capabilities:
+      native-tool: true
+    authority:
+      role: controller
+      skillweave-dispatch-required: true
+      reviewer: true
+    delegation:
+      skillweave-dispatch: true
+
+forbidden-authority:
+  claude-code: [ops, reviewer, observer, integrator]
+  codex: [controller, reviewer, observer, integrator]
+  antigravity: [controller, ops, observer, integrator]
+  opencode: [controller, ops, reviewer, observer]
