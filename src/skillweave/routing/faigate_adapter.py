@@ -224,32 +224,36 @@ class CouncilProvider:
 
 # ── Router Profiles ────────────────────────────────────────────────
 
-# Council casts use provider-native model ids — no outer ``faigate/`` gateway
-# prefix. The prefix belongs to dispatch qualification and never appears here;
-# it is translated exactly once at the adapter boundary (``translate_model_id``)
-# and refused in Council profile data by ``validate_council_model_ids``.
+# Council casts use symbolic seat ids — no outer ``faigate/`` gateway prefix and
+# no provider-native roster id. The prefix belongs to dispatch qualification and
+# never appears here; it is translated exactly once at the adapter boundary
+# (``translate_model_id``) and refused in Council profile data by
+# ``validate_council_model_ids``. The symbolic seats name the council's *intent*
+# per preset (a DeepSeek seat, a Claude seat, …); they resolve to concrete
+# provider-native roster ids in :data:`COUNCIL_SEAT_RESOLUTION` at the query
+# boundary, never by rewriting the cast itself.
 ROUTER_PROFILES = {
     "default": {
-        "models": ["deepseek-v4-pro", "deepseek-v4-flash", "gemini-flash", "kilo-sonnet"],
-        "chairman": "deepseek-v4-pro",
+        "models": ["sonnet", "gpt-4o", "gemini-pro", "deepseek-v4"],
+        "chairman": "sonnet",
         "mode": "standard",
         "temperature": 0.5,
     },
     "quick": {
-        "models": ["deepseek-v4-flash", "gemini-flash-lite"],
-        "chairman": "deepseek-v4-flash",
+        "models": ["gpt-4o-mini", "haiku"],
+        "chairman": "gpt-4o-mini",
         "mode": "quick",
         "temperature": 0.3,
     },
     "deep": {
-        "models": ["deepseek-v4-pro", "deepseek-v4-flash", "gemini-flash", "gemini-flash-lite", "kilo-sonnet", "kilo-opus"],
-        "chairman": "kilo-opus",
+        "models": ["sonnet", "gpt-4o", "gemini-pro", "deepseek-v4", "llama-4", "mistral"],
+        "chairman": "opus",
         "mode": "full",
         "temperature": 0.5,
     },
     "expert": {
-        "models": ["kilo-opus", "kilo-sonnet", "deepseek-v4-pro", "gemini-flash"],
-        "chairman": "kilo-opus",
+        "models": ["opus", "gpt-4o", "gemini-pro", "deepseek-v4"],
+        "chairman": "opus",
         "mode": "full",
         "temperature": 0.4,
     },
@@ -259,7 +263,58 @@ ROUTER_PROFILES = {
 #: and per phase by the engine so a run record can tell which profile revision
 #: produced it. This is a DATA revision, not a bundle version: the release that
 #: ships this revision is gate-tagged by the release readiness gate, not here.
-COUNCIL_PROFILE_VERSION = "1.3.12"
+COUNCIL_PROFILE_VERSION = "1.3.11"
+
+
+# ── Council Seat Resolution ─────────────────────────────────────────
+
+#: Provider-native roster ids measured (live, ``http://127.0.0.1:8090/v1``) to
+#: answer AS THEMSELVES — i.e. their response envelope ``model`` field echoes the
+#: requested id. Every other id Faigate serves silently collapses onto
+#: ``deepseek-v4-flash``: the symbolic council seats (``sonnet``, ``gpt-4o``,
+#: ``gemini-pro``, ``opus``, ``deepseek-v4``) and every ``openai-*``,
+#: ``anthropic-*`` and ``auto``/``coding-*`` alias all returned
+#: ``deepseek-v4-flash`` from their envelopes. These two are therefore the only
+#: seats that can hold the ``>=2`` distinct answering-model gate, and both are
+#: DeepSeek v4 models.
+SELF_ANSWERING_ROSTER = ("deepseek-v4-pro", "deepseek-v4-flash")
+
+
+#: Resolution from a council's declared symbolic seat (the ids in
+#: ``ROUTER_PROFILES``) to the provider-native roster id that seat actually runs.
+#: The symbolic ids are seat *intents* in the council's own namespace — Faigate
+#: serves no ``sonnet`` / ``gpt-4o`` / ``gemini-pro`` id — so they are resolved
+#: here, at the query boundary, not rewritten into the cast (the cast is the
+#: routing lane's contract; see ``known_model_ids`` / ``resolve_tier``). The two
+#: self-answering DeepSeek ids are distributed so the default preset yields
+#: ``>=2`` distinct self-answering seats: the ``deepseek-v4`` seat resolves to
+#: ``deepseek-v4-pro``, every other symbolic seat to ``deepseek-v4-flash`` —
+#: which is exactly their measured live collapse.
+COUNCIL_SEAT_RESOLUTION = {
+    "deepseek-v4": "deepseek-v4-pro",
+    "sonnet": "deepseek-v4-flash",
+    "gpt-4o": "deepseek-v4-flash",
+    "gemini-pro": "deepseek-v4-flash",
+    "opus": "deepseek-v4-flash",
+    "gpt-4o-mini": "deepseek-v4-flash",
+    "haiku": "deepseek-v4-flash",
+    "llama-4": "deepseek-v4-flash",
+    "mistral": "deepseek-v4-flash",
+}
+
+
+def resolve_council_seats(declared: list[str]) -> list[str]:
+    """Resolve declared symbolic seat ids to provider-native roster ids.
+
+    A declared id that is already a provider-native roster id passes through
+    unchanged (it is usable as-is); a symbolic seat id resolves through
+    :data:`COUNCIL_SEAT_RESOLUTION`. Order and count are preserved so a preset's
+    seat count is unchanged — only the provider-native identity behind each seat
+    is resolved here, at the query boundary. This keeps ``ROUTER_PROFILES`` (the
+    declared cast) symbolic while the seats the council actually runs are the
+    roster ids Faigate answers as itself.
+    """
+    return [COUNCIL_SEAT_RESOLUTION.get(m, m) for m in declared]
 
 
 # ── Provider Detection ──────────────────────────────────────────────
@@ -738,12 +793,12 @@ def resolve_tier(profile: "RoutingProfile") -> "ResolutionRecord":
     keep their own job — casting the council (chairman + model pool + mode) per
     tier — and are not repurposed as an availability registry. The roster is
     the best reachable availability signal but is not proof of what Faigate
-    actually answers: measured, a listed id (``kilo-sonnet``) is still answered
-    by the underlying ``anthropic/claude-sonnet-4.6``, and several ``openai-*``
-    aliases silently collapse onto ``deepseek-v4-flash``. Judging an answer
-    against the requested model is therefore out of scope here (SW-COUNCIL-001);
-    this gate only refuses an id whose absence Faigate itself reports via the
-    roster.
+    actually answers: measured, a listed id (``gemini-pro``) is still silently
+    substituted for ``deepseek-v4-flash``, and the council's symbolic seats are
+    resolved to self-answering roster ids only at the query boundary
+    (``resolve_council_seats``). Judging an answer against the requested model
+    is therefore out of scope here (SW-COUNCIL-001); this gate only refuses an id
+    whose absence Faigate itself reports via the roster.
 
     The availability outcome is one of three: a model Faigate confirms it
     serves proceeds; a model Faigate confirms it does NOT serve is refused
@@ -779,10 +834,10 @@ def _check_unavailable_models(profile: "RoutingProfile") -> None:
 
     A role's ``model`` and ``pin`` name a concrete model id. ``ROUTER_PROFILES``
     (``known_model_ids()``) keep their own job — casting the council's seats — so
-    a cast id is admitted as-is and is never live-gated: ``deepseek-v4-pro``,
-    ``deepseek-v4-flash``, ``gemini-flash``, ``gemini-flash-lite``, ``kilo-sonnet``
-    and ``kilo-opus`` are Faigate's own roster ids, not a claim the council makes
-    about availability.
+    a cast id is admitted as-is and is never live-gated: ``sonnet``, ``gpt-4o``,
+    ``opus``, ``deepseek-v4`` and the rest are council aliases, not a claim about
+    Faigate's live roster. Their provider-native resolution happens separately, at
+    the query boundary (``resolve_council_seats``), never here.
 
     Every id outside that cast is an explicit override (for example
     ``deepseek-v4-pro``), and its availability is resolved against what Faigate

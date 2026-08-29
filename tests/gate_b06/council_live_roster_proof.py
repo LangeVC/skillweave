@@ -1,8 +1,12 @@
 """Council live roster gate — distinct seats + chairman, full matrix (SW1311-COUNCIL-001).
 
 A live gate (NOT part of the hermetic suite) that measures, against a running
-Faidate, whether the ``ROUTER_PROFILES`` casts actually answer as themselves —
-using the response envelope's ``model`` field as the single source of truth.
+Faidate, whether the council's declared seats resolve to provider-native roster
+ids that answer as themselves — using the response envelope's ``model`` field as
+the single source of truth. The ``ROUTER_PROFILES`` cast stays symbolic (the
+routing lane's contract); each seat resolves through ``resolve_council_seats``
+at the query boundary, and the gate proves the resolved set holds the ``>=2``
+distinct answering-model gate live.
 
 Contracts enforced here (criterion 6):
 
@@ -26,7 +30,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 from skillweave.routing.faigate_adapter import (  # noqa: E402
     ROUTER_PROFILES,
     FaigateProvider,
-    translate_model_id,
+    resolve_council_seats,
 )
 
 MIN_DISTINCT_SEATS = 2
@@ -44,31 +48,40 @@ def main() -> int:
     base_url = os.environ.get("FAIGATE_BASE_URL", "http://127.0.0.1:8090/v1")
     provider = FaigateProvider(base_url=base_url)
 
-    # Use the default preset's casts as the seat set, deduplicated, order-stable.
+    # Use the default preset's declared seats, deduplicated, order-stable. The
+    # declared ids are symbolic seat intents; each resolves to a provider-native
+    # roster id before the query (the cast itself stays symbolic).
     preset = ROUTER_PROFILES["default"]
-    seats = []
+    declared = []
     seen = set()
     for mid in _seats_for_preset(preset):
         if mid not in seen:
             seen.add(mid)
-            seats.append(mid)
+            declared.append(mid)
 
-    # The gate must request at least two distinct seats.
+    seats = resolve_council_seats(declared)
+
+    # Resolve each declared seat to its provider-native roster id, keeping the
+    # positional pairing declared[i] -> seats[i] for the truth matrix.
+    pairs = list(zip(declared, seats))
+
+    # The gate must request at least two distinct resolved seats.
     distinct_seats = len(set(seats))
     print(f"Faidate: {base_url}")
-    print(f"seats requested ({distinct_seats} distinct): {', '.join(seats)}")
+    print(f"declared ({', '.join(declared)}) -> resolved "
+          f"({distinct_seats} distinct): {', '.join(seats)}")
     if distinct_seats < MIN_DISTINCT_SEATS:
         print(f"FAIL: fewer than {MIN_DISTINCT_SEATS} distinct seats requested.")
         return 1
 
-    async def probe_one(mid: str):
+    async def probe_one(declared_mid: str, native: str):
         messages = [{"role": "user", "content": "Reply with exactly one word."}]
-        native = translate_model_id(mid)
         try:
             response = await provider.query(native, messages, temperature=0.0, timeout=15.0)
             answering = getattr(response, "answering_model", None)
             requested = getattr(response, "requested_model", None) or native
             return {
+                "declared": declared_mid,
                 "requested": requested,
                 "resolved": native,
                 "answering": answering,
@@ -76,14 +89,15 @@ def main() -> int:
             }
         except Exception as e:  # noqa: BLE001 — a live gate reports every seat
             return {
-                "requested": mid,
+                "declared": declared_mid,
+                "requested": native,
                 "resolved": native,
                 "answering": None,
                 "status": f"error: {type(e).__name__}",
             }
 
     async def run_all():
-        return [await probe_one(mid) for mid in seats]
+        return [await probe_one(d, n) for d, n in pairs]
 
     try:
         rows = asyncio.run(run_all())
@@ -99,10 +113,10 @@ def main() -> int:
             print(f"  {r['requested']:<22} -> {r['status']}")
         return 1
 
-    print("\nrequested -> resolved -> answering -> status")
+    print("\ndeclared -> requested -> resolved -> answering -> status")
     for r in rows:
         print(
-            f"  {r['requested']:<22} -> {r['resolved']:<22} -> "
+            f"  {r['declared']:<14} -> {r['requested']:<22} -> {r['resolved']:<22} -> "
             f"{str(r['answering']):<22} -> {r['status']}"
         )
 

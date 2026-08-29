@@ -377,7 +377,7 @@ def test_tier_names_intent_not_a_model():
     assert record.tier == "balanced"
     assert record.router_name == "default"
     assert record.mode == "standard"
-    assert record.resolved_models == ["deepseek-v4-pro", "deepseek-v4-flash", "gemini-flash", "kilo-sonnet"]
+    assert record.resolved_models == ["sonnet", "gpt-4o", "gemini-pro", "deepseek-v4"]
 
 
 def test_resolution_record_marks_pinned_profile():
@@ -401,8 +401,8 @@ def test_unpinned_profile_resolution_is_not_marked_pinned():
     record = resolve_tier(profile)
     assert record.is_pinned is False
     assert record.pinned is None
-    assert record.resolved_models == ["deepseek-v4-pro", "deepseek-v4-flash", "gemini-flash",
-                                      "gemini-flash-lite", "kilo-sonnet", "kilo-opus"]
+    assert record.resolved_models == ["sonnet", "gpt-4o", "gemini-pro",
+                                      "deepseek-v4", "llama-4", "mistral"]
 
 
 def test_pin_makes_profile_stable_when_preset_changes():
@@ -443,7 +443,7 @@ def test_resolution_record_captures_requested_and_resolved():
     assert record.tier == "fast"
     assert record.router_name == "quick"
     assert record.mode == "quick"
-    assert record.resolved_models == ["deepseek-v4-flash", "gemini-flash-lite"]
+    assert record.resolved_models == ["gpt-4o-mini", "haiku"]
 
 
 def test_resolution_record_roundtrips():
@@ -523,8 +523,8 @@ def test_unavailable_pin_names_profile_and_role():
 
 def test_known_model_ids_is_exhaustive_and_disjoint_from_unknown():
     ids = known_model_ids()
-    assert "deepseek-v4-pro" in ids
-    assert "kilo-opus" in ids
+    assert "sonnet" in ids
+    assert "opus" in ids
     assert "turbo-9000" not in ids
     # Every preset's models are resolvable, i.e. the availability set is the
     # union of all preset pools, not a guess.

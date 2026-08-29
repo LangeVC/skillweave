@@ -36,14 +36,18 @@ quarantined behind `skillweave/legacy`.
 
 ## Council model namespace
 
-The Council's model ids are **provider-native** — unprefixed ids in the
-provider's own namespace, never gateway-qualified. The `faigate/` gateway
-prefix belongs to the dispatch layer only and is translated exactly once at the
-adapter boundary (`translate_model_id`); a prefix in Council profile data is
-refused before any provider call. Each seat records requested / resolved /
-answering model, status, provider and profile revision — the answering model is
-read from the response envelope, never inferred from the request. Fewer than
-`min_models_required` distinct answering models is a degraded run, never
+The Council's `ROUTER_PROFILES` declares **symbolic seats** (seat intents in the
+council's own namespace — `sonnet`, `gpt-4o`, `gemini-pro`, `deepseek-v4`, …),
+never gateway-qualified. Each seat resolves to a **provider-native** roster id
+exactly once at the query boundary (`resolve_council_seats`); Faigate's live
+roster self-answers only `deepseek-v4-pro` and `deepseek-v4-flash`, so every seat
+resolves to one of those two to hold the `>=2` distinct answering-model gate. The
+`faigate/` gateway prefix belongs to the dispatch layer only and is translated
+exactly once at the adapter boundary (`translate_model_id`); a prefix in Council
+profile data is refused before any provider call. Each seat records requested /
+resolved / answering model, status, provider and profile revision — the answering
+model is read from the response envelope, never inferred from the request. Fewer
+than `min_models_required` distinct answering models is a degraded run, never
 consensus.
 
 ## Multi-lane control plane

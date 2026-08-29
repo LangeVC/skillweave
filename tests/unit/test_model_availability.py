@@ -3,7 +3,7 @@
 Dispatch 1 criteria:
 
 1. Model availability is resolved against what Faigate can actually serve, not
-   against ``ROUTER_PROFILES``. Fixture: ``openai-gpt4o``. A profile pinning
+   against ``ROUTER_PROFILES``. Fixture: ``deepseek-v4-pro``. A profile pinning
    it loads, and no message claims Faigate cannot resolve it. Red proof: the
    identical profile raises ``RoutingProfileError`` against v1.3.5 (478211f).
 2. When no authoritative source is reachable, an unresolvable model is reported
@@ -27,15 +27,7 @@ from skillweave.routing import (
 from skillweave.routing import faigate_adapter as adapter
 
 
-#: A real Faidate roster id that ROUTER_PROFILES does NOT cast. The Council
-#: correction (SW1311-COUNCIL-001) admitted ``deepseek-v4-pro`` into the cast, so
-#: these fixtures use ``openai-gpt4o`` — still served by Faidate, still never a
-#: council seat — to keep proving that availability resolves against Faidate,
-#: never against the council cast.
-NON_CAST_FAIGATE_MODEL = "openai-gpt4o"
-
-
-def _pin_profile(pin=NON_CAST_FAIGATE_MODEL):
+def _pin_profile(pin="deepseek-v4-pro"):
     return from_dict(
         {
             "name": "sw135",
@@ -62,9 +54,9 @@ class _FakeFaigate(adapter.FaigateProvider):
 
 def test_deepseek_v4_pro_is_not_in_the_council_cast():
     # The fixture model is a real Faigate model that ROUTER_PROFILES never cast.
-    # This pins the pre-condition: if the fixture were already a cast model,
+    # This pins the pre-condition: if deepseek-v4-pro were already a cast model,
     # this dispatch would have nothing to prove.
-    assert NON_CAST_FAIGATE_MODEL not in known_model_ids()
+    assert "deepseek-v4-pro" not in known_model_ids()
 
 
 def test_pin_to_live_model_resolves_not_refused():
@@ -74,11 +66,11 @@ def test_pin_to_live_model_resolves_not_refused():
     with mock.patch.object(
         adapter,
         "detect_providers",
-        return_value={"faigate": _FakeFaigate([NON_CAST_FAIGATE_MODEL])},
+        return_value={"faigate": _FakeFaigate(["deepseek-v4-pro"])},
     ):
         resolution = resolve_tier(profile)
-    assert resolution.pinned == NON_CAST_FAIGATE_MODEL
-    assert resolution.resolved_models == [NON_CAST_FAIGATE_MODEL]
+    assert resolution.pinned == "deepseek-v4-pro"
+    assert resolution.resolved_models == ["deepseek-v4-pro"]
 
 
 def test_resolution_emits_no_cannot_resolve_claim_for_live_model():
@@ -89,11 +81,11 @@ def test_resolution_emits_no_cannot_resolve_claim_for_live_model():
     with mock.patch.object(
         adapter,
         "detect_providers",
-        return_value={"faigate": _FakeFaigate([NON_CAST_FAIGATE_MODEL])},
+        return_value={"faigate": _FakeFaigate(["deepseek-v4-pro"])},
     ):
         resolution = resolve_tier(profile)
-    assert resolution.resolved_models == [NON_CAST_FAIGATE_MODEL]
-    assert resolution.pinned == NON_CAST_FAIGATE_MODEL
+    assert resolution.resolved_models == ["deepseek-v4-pro"]
+    assert resolution.pinned == "deepseek-v4-pro"
 
 
 # ── Criterion 2: unreachable Faigate ⇒ UNVERIFIED, not refused ─────────────
@@ -105,8 +97,8 @@ def test_unreachable_faigate_leaves_model_unverified():
     profile = _pin_profile()
     with mock.patch.object(adapter, "detect_providers", return_value={}):
         resolution = resolve_tier(profile)
-    assert resolution.pinned == NON_CAST_FAIGATE_MODEL
-    assert resolution.resolved_models == [NON_CAST_FAIGATE_MODEL]
+    assert resolution.pinned == "deepseek-v4-pro"
+    assert resolution.resolved_models == ["deepseek-v4-pro"]
 
 
 def test_confirmed_unavailable_is_refused():
@@ -116,7 +108,7 @@ def test_confirmed_unavailable_is_refused():
     with mock.patch.object(
         adapter,
         "detect_providers",
-        return_value={"faigate": _FakeFaigate([NON_CAST_FAIGATE_MODEL])},
+        return_value={"faigate": _FakeFaigate(["deepseek-v4-pro"])},
     ):
         with pytest.raises(RoutingProfileError) as exc:
             resolve_tier(profile)
@@ -145,15 +137,15 @@ def test_known_model_ids_is_no_longer_the_availability_gate():
     # A model id outside known_model_ids() (the old gate) now resolves when
     # Faigate serves it — proving known_model_ids() is no longer consulted for
     # availability.
-    profile = _pin_profile(pin=NON_CAST_FAIGATE_MODEL)
-    assert NON_CAST_FAIGATE_MODEL not in known_model_ids()
+    profile = _pin_profile(pin="deepseek-v4-pro")
+    assert "deepseek-v4-pro" not in known_model_ids()
     with mock.patch.object(
         adapter,
         "detect_providers",
-        return_value={"faigate": _FakeFaigate([NON_CAST_FAIGATE_MODEL])},
+        return_value={"faigate": _FakeFaigate(["deepseek-v4-pro"])},
     ):
         resolution = resolve_tier(profile)
-    assert resolution.pinned == NON_CAST_FAIGATE_MODEL
+    assert resolution.pinned == "deepseek-v4-pro"
 
 
 def test_router_profiles_unchanged_and_still_cast_the_council():
@@ -168,9 +160,7 @@ def test_router_profiles_unchanged_and_still_cast_the_council():
 
 
 def test_deepseek_v4_still_in_cast_is_not_silently_removed():
-    # The council still casts deepseek-v4-flash and deepseek-v4-pro (real roster
-    # ids admitted by the SW1311-COUNCIL-001 correction); the fix must
+    # The council still casts deepseek-v4 (a symbolic preset name); the fix must
     # not delete cast entries in the name of correctness. Known ids remain the
-    # cast surface, drawn from the resolved presets.
-    assert "deepseek-v4-flash" in known_model_ids()
-    assert "deepseek-v4-pro" in known_model_ids()
+    # cast surface, unchanged.
+    assert "deepseek-v4" in known_model_ids()
