@@ -248,6 +248,7 @@ def enforce_topology(
     nothing here edits product paths.
     """
     from skillweave.dispatch.topology import (
+        CycleError,
         ManifestError,
         assess_eligibility,
         build_serialization_plan,
@@ -312,6 +313,27 @@ def enforce_topology(
                     f"{by_id[iid].integration_policy!r}"
                 )
 
+    # CTRL-C4-INTEGRATION-GRAPH: an explicit integration lane must integrate at
+    # least one in-wave dependency, and every dependency it names for integration
+    # must exist in the declared wave. A mere ``integration_lanes`` label without
+    # the dependency relation grants no fail-open exception.
+    for iid in integration_ids:
+        deps = list(by_id[iid].depends_on or [])
+        in_wave = [d for d in deps if d in by_id]
+        if not in_wave:
+            raise TopologyGateError(
+                f"integration lane {iid!r} declares no in-wave dependency to "
+                "integrate; a mere integration-lane label does not grant an "
+                "exception"
+            )
+        missing = [d for d in deps if d not in by_id]
+        if missing:
+            raise TopologyGateError(
+                f"integration lane {iid!r} depends on undeclared lane(s) "
+                f"{sorted(missing)}; dependencies used for integration must "
+                "exist in the wave"
+            )
+
     # F5: eligibility is fail-closed at the pre-integration boundary. An
     # observed (non-``None``) eligibility map must cover *every* governed lane —
     # a governed lane whose state is absent is refused, not skipped. A
@@ -336,13 +358,23 @@ def enforce_topology(
         for manifest in manifests:
             _require_eligible(manifest.lane_id)
     else:
-        # Even when no eligibility map was supplied, a lane being integrated
-        # (and its integrator) cannot release without an observation.
-        for manifest in requires:
-            _require_eligible(manifest.lane_id)
-            for iid in integration_ids:
-                if iid != manifest.lane_id and manifest.lane_id in (by_id[iid].depends_on or []):
-                    _require_eligible(iid)
+        # Even when no eligibility map was supplied, a pre-integration boundary
+        # cannot release: every explicit integration lane and every in-wave lane
+        # it integrates must carry a present, passing observation. Merely naming
+        # ``integration_lanes`` never grants a fail-open exception, whether or
+        # not any lane declares ``requires_integrator``.
+        observed: list[str] = []
+        seen: set[str] = set()
+        for iid in integration_ids:
+            if iid not in seen:
+                seen.add(iid)
+                observed.append(iid)
+            for dep in by_id[iid].depends_on or []:
+                if dep in by_id and dep not in seen:
+                    seen.add(dep)
+                    observed.append(dep)
+        for lid in observed:
+            _require_eligible(lid)
 
     # F2: a semantic conflict is routed out of normal fan-out to the bounded
     # Integrator. The controller launches no worker for the conflicted lane and
@@ -370,7 +402,12 @@ def enforce_topology(
     remaining = [m for m in manifests if m.lane_id not in removed]
     groups: list[list[str]] = []
     if remaining:
-        plan = build_serialization_plan(remaining, integration_lanes=integration_ids)
+        try:
+            plan = build_serialization_plan(remaining, integration_lanes=integration_ids)
+        except ManifestError as exc:
+            raise TopologyGateError(str(exc)) from exc
+        except CycleError as exc:
+            raise TopologyGateError(str(exc)) from exc
         groups = [list(group) for group in plan.groups]
 
     return TopologyEnforcement(

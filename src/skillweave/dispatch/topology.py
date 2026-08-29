@@ -104,6 +104,16 @@ class ManifestError(TopologyError):
     """A mutating lane's manifest is incomplete or malformed."""
 
 
+class CycleError(TopologyError):
+    """The declared dependency graph contains a cycle.
+
+    A cycle among the declared lanes means no topological order exists, so an
+    Integrator could be placed before the lane it integrates. This is a
+    fail-closed topology error raised before provisioning or launch — never a
+    silent fall back to ``lane_id`` order.
+    """
+
+
 def _is_full_sha(value: Any) -> bool:
     if not isinstance(value, str) or len(value) != 40:
         return False
@@ -301,28 +311,38 @@ def _dependency_order(topologies: Sequence[LaneTopology]) -> List[LaneTopology]:
     place every dependency before every dependent. Two lanes with no dependency
     edge keep their ``lane_id`` order (stable sort). Declared dependencies that
     are not themselves lanes in ``topologies`` are ignored (they are external and
-    carry no batch position here). A cycle among the declared lanes falls back to
-    ``lane_id`` order so a malformed manifest still fails later in ``validate``
-    rather than hanging the planner.
+    carry no batch position here). A cycle among the *declared* lanes raises
+    :class:`CycleError` — it is never resolved by falling back to ``lane_id``
+    order, which could place an Integrator before the lane it integrates.
     """
     by_id = {t.lane_id: t for t in topologies}
-    ordered: List[LaneTopology] = []
-    remaining = set(t.lane_id for t in topologies)
+    indegree = {t.lane_id: 0 for t in topologies}
+    dependents: dict[str, List[str]] = {t.lane_id: [] for t in topologies}
+    for t in topologies:
+        for dep in (t.depends_on or []):
+            if dep in by_id:
+                indegree[t.lane_id] += 1
+                dependents[dep].append(t.lane_id)
 
-    while remaining:
-        progressed = False
-        for t in [by_id[i] for i in sorted(remaining)]:
-            deps = [d for d in (t.depends_on or []) if d in remaining]
-            if not deps:
-                ordered.append(t)
-                remaining.discard(t.lane_id)
-                progressed = True
-                break
-        if not progressed:
-            # Cycle among the remaining declared deps: emit by lane_id order.
-            for t in [by_id[i] for i in sorted(remaining)]:
-                ordered.append(t)
-            break
+    ordered: List[LaneTopology] = []
+    ready = sorted(lid for lid, deg in indegree.items() if deg == 0)
+    while ready:
+        lid = ready.pop(0)
+        ordered.append(by_id[lid])
+        for child in dependents[lid]:
+            indegree[child] -= 1
+            if indegree[child] == 0:
+                ready.append(child)
+                ready.sort()
+
+    if len(ordered) != len(topologies):
+        remaining = sorted(
+            set(t.lane_id for t in topologies) - {t.lane_id for t in ordered}
+        )
+        raise CycleError(
+            f"dependency cycle among declared lanes: {remaining}",
+            field=None,
+        )
     return ordered
 
 
@@ -343,12 +363,19 @@ def build_serialization_plan(
 
     ``integration_lanes`` names the lanes that are *explicitly* declared as the
     integration lanes (acceptance criterion 2): a collision between two plain
-    lanes is never folded into one batch by fiat.
+    lanes is never folded into one batch by fiat, and a mere ``integration_lanes``
+    label without the dependency relation does **not** suppress collision
+    serialization. A collision is only absorbed when one member of the pair is an
+    explicit integration lane that actually declares the other in its own
+    ``depends_on``.
     """
     integrations = set(integration_lanes or [])
     by_id = {t.lane_id: t for t in topologies}
     for t in topologies:
         t.validate()
+
+    def _integrates(iid: str, subject_id: str) -> bool:
+        return iid in integrations and subject_id in (by_id[iid].depends_on or [])
 
     groups: List[List[str]] = []
     for t in _dependency_order(topologies):
@@ -365,7 +392,8 @@ def build_serialization_plan(
                     ok = False
                     break
                 if _collides(t, other) and not (
-                    t.lane_id in integrations or other_id in integrations
+                    _integrates(t.lane_id, other_id)
+                    or _integrates(other_id, t.lane_id)
                 ):
                     ok = False
                     break
@@ -479,6 +507,7 @@ def is_eligible(
 __all__ = [
     "TopologyError",
     "ManifestError",
+    "CycleError",
     "LaneTopology",
     "SerializationPlan",
     "Collision",

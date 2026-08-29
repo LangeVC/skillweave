@@ -163,12 +163,33 @@ def test_detect_collisions_reports_incompatible_base():
 
 
 def test_explicit_integration_lane_absorbs_collision():
-    a = _lane("lane-a", write_scope=["/shared/**"], policy="requires_integrator")
-    b = _lane("integrator", write_scope=["/shared/**"], policy="requires_integrator")
-    plan = build_serialization_plan([a, b], integration_lanes=["integrator"])
-    # The integrator is permitted to fold the conflict; the two may share a
-    # batch only because one is an explicit integration lane.
-    assert plan.groups == [["integrator", "lane-a"]]
+    a = _lane("lane-a", write_scope=["/shared/**"])
+    integrator = _lane(
+        "integrator", write_scope=["/shared/**"], depends_on=["lane-a"]
+    )
+    plan = build_serialization_plan([a, integrator], integration_lanes=["integrator"])
+    # The integrator is ordered after its dependency: the two never share a
+    # batch, because a dependency edge forbids concurrent placement.
+    assert plan.groups == [["lane-a"], ["integrator"]]
+
+
+def test_integration_label_without_dependency_does_not_suppress_collision():
+    # A mere ``integration_lanes`` label with no dependency relation must not
+    # absorb a write-scope collision: the two lanes serialize.
+    a = _lane("lane-a", write_scope=["/shared/**"])
+    integrator = _lane("integrator", write_scope=["/shared/**"])  # no depends_on
+    plan = build_serialization_plan([a, integrator], integration_lanes=["integrator"])
+    assert plan.groups != [["integrator", "lane-a"]]
+    assert "lane-a" in plan.serialized or "integrator" in plan.serialized
+
+
+def test_dependency_cycle_raises_cycle_error():
+    from skillweave.dispatch.topology import CycleError
+
+    a = _lane("lane-a", depends_on=["lane-b"])
+    b = _lane("lane-b", depends_on=["lane-a"])
+    with pytest.raises(CycleError):
+        build_serialization_plan([a, b])
 
 
 def test_two_plain_lanes_never_fold_by_fiat():
@@ -1189,3 +1210,188 @@ def test_disjoint_eligible_lanes_use_parallel_fanout_once(tmp_path):
     assert fanout.batches == [["lane-a", "lane-b"]]
     assert inline.calls == 0
     assert run.halted is False
+
+
+# ── C5 behavioral evidence (controller correction) ───────────────────────────
+#
+# Closes the C4 code-level fail-closed audit: integration-lane eligibility and
+# the integration graph must be fail-closed at every pre-integration boundary.
+
+
+# Evidence 1: ``integration_lanes=["integrator"]`` with no eligibility map fails
+# even when no lane declares ``requires_integrator``.
+def test_integration_lane_no_eligibility_fails_without_requires_integrator(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**")
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-a"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(integration_lanes=["integrator"]),
+        )
+    assert "worktree state" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 2: an integration lane with no in-wave ``depends_on`` target cannot
+# absorb a collision.
+def test_integration_lane_without_dependency_cannot_absorb_collision(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/shared/**")
+    integrator = _governed_lane("integrator", write_scope="/shared/**")  # no dep
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(integration_lanes=["integrator"]),
+        )
+    assert "no in-wave dependency" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 3: missing eligibility for the Integrator OR any integrated in-wave
+# dependency fails.
+def test_missing_eligibility_for_integrated_dependency_fails(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**")
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-a"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(
+                integration_lanes=["integrator"],
+                eligibility={"integrator": _clean_state("integrator")},
+            ),
+        )
+    assert "lane-a" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+def test_missing_eligibility_for_integrator_fails(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**")
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-a"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(
+                integration_lanes=["integrator"],
+                eligibility={"lane-a": _clean_state("lane-a")},
+            ),
+        )
+    assert "integrator" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 4: dirty/detached/uncommitted/wrong-branch Integrator remains blocked.
+def test_dirty_integrator_blocked(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**")
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-a"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    dirty = WorktreeState(
+        committed_sha="c" * 40, detached=False, on_branch="branch-integrator",
+        dirty_paths=["src/x.py"],
+    )
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(
+                integration_lanes=["integrator"],
+                eligibility={
+                    "lane-a": _clean_state("lane-a"),
+                    "integrator": dirty,
+                },
+            ),
+        )
+    assert "not eligible" in str(exc.value)
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 5: a dependency cycle including an Integrator fails closed instead of
+# using lane-id order.
+def test_dependency_cycle_including_integrator_fails_closed(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo/a/**", depends_on=["integrator"])
+    integrator = _governed_lane(
+        "integrator", write_scope="/repo/integrator/**", depends_on=["lane-a"]
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    with pytest.raises(TopologyGateError) as exc:
+        _dispatch(
+            tmp_path, [a, integrator], fanout=fanout, inline=inline,
+            gate_input=TopologyGateInput(
+                integration_lanes=["integrator"],
+                eligibility={
+                    "lane-a": _clean_state("lane-a"),
+                    "integrator": _clean_state("integrator"),
+                },
+            ),
+        )
+    assert "cycle" in str(exc.value).lower()
+    assert fanout.calls == 0 and inline.calls == 0
+
+
+# Evidence 6: a valid acyclic Integrator graph with complete clean eligibility
+# executes dependencies first, then the Integrator, each exactly once through the
+# correct inline seam.
+def test_valid_acyclic_integrator_graph_executes_deps_first(tmp_path):
+    a = _governed_lane(
+        "lane-a", write_scope="/repo/a/**", policy="requires_integrator"
+    )
+    b = _governed_lane("lane-b", write_scope="/repo/b/**")
+    integrator = _governed_lane(
+        "integrator",
+        write_scope="/repo/integrator/**",
+        depends_on=["lane-a", "lane-b"],
+    )
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    run, _ = _dispatch(
+        tmp_path,
+        [a, b, integrator],
+        fanout=fanout,
+        inline=inline,
+        gate_input=TopologyGateInput(
+            integration_lanes=["integrator"],
+            eligibility={
+                "lane-a": _clean_state("lane-a"),
+                "lane-b": _clean_state("lane-b"),
+                "integrator": _clean_state("integrator"),
+            },
+        ),
+    )
+    # The two disjoint dependencies run in one fan-out batch; the integrator is
+    # ordered strictly after them and runs exactly once on the inline seam.
+    assert fanout.batches == [["lane-a", "lane-b"]]
+    assert inline.lane_ids == ["integrator"]
+    assert inline.calls == 1
+    assert run.halted is False
+
+
+# Evidence 7: independent disjoint lanes with no integration declaration retain
+# bounded parallel behavior and do not require pre-integration eligibility.
+def test_disjoint_lanes_without_integration_declaration_need_no_eligibility(tmp_path):
+    a = _governed_lane("lane-a", write_scope="/repo-a/**")
+    b = _governed_lane("lane-b", write_scope="/repo-b/**")
+    fanout = _RecordingFanout()
+    inline = _RecordingInline()
+    run, _ = _dispatch(
+        tmp_path, [a, b], fanout=fanout, inline=inline,
+        gate_input=TopologyGateInput(),  # no integration_lanes, no eligibility
+    )
+    assert fanout.batches == [["lane-a", "lane-b"]]
+    assert inline.calls == 0
+    assert run.halted is False
+
