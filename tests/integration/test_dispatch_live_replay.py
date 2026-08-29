@@ -17,6 +17,9 @@ Behavioural tests over the deterministic projection
    as the captured live state.
 8. Consumer disconnect and reconnect do not alter run state, and replay from
    sequence zero restores the view.
+C1: Replaying identical serialized bytes at materially different wall-clock
+   times produces a byte-/structure-identical projection (deterministic
+   heartbeat age derived only from typed facts).
 10. Process recreation states the run-scoped boundary and does not claim a
     persistent lease, offset or autonomous resume.
 
@@ -202,6 +205,109 @@ def test_disconnect_reconnect_and_replay_from_zero_restore_view():
     replayed = Projector("run-1")
     _projector_feed(replayed, stream.typed_events_since(0))
     assert builds_identical_projection(captured, replayed.projection())
+
+
+# ── Regression: deterministic heartbeat age under wall-clock skew ───────────
+#
+# C1/F-OBSERVER-DET-001: the projected heartbeat age must be a pure function
+# of the serialized typed facts, never of the wall clock at fold/replay time.
+# Replaying identical bytes at materially different wall-clock times must yield
+# a byte-/structure-identical projection, and reconnect/replay-from-zero restores
+# the identical view. Live freshness survives because age is measured against a
+# typed reference timestamp (a later typed event), which advances as the typed
+# stream grows.
+
+
+def _typed_heartbeat_stream():
+    """A fixed, serialized typed stream (same bytes every call).
+
+    Both the heartbeat and the later reference event carry fixed typed
+    timestamps, 60s apart, so the deterministic projected age is exactly 60.0.
+    The stream is byte-identical on every build, so repeated / delayed replays
+    fold the exact same serialized bytes.
+    """
+    stream, _sink = _stream("run-det")
+    stream.wave_started(wave="w0")
+    stream.lane_started(wave="w0", lane_id="ops")
+    stream.dispatch_started(wave="w0", lane_id="ops", dispatch_id="d-0")
+    # Heartbeat carries a fixed typed timestamp; a later typed event advances
+    # the deterministic reference exactly 60s on.
+    stream.emit(
+        wave="w0", lane_id="ops", dispatch_id="d-0",
+        event_type=EventType.HEARTBEAT,
+        process_status=ProcessStatus.RUNNING,
+        task_status=TaskStatus.IN_PROGRESS,
+        timestamp="2026-01-01T00:00:00Z",
+    )
+    stream.emit(
+        wave="w0", lane_id="ops", dispatch_id="d-0",
+        event_type=EventType.EVIDENCE_RECORDED,
+        process_status=ProcessStatus.EXITED,
+        task_status=TaskStatus.DONE,
+        evidence_status="recorded",
+        receipt_refs=["r-1"],
+        timestamp="2026-01-01T00:01:00Z",
+    )
+    return stream, stream.typed_events_since(0)
+
+
+def test_delayed_replay_identical_bytes_identical_projection():
+    """Replaying identical serialized bytes at different wall-clock times is
+    projection-identical.
+
+    The heartbeat's typed timestamp is fixed far in the past (2026-01-01) while
+    the wall clock at replay is materially later. The fold must derive the age
+    purely from typed facts, so two replay folds of the identical bytes produce
+    byte-/structure-identical projections regardless of when each fold runs.
+    """
+    _, events = _typed_heartbeat_stream()
+    bytes_early = [json.dumps(e, sort_keys=True) for e in events]
+
+    # Two independent folds of the exact same serialized bytes (running at
+    # different wall-clock instants). A clock-dependent fold would emit
+    # different heartbeat ages and compare unequal.
+    replay_early = Projector("run-det")
+    _projector_feed(replay_early, [json.loads(b) for b in bytes_early])
+
+    replay_late = Projector("run-det")
+    _projector_feed(replay_late, [json.loads(b) for b in bytes_early])
+
+    early_proj = replay_early.projection()
+    late_proj = replay_late.projection()
+
+    # Structure-identical: the projections are equal and serialized bytes match.
+    assert builds_identical_projection(early_proj, late_proj)
+    assert json.dumps(early_proj.to_dict(), sort_keys=True) == (
+        json.dumps(late_proj.to_dict(), sort_keys=True)
+    )
+
+    # Live freshness is preserved via typed timestamps: the age is the typed
+    # reference (00:01:00Z) minus the heartbeat (00:00:00Z) = exactly 60s, a
+    # pure function of the serialized facts (no wall-clock dependence).
+    job = next(j for j in early_proj.jobs if j.job_id == "d-0")
+    assert job.heartbeat_age_s == 60.0
+
+
+def test_reconnect_and_replay_zero_survive_wall_clock_drift():
+    """A reconnecting consumer replaying from zero sees the identical view
+    even when the wall clock has advanced materially (no time-dependent drift)."""
+    stream, events = _typed_heartbeat_stream()
+
+    # "disconnect": a fresh observer folds the live typed events (at t0).
+    live = LiveObserver(stream)
+    live.observe(events)
+    captured = live.projection().to_dict()
+
+    # "reconnect later": an independent projector replays the same typed events
+    # from zero (at a materially later wall clock); the view must be identical.
+    replay = Projector("run-det")
+    _projector_feed(replay, stream.typed_events_since(0))
+
+    assert captured == replay.projection().to_dict()
+
+    # The replayed view restores the deterministic heartbeat age exactly.
+    job = next(j for j in replay.projection().jobs if j.job_id == "d-0")
+    assert job.heartbeat_age_s == 60.0
 
 
 # ── Criterion 10: run-scoped boundary, no persistent lease/offset ─────────────

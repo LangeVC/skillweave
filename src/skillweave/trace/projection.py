@@ -17,7 +17,7 @@ worker, mutates a product file, or carries transition authority.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 from skillweave.trace.handoff import ControllerCheckpoint, Handoff
@@ -131,10 +131,6 @@ class ProjectionEvent:
     payload: Mapping[str, Any]
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 class Projector:
     """Fold an ordered stream of typed events into a deterministic projection.
 
@@ -191,9 +187,10 @@ class Projector:
 
         if event_type == "heartbeat":
             if dispatch_id:
-                self._heartbeat_times[dispatch_id] = payload.get(
-                    "timestamp", _now()
-                )
+                # The heartbeat timestamp is a typed fact of the event. If the
+                # event does not carry one, there is no deterministic fact to
+                # derive an age from, so nothing is recorded (no wall clock).
+                self._heartbeat_times[dispatch_id] = payload.get("timestamp")
 
         disposition = payload.get("disposition")
         if disposition and lane_id:
@@ -213,22 +210,32 @@ class Projector:
             self._jobs[job_id] = JobCell(
                 job_id=job_id,
                 state=state,
-                heartbeat_age_s=self._heartbeat_age(job_id),
+                heartbeat_age_s=self._heartbeat_age(job_id, payload),
                 evidence=tuple(self._evidence),
                 criterion_group=group,
             )
 
-    def _heartbeat_age(self, job_id: str) -> Optional[float]:
+    def _heartbeat_age(self, job_id: str, payload: Mapping[str, Any]) -> Optional[float]:
+        """Derive a heartbeat's age purely from typed facts (deterministic).
+
+        Age is ``reference - heartbeat_timestamp``, where ``reference`` is the
+        deterministic projection reference: the most recent typed event's
+        ``timestamp`` as it is folded. Both terms are typed facts carried by
+        the serialized stream, so replaying identical bytes at any wall-clock
+        time yields an identical projection (replays are deterministic). The
+        reference advances as newer typed events arrive, preserving live
+        freshness without any wall-clock read during fold/replay.
+        """
         ts = self._heartbeat_times.get(job_id)
-        if ts is None:
+        reference = payload.get("timestamp")
+        if ts is None or reference is None:
             return None
         try:
-            elapsed = (
-                datetime.now(timezone.utc)
-                - datetime.fromisoformat(ts)
-            ).total_seconds()
+            heartbeat_t = datetime.fromisoformat(ts)
+            reference_t = datetime.fromisoformat(reference)
         except ValueError:
             return None
+        elapsed = (reference_t - heartbeat_t).total_seconds()
         return round(elapsed, 3)
 
     def apply_handoff(self, handoff: Handoff) -> None:
