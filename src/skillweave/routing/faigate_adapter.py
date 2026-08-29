@@ -67,7 +67,7 @@ class RateLimitedError(RuntimeError):
         self.provider = provider
 
 
-def translate_model_id(model: str) -> str:
+def translate_model_id(model: str, provider: str = "faigate") -> str:
     """Return the provider-native model id, translating the outer prefix once.
 
     This is the single, owning translation point. The rules are exact:
@@ -79,6 +79,13 @@ def translate_model_id(model: str) -> str:
       (``openrouter/x``, ``omniroute/x``, …) or a dangling ``faigate/`` raises
       :class:`ModelNamespaceError` — it is never silently collapsed.
 
+    After the namespace is resolved exactly once, the provider's own alias table
+    (``FAIGATE_MAP`` / ``OPENROUTER_MAP``) is applied as the single provider
+    backend. That mapping is *not* a second translation path and never runs on a
+    prefixed id: it only rewrites an already-resolved, provider-native alias into
+    the concrete target the router expects. An unmapped alias passes through
+    unchanged.
+
     The function is pure: no network, no global state. It exists so that callers
     (``FaidateProvider``, the council engine) never hand-code ``replace`` on an
     id, which is how the v1.3.9 prefix leaked and how the v1.3.10 correction
@@ -87,10 +94,10 @@ def translate_model_id(model: str) -> str:
     if not model:
         raise ModelNamespaceError(model, "empty model id")
     if "/" not in model and ":" not in model:
-        return model
+        body = model
     # A single leading ``faigate/`` or ``faigate:`` prefix translates away
     # exactly once. Both delimiters name the one outer gateway namespace.
-    if model.startswith(f"{PROVIDER_NAMESPACE}/") or model.startswith(f"{PROVIDER_NAMESPACE}:"):
+    elif model.startswith(f"{PROVIDER_NAMESPACE}/") or model.startswith(f"{PROVIDER_NAMESPACE}:"):
         body = model[len(PROVIDER_NAMESPACE) + 1:]
         if not body:
             raise ModelNamespaceError(model, "dangling prefix without a body")
@@ -98,9 +105,17 @@ def translate_model_id(model: str) -> str:
             raise ModelNamespaceError(model, "prefix applied twice")
         if "/" in body or ":" in body:
             raise ModelNamespaceError(model, "prefix followed by a nested namespace")
-        return body
     # Any other outer prefix is refused rather than silently mangled.
-    raise ModelNamespaceError(model, "unrecognised provider prefix")
+    else:
+        raise ModelNamespaceError(model, "unrecognised provider prefix")
+
+    # Provider-specific alias backend: maps a resolved native alias to the
+    # concrete target id the provider expects. This is the only second lookup in
+    # the module, and it is reached only through this single translation path.
+    mapping = _PROVIDER_MODEL_MAPS.get(provider)
+    if mapping is not None:
+        body = mapping.get(body, body)
+    return body
 
 
 def validate_council_model_ids(*, models, chairman, source: str = "council profile") -> None:
@@ -205,6 +220,52 @@ def _extract_answer(envelope: dict, requested_model: str, provider: str = "unkno
         provider=provider,
     )
 
+
+FAIGATE_MAP = {
+    "sonnet": "anthropic-sonnet",
+    "claude-sonnet-4-5": "anthropic-sonnet",
+    "haiku": "anthropic-haiku",
+    "claude-haiku-3-5": "anthropic-haiku",
+    "opus": "anthropic-claude",
+    "claude-opus-4": "anthropic-claude",
+    "gpt-4o": "openai-gpt4o",
+    "gpt-4o-mini": "gemini-flash",
+    "gemini-pro": "gemini-pro",
+    "gemini-2-5-pro": "gemini-pro",
+    "deepseek-v4": "deepseek-v4-pro",
+    "deepseek-v4-pro": "deepseek-v4-pro",
+    "llama-4": "openrouter-fallback",
+    "llama-4-maverick": "openrouter-fallback",
+    "mistral": "anthropic-claude",
+    "mistral-large": "anthropic-claude",
+}
+
+OPENROUTER_MAP = {
+    "sonnet": "anthropic/claude-3.5-sonnet",
+    "claude-sonnet-4-5": "anthropic/claude-3.5-sonnet",
+    "haiku": "anthropic/claude-3-haiku",
+    "claude-haiku-3-5": "anthropic/claude-3-haiku",
+    "opus": "anthropic/claude-3-opus",
+    "claude-opus-4": "anthropic/claude-3-opus",
+    "gpt-4o": "openai/gpt-4o",
+    "gpt-4o-mini": "openai/gpt-4o-mini",
+    "gemini-pro": "google/gemini-pro-1.5",
+    "gemini-2-5-pro": "google/gemini-pro-1.5",
+    "deepseek-v4": "deepseek/deepseek-coder",
+    "deepseek-v4-pro": "deepseek/deepseek-coder",
+    "llama-4": "meta-llama/llama-3-70b-instruct",
+    "llama-4-maverick": "meta-llama/llama-3-70b-instruct",
+    "mistral": "mistralai/mistral-large",
+    "mistral-large": "mistralai/mistral-large",
+}
+
+#: Provider name -> alias table. ``translate_model_id`` reads this as its single
+#: provider-specific backend; no call site may consult ``FAIGATE_MAP`` or
+#: ``OPENROUTER_MAP`` directly — that would be a second translation path.
+_PROVIDER_MODEL_MAPS = {
+    "faigate": FAIGATE_MAP,
+    "openrouter": OPENROUTER_MAP,
+}
 
 class CouncilProvider:
     """Abstract base: all providers implement query + availability."""
@@ -450,7 +511,7 @@ class FaigateProvider(CouncilProvider):
             if _is_rate_limit(result["error"]):
                 raise RateLimitedError(clean_model)
             raise RuntimeError(f"Faigate query failed: {result['error']}")
-        return _extract_answer(result, clean_model, self.provider_name())
+        return _extract_answer(result, model, self.provider_name())
 
     def provider_name(self) -> str:
         return "faigate"
@@ -489,7 +550,8 @@ class OpenRouterProvider(CouncilProvider):
 
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
-        body = {"model": model, "messages": messages, "temperature": temperature}
+        clean_model = translate_model_id(model, "openrouter")
+        body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", body) if timeout is None
                      else self._req("/chat/completions", body, timeout=timeout)))
@@ -506,7 +568,11 @@ class OpenRouterProvider(CouncilProvider):
                 lambda: self._req("/models", method="GET")
             )
             available_ids = {m.get("id", "") for m in result.get("data", [])}
-            return {m: (m in available_ids or any(m in a for a in available_ids)) for m in models}
+            results = {}
+            for m in models:
+                clean_m = translate_model_id(m, "openrouter")
+                results[m] = (clean_m in available_ids or any(clean_m in a for a in available_ids))
+            return results
         except Exception:
             return {m: True for m in models}
 
@@ -541,7 +607,8 @@ class GenericRouterProvider(CouncilProvider):
 
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
-        body = {"model": model, "messages": messages, "temperature": temperature}
+        clean_model = translate_model_id(model, "openrouter")
+        body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", body) if timeout is None
                      else self._req("/chat/completions", body, timeout=timeout)))
