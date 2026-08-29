@@ -58,8 +58,10 @@ criteria:
    :class:`ArtifactPolicy` and can never expose private prompts, secrets or
    hidden reasoning; artifact content above the allowed sensitivity level is
    redacted. Restricted-field matching is normalization-aware so case and
-   separator variants (``API_KEY``, ``api-key``, ``Private_Prompt``) and
-   nested/list forms are all redacted.
+   separator variants (``API_KEY``, ``api-key``, ``Private_Prompt``),
+   compound variants that embed a restricted token (``secret_token``,
+   ``api_key_token``) and nested/list forms are all redacted, while ordinary
+   words that merely contain a restricted token (``secretary_name``) are not.
 """
 
 from __future__ import annotations
@@ -1520,6 +1522,33 @@ def _normalize_field_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(name).lower())
 
 
+def _field_name_tokens(name: str) -> tuple[str, ...]:
+    """Split a field name into lowercase semantic words.
+
+    Separators and camelCase boundaries are treated as word boundaries so
+    ``private_prompt``, ``Private_Prompt``, ``PRIVATE-PROMPT`` and
+    ``privatePrompt`` all yield ``("private", "prompt")``. A word that merely
+    *contains* a restricted token (``secretary``) stays one token and never
+    matches the standalone ``secret`` token.
+    """
+    s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", str(name))
+    words = re.split(r"[^a-zA-Z0-9]+", s)
+    return tuple(w.lower() for w in words if w)
+
+
+def _contains_word_sequence(haystack: tuple[str, ...], needle: tuple[str, ...]) -> bool:
+    """True when ``needle`` appears as a contiguous subsequence of ``haystack``."""
+    if not needle:
+        return True
+    if len(needle) > len(haystack):
+        return False
+    width = len(needle)
+    return any(
+        haystack[i : i + width] == needle
+        for i in range(len(haystack) - width + 1)
+    )
+
+
 @dataclass(frozen=True)
 class ArtifactPolicy:
     """The redaction policy applied by :func:`export` (criterion 8).
@@ -1536,9 +1565,20 @@ class ArtifactPolicy:
     redaction_token: str = "***REDACTED***"
 
     def is_restricted(self, name: Any) -> bool:
-        return _normalize_field_name(name) in {
-            _normalize_field_name(f) for f in self.restricted_fields
-        }
+        normalized = _normalize_field_name(name)
+        tokens = _field_name_tokens(name)
+        for restricted in self.restricted_fields:
+            # Exact normalized equality preserves the single-token forms such as
+            # ``api_key``/``apikey`` and ``hidden reason ing``/``hiddenreasoning``.
+            if normalized == _normalize_field_name(restricted):
+                return True
+            # Compound/case/separator variants are redacted when they contain a
+            # restricted token or a restricted token *sequence* as distinct
+            # words. This catches ``secret_token``, ``api_key_token`` and
+            # ``apiKeyNested`` while never matching ``secretary_name``.
+            if _contains_word_sequence(tokens, _field_name_tokens(restricted)):
+                return True
+        return False
 
 
 #: The top-level entry fields an export may carry (schema order).

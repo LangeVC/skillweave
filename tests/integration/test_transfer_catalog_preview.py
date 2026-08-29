@@ -673,6 +673,89 @@ def test_export_redacts_restricted_top_level_field():
     assert exported["metadata"]["chain_of_thought"] == "***REDACTED***"
 
 
+# F-03 (C2): compound restricted-field names are redacted ──────────────────
+#
+# Compound/case/separator variants that embed a restricted token or a
+# restricted token *sequence* must be redacted across nested mappings and
+# lists, while ordinary words that merely contain a restricted token
+# (``secretary_name``) must be exported verbatim.
+
+
+def test_export_redacts_compound_secret_variants_nested():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "secret_token": "v1",
+        "SECRET_TOKEN": "v2",
+        "Secret Token": "v3",
+        "api_key_token": "v4",
+        "tokenizer_secret": "v5",
+        "private_prompt_content": "v6",
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    for secret in ("v1", "v2", "v3", "v4", "v5", "v6"):
+        assert secret not in exported
+    assert exported.count("***REDACTED***") >= 6
+
+
+def test_export_redacts_compound_variants_inside_lists():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "notes": [
+            {"secretToken": "leaked-1"},
+            {"api.key.token": "leaked-2"},
+            {"nested": [{"PRIVATE_PROMPT": "leaked-3"}]},
+        ]
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    for secret in ("leaked-1", "leaked-2", "leaked-3"):
+        assert secret not in exported
+
+
+def test_export_redacts_compound_variant_camel_case():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "apiKeyNested": "camel-1",
+        "hiddenReasoningSlot": "camel-2",
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    assert "camel-1" not in exported
+    assert "camel-2" not in exported
+
+
+def test_export_keeps_nonsecret_near_matches_verbatim():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "secretary_name": "susan",
+        "tokens_processed": 128,
+        "tokenizer_config": "cl100k_base",
+        "access_level": "public",
+    }
+    entry = Entry.from_dict(raw)
+    exported = export([entry])[0]
+    metadata = exported["metadata"]
+    assert metadata["secretary_name"] == "susan"
+    assert metadata["tokens_processed"] == 128
+    assert metadata["tokenizer_config"] == "cl100k_base"
+    assert metadata["access_level"] == "public"
+    assert "***REDACTED***" not in json.dumps(metadata)
+
+
+def test_export_redacts_compound_variants_nested_inside_mapping_and_list():
+    raw = catalog_entry_for("sw1311-model-001").to_dict()
+    raw["metadata"] = {
+        "container": {
+            "inner": [{"secret_token": "deep-1"}, {"API_KEY_VAULT": "deep-2"}]
+        }
+    }
+    entry = Entry.from_dict(raw)
+    exported = json.dumps(export([entry])[0])
+    assert "deep-1" not in exported
+    assert "deep-2" not in exported
+
+
 # F-04: runtime validation agrees with schema (no bool/number coercion) ──────
 
 
