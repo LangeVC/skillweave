@@ -339,7 +339,7 @@ class FaigateProvider(CouncilProvider):
                      else self._req("/chat/completions", "POST", body, timeout)))
         if result.get("error"):
             raise RuntimeError(f"Faigate query failed: {result['error']}")
-        return _extract_answer(result, clean_model)
+        return _extract_answer(result, model.replace("faigate:", ""))
 
     def provider_name(self) -> str:
         return "faigate"
