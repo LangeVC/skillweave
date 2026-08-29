@@ -131,3 +131,140 @@ def _run_all() -> int:
 
 if __name__ == "__main__":
     sys.exit(1 if _run_all() else 0)
+
+
+# ── SW1311-COUNCIL-001 — historical regression closure (criterion 8) ────────
+# The v1.3.9 release prefixed every Council profile id with ``faigate/``
+# (gateway namespace leaked into profile data). v1.3.10 reverted the prefix but
+# left a ``replace`` in the adapter that could silently collapse an unknown
+# namespace. These fixtures lock BOTH commits out: the prefix must not reappear
+# in Council data, and no silent ``replace``/collapse remains.
+
+from skillweave.routing.faigate_adapter import (  # noqa: E402
+    ROUTER_PROFILES,
+    ModelNamespaceError,
+    translate_model_id,
+    validate_council_model_ids,
+)
+
+# The exact ids v1.3.9 prefixed (taken from the v1.3.9 commit's
+# ``council-profiles.md`` diff) and their provider-native v1.3.10 form.
+V139_PREFIXED = [
+    "faigate/claude-sonnet-4-5",
+    "faigate/gpt-4o",
+    "faigate/gemini-2-5-pro",
+    "faigate/deepseek-v4-pro",
+    "faigate/claude-opus-4",
+]
+
+
+def test_router_profiles_never_re_adopt_the_v139_prefix():
+    # The exact relapse v1.3.9 committed: Council profile ids carrying the outer
+    # gateway prefix. No id in ROUTER_PROFILES may carry it again.
+    for preset in ROUTER_PROFILES.values():
+        for mid in list(preset["models"]) + [preset["chairman"]]:
+            assert "faigate/" not in mid
+            assert "/" not in mid
+
+
+def test_prefixed_council_ids_fail_validation_before_call():
+    # The v1.3.9 ids, fed back in, are refused by the Council profile validator
+    # with a typed error — never silently accepted and passed to a provider.
+    for mid in V139_PREFIXED:
+        with pytest.raises(ModelNamespaceError):
+            validate_council_model_ids(models=[mid], chairman=None, source="v1.3.9 fixture")
+
+
+def test_translation_strips_exactly_once_and_never_collapses_unknown():
+    # The v1.3.10 correction used ``replace`` which could silently collapse a
+    # foreign or doubled prefix. Exact-once translation refuses both.
+    assert translate_model_id("faigate/deepseek-v4-pro") == "deepseek-v4-pro"
+    with pytest.raises(ModelNamespaceError):
+        translate_model_id("faigate/faigate/deepseek-v4-pro")
+    with pytest.raises(ModelNamespaceError):
+        translate_model_id("openrouter/deepseek-v4-pro")
+
+
+def test_dispatch_qualified_syntax_still_valid_but_not_in_council_data():
+    # The dispatch layer's gateway-qualified id remains a legal input to the
+    # adapter (translated exactly once), while the same id is illegal in Council
+    # profile data. One fixture proves both contexts concurrently.
+    dispatch_id = "faigate/deepseek-v4-pro"
+    assert translate_model_id(dispatch_id) == "deepseek-v4-pro"  # dispatch: valid
+    with pytest.raises(ModelNamespaceError):  # council data: invalid
+        validate_council_model_ids(models=[dispatch_id], chairman=None, source="council")
+
+
+# ── SW1311-COUNCIL-001 — proven live roster identifiers (criterion 6) ───────
+# The council's seat set is grounded in a live Faidate roster proof, not in a
+# guessed alias. ``ROUTER_PROFILES`` names those proven ids directly: the two
+# provider-native roster ids measured to self-answer (requested == answering in
+# the response envelope). A later edit that inserts a non-self-answering id, or
+# leaves the default preset with fewer than two distinct self-answering ids, fails
+# here before any live call.
+
+#: The distinct self-answering roster ids measured live at
+#: ``http://127.0.0.1:8090/v1`` — requested == answering from the response
+#: envelope. Every other id Faigate serves collapses onto ``deepseek-v4-flash``,
+#: so these two are the only seats that can hold the >=2 distinct gate.
+PROVEN_SELF_ANSWERING = {"deepseek-v4-pro", "deepseek-v4-flash"}
+
+
+def test_default_profile_models_are_self_answering_roster_ids():
+    # The default preset's models must name provider-native roster ids that
+    # answer as themselves — never a stale alias that collapses silently.
+    assert set(ROUTER_PROFILES["default"]["models"]) <= PROVEN_SELF_ANSWERING, (
+        f"default preset models are not all proven self-answering roster ids: "
+        f"{ROUTER_PROFILES['default']['models']}"
+    )
+
+
+def test_every_preset_names_only_self_answering_roster_ids():
+    # Every declared seat (across all presets) must be one of the proven
+    # self-answering roster ids.
+    for preset in ROUTER_PROFILES.values():
+        for mid in list(preset["models"]) + [preset["chairman"]]:
+            assert mid in PROVEN_SELF_ANSWERING, (
+                f"{mid!r} is not a proven self-answering Faidate roster id; "
+                f"name a real /v1/models id that self-answers"
+            )
+
+
+def test_default_profile_yields_at_least_two_distinct_models():
+    # The live gate requests the ``default`` preset's seats and demands >=2
+    # distinct answering models among answered seats. Proven: the default cast
+    # names both self-answering deepseek ids.
+    default = ROUTER_PROFILES["default"]
+    assert len(set(default["models"])) >= 2, (
+        f"default profile lacks >=2 distinct self-answering roster models; "
+        f"found {default['models']}"
+    )
+
+
+def test_default_profile_at_least_two_distinct_answering_models():
+    # Across the whole default cast (models + chairman in full mode), the seat
+    # set is at least two distinct self-answering models, so the minimum-distinct
+    # gate holds.
+    default = ROUTER_PROFILES["default"]
+    seats = default["models"] + ([default["chairman"]] if default.get("mode") == "full" else [])
+    assert len(set(seats)) >= 2, f"default profile seat set too small: {seats}"
+
+
+def test_cast_is_provider_native_not_symbolic():
+    # ``ROUTER_PROFILES`` names provider-native roster ids directly. ``deepseek-v4``
+    # is a symbolic alias and must NOT appear in the cast; ``deepseek-v4-pro`` /
+    # ``deepseek-v4-flash`` are the only declared seats.
+    from skillweave.routing.faigate_adapter import known_model_ids
+    assert "deepseek-v4" not in known_model_ids()
+    assert "deepseek-v4-pro" in known_model_ids()
+    assert "deepseek-v4-flash" in known_model_ids()
+
+
+def test_v139_and_v1310_guards_still_hold_against_new_profiles():
+    # The historical prefix relapse and the silent-collapse guards remain intact
+    # against the corrected profiles: no id carries a gateway namespace, and no
+    # ``faigate/`` prefix appears anywhere in Council profile data.
+    for preset in ROUTER_PROFILES.values():
+        for mid in list(preset["models"]) + [preset["chairman"]]:
+            assert "/" not in mid and ":" not in mid
+            assert "faigate" not in mid

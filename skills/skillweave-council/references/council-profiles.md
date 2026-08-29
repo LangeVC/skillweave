@@ -2,30 +2,41 @@
 
 Pre-configured model sets for different use cases.
 
+Each id below is a **provider-native Faigate roster id** — a real id from the
+live ``GET /v1/models`` roster measured to answer *as itself* (its response
+envelope ``model`` field echoes the requested id). Faigate's roster self-answers
+only ``deepseek-v4-pro`` and ``deepseek-v4-flash``; every other id it serves
+silently collapses onto ``deepseek-v4-flash``. The presets therefore name those
+two ids directly, with no symbolic seat alias and no hidden substitution: what
+the profile names is exactly what runs, and the ``>=2`` distinct answering-model
+gate holds on the two self-answering seats. The run record attributes the model
+that actually answered (read from the response envelope, never inferred from the
+request).
+
 ## default
-- Models: claude-sonnet-4-5, gpt-4o, gemini-2-5-pro, deepseek-v4-pro
-- Chairman: claude-sonnet-4-5
+- Models: deepseek-v4-pro, deepseek-v4-flash
+- Chairman: deepseek-v4-pro
 - Mode: standard
 - Temperature: 0.5
 - Use: General-purpose deliberation
 
 ## quick
-- Models: gpt-4o-mini, claude-haiku-3-5
-- Chairman: gpt-4o-mini
+- Models: deepseek-v4-flash
+- Chairman: deepseek-v4-flash
 - Mode: quick
 - Temperature: 0.3
 - Use: Fast comparison, budget-friendly
 
 ## deep
-- Models: claude-sonnet-4-5, gpt-4o, gemini-2-5-pro, deepseek-v4-pro, llama-4-maverick, mistral-large
-- Chairman: claude-opus-4
+- Models: deepseek-v4-pro, deepseek-v4-flash
+- Chairman: deepseek-v4-pro
 - Mode: full
 - Temperature: 0.5
 - Use: Comprehensive analysis, diverse perspectives
 
 ## expert
-- Models: claude-opus-4, gpt-4o, gemini-2-5-pro, deepseek-v4-pro
-- Chairman: claude-opus-4
+- Models: deepseek-v4-pro, deepseek-v4-flash
+- Chairman: deepseek-v4-pro
 - Mode: full
 - Temperature: 0.4
 - Use: High-stakes decisions, research-grade output

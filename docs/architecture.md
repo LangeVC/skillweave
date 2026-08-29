@@ -34,6 +34,21 @@ drives end to end. It does not import or invoke any simulated executor: the
 canonical path runs real subprocesses, and any `simulate_*` placeholder is
 quarantined behind `skillweave/legacy`.
 
+## Council model namespace
+
+The Council's `ROUTER_PROFILES` names **provider-native** Faidate roster ids
+directly — real `/v1/models` ids, never gateway-qualified and never symbolic seat
+aliases. Faigate's live roster self-answers only `deepseek-v4-pro` and
+`deepseek-v4-flash`; every other id it serves silently collapses onto
+`deepseek-v4-flash`, so the presets name those two ids directly to hold the
+`>=2` distinct answering-model gate. The `faigate/` gateway prefix belongs to the
+dispatch layer only and is translated exactly once at the adapter boundary
+(`translate_model_id`); a prefix in Council profile data is refused before any
+provider call. Each seat records requested / resolved / answering model, status,
+provider and profile revision — the answering model is read from the response
+envelope, never inferred from the request. Fewer than `min_models_required`
+distinct answering models is a degraded run, never consensus.
+
 ## Multi-lane control plane
 
 The control plane is a set of cooperating written surfaces, each with a single
