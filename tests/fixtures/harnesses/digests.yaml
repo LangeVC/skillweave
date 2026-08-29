@@ -1,0 +1,21 @@
+# Installed-skill digests per adapter (SW1311-HARNESS-001, criterion 4).
+#
+# In strict-controller mode a dispatch is refused before worker launch unless
+# every expected digest here is reported and matches. A missing (stale) or
+# mismatched digest names the offending asset. These are hermetic fixture
+# digests — deterministic fixed hex strings so the tests prove binding and
+# staleness without depending on real skill content.
+
+claude-code:
+  skillweave-promptchain: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  skillweave-blueprint: cccccccccccccccccccccccccccccccc
+
+codex:
+  skillweave-promptchain: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+antigravity:
+  skillweave-repo-health: dddddddddddddddddddddddddddddddd
+
+opencode:
+  skillweave-promptchain: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  skillweave-lifecycle: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

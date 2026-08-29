@@ -45,6 +45,11 @@ from skillweave.dispatch.contracts import (
     validate_for_dispatch,
 )
 from skillweave.dispatch.events import DispatchEventStream
+from skillweave.dispatch.harness_contract import (
+    HarnessAdapterProfile,
+    StrictController,
+    StrictControllerError,
+)
 from skillweave.dispatch.profile_resolution import (
     ProfileResolutionError,
     ResolvedDispatch,
@@ -936,6 +941,7 @@ class OperatorDispatchApplication:
         cwd: Optional[str] = None,
         artifact_store: Optional[Any] = None,
         namespace_registry: Optional[StateNamespaceRegistry] = None,
+        strict_controller: Optional[StrictController] = None,
     ):
         self._workspace_seam = workspace_seam
         self._fanout_seam = fanout_seam
@@ -943,6 +949,7 @@ class OperatorDispatchApplication:
         self._repo_root = repo_root
         self._cwd = cwd
         self._artifact_store = artifact_store
+        self._strict_controller = strict_controller
         self._active_store: Optional[Any] = None
         self._last_success: dict[str, bool] = {}
         self._typed_failure: dict[str, bool] = {}
@@ -1054,6 +1061,64 @@ class OperatorDispatchApplication:
         )
         return DispatchRun(run_id=generate_run_id(), wave=wave, report=report)
 
+    # -- experimental strict-controller pre-launch seam ----------------------
+
+    def _apply_strict_adherence(
+        self,
+        *,
+        declaration: SequenceDeclaration,
+        resolved: ResolvedDispatch,
+        task_brief: bytes,
+        adapter: Optional[HarnessAdapterProfile] = None,
+        adapter_skill_digests: Optional[Mapping[str, str]] = None,
+    ) -> None:
+        """Fail-closed strict gate between validation and the first launch.
+
+        This is the single pre-launch strict-adherence seam (SW1311-HARNESS-001,
+        criterion 3). It runs *before* any workspace is provisioned or any worker
+        starts. When a strict controller is configured, the seam refuses the
+        dispatch unless the validated sequence, the resolved profile, the exact
+        task brief and the installed skill digests are all bound; it reconciles
+        the adapter's expected digests against the observed values (naming a
+        missing/stale asset), reconciles a single distinct authority, and fails
+        closed on a native-delegation / direct-shell bypass. It mutates no
+        dispatch state — it reads the already-loaded declaration and resolution
+        and records into the controller's attempt log only.
+        """
+        controller = self._strict_controller
+        if controller is None:
+            return
+
+        observed = dict(adapter_skill_digests or {})
+        # The strict binding itself is the gate: it raises (StrictControllerError)
+        # by name when any of the four required facts is unbound.
+        controller.bind(
+            sequence=declaration,
+            profile=resolved,
+            task_brief=task_brief,
+            skill_digests=observed or (adapter.skill_digests if adapter else {}),
+            adapter=adapter,
+            bound_at=f"{getattr(declaration, 'execution_model', '?')}:"
+            f"{getattr(resolved, 'profile_name', '?')}",
+        )
+        if adapter is not None:
+            controller.reconcile_authority(adapter)
+            controller.observe_actual_digests(adapter, observed)
+            # Every active bypass the adapter declares is consumed here, before
+            # any provisioning: ``record_attempt`` raises (BypassNotRecordedError)
+            # when strict mode requires SkillWeave dispatch, so a foreign
+            # hand-off never reaches a workspace provision or worker launch.
+            for bypass in adapter.bypass_flags():
+                controller.record_attempt(
+                    kind=bypass,
+                    detail=f"{bypass} dispatch attempt by adapter '{adapter.name}'",
+                    adapter=adapter,
+                )
+        # A SkillWeave dispatch attempt is always recorded after the declared
+        # bypasses were consumed; a refused bypass raises above before this
+        # line, so no provisioning follows a foreign hand-off.
+        controller.record_attempt(kind="skillweave", detail="wave dispatch", adapter=adapter)
+
     def dispatch(
         self,
         sequence_path: str,
@@ -1064,6 +1129,8 @@ class OperatorDispatchApplication:
         sink: Optional[Any] = None,
         work: bytes = b"",
         gate_input: Optional[TopologyGateInput] = None,
+        strict_adapter: Optional[HarnessAdapterProfile] = None,
+        strict_skill_digests: Optional[Mapping[str, str]] = None,
     ) -> DispatchRun:
         """Execute one wave and return a machine-readable run identifier.
 
@@ -1086,6 +1153,18 @@ class OperatorDispatchApplication:
         )
         enforcement = enforce_topology(declaration, gate_input=gate_input)
         removed = set(enforcement.removed_lane_ids)
+
+        # Experimental strict-controller seam, before any workspace is
+        # provisioned or any worker launched: bind the validated sequence,
+        # resolved profile, exact task brief and installed skill digests, and
+        # refuse fail-closed on the first gap (SW1311-HARNESS-001).
+        self._apply_strict_adherence(
+            declaration=declaration,
+            resolved=resolved,
+            task_brief=work,
+            adapter=strict_adapter,
+            adapter_skill_digests=strict_skill_digests,
+        )
 
         run_id = self._generate_run_id()
         self._last_success = {}

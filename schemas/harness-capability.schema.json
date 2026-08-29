@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HarnessCapabilityProfile",
+  "description": "The provider-neutral adapter capability profile contract (SW1311-HARNESS-001). A profile is DATA, never code: it declares which of the eight dispatch capabilities an adapter supports, which authority a role holds, whether native delegation / direct-shell bypass is permitted, and the separated run-statuses (documented, installed, dispatch-proven, production) as four independent facts. The concrete harness name belongs in the adapter's own file key, never in core dispatch.",
+  "type": "object",
+  "required": [
+    "adapter",
+    "capabilities",
+    "authority",
+    "delegation",
+    "statuses"
+  ],
+  "properties": {
+    "adapter": {
+      "description": "The concrete harness name. This is the only place a literal harness name is allowed; core dispatch reads the name as opaque data.",
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilities": {
+      "description": "Which of the eight dispatch capabilities this adapter supports. A missing capability falls closed to false.",
+      "type": "object",
+      "properties": {
+        "native-tool": { "type": "boolean" },
+        "external-process": { "type": "boolean" },
+        "in-place": { "type": "boolean" },
+        "stdin": { "type": "boolean" },
+        "status": { "type": "boolean" },
+        "cancel": { "type": "boolean" },
+        "state-namespace": { "type": "boolean" },
+        "installed-skill-digest": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "authority": {
+      "description": "The capability/authority this role holds, distinct from every other role. One role, one authority: controller, ops, reviewer, observer and integrator are never conflated.",
+      "type": "object",
+      "required": ["role"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["controller", "ops", "reviewer", "observer", "integrator"]
+        },
+        "skillweave-dispatch-required": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "delegation": {
+      "description": "How this adapter may hand work out. skillweave_dispatch is the allowed general path; native_delegation and direct_shell are bypasses that must fail closed when strict mode requires SkillWeave dispatch.",
+      "type": "object",
+      "properties": {
+        "skillweave-dispatch": { "type": "boolean" },
+        "native-delegation": { "type": "boolean" },
+        "direct-shell": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "statuses": {
+      "description": "Four independently evidenced run-status facts about this adapter. documented, installed, dispatch-proven and production are NOT one axis: a written name is never a proven run, and neither is ever a production profile.",
+      "type": "object",
+      "properties": {
+        "documented": { "type": "boolean" },
+        "installed": { "type": "boolean" },
+        "dispatch-proven": { "type": "boolean" },
+        "production": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "skill-digests": {
+      "description": "The installed skill names and their expected content digests this adapter binds to in strict mode. A missing or stale digest must be refused before a worker launch.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evidence": {
+      "description": "Actual per-harness real-run evidence (a resolved model, exit code, artifact), never a stable transport-parity claim.",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}
