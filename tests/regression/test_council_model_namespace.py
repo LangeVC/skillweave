@@ -131,3 +131,65 @@ def _run_all() -> int:
 
 if __name__ == "__main__":
     sys.exit(1 if _run_all() else 0)
+
+
+# ── SW1311-COUNCIL-001 — historical regression closure (criterion 8) ────────
+# The v1.3.9 release prefixed every Council profile id with ``faigate/``
+# (gateway namespace leaked into profile data). v1.3.10 reverted the prefix but
+# left a ``replace`` in the adapter that could silently collapse an unknown
+# namespace. These fixtures lock BOTH commits out: the prefix must not reappear
+# in Council data, and no silent ``replace``/collapse remains.
+
+from skillweave.routing.faigate_adapter import (  # noqa: E402
+    ROUTER_PROFILES,
+    ModelNamespaceError,
+    translate_model_id,
+    validate_council_model_ids,
+)
+
+# The exact ids v1.3.9 prefixed (taken from the v1.3.9 commit's
+# ``council-profiles.md`` diff) and their provider-native v1.3.10 form.
+V139_PREFIXED = [
+    "faigate/claude-sonnet-4-5",
+    "faigate/gpt-4o",
+    "faigate/gemini-2-5-pro",
+    "faigate/deepseek-v4-pro",
+    "faigate/claude-opus-4",
+]
+
+
+def test_router_profiles_never_re_adopt_the_v139_prefix():
+    # The exact relapse v1.3.9 committed: Council profile ids carrying the outer
+    # gateway prefix. No id in ROUTER_PROFILES may carry it again.
+    for preset in ROUTER_PROFILES.values():
+        for mid in list(preset["models"]) + [preset["chairman"]]:
+            assert "faigate/" not in mid
+            assert "/" not in mid
+
+
+def test_prefixed_council_ids_fail_validation_before_call():
+    # The v1.3.9 ids, fed back in, are refused by the Council profile validator
+    # with a typed error — never silently accepted and passed to a provider.
+    for mid in V139_PREFIXED:
+        with pytest.raises(ModelNamespaceError):
+            validate_council_model_ids(models=[mid], chairman=None, source="v1.3.9 fixture")
+
+
+def test_translation_strips_exactly_once_and_never_collapses_unknown():
+    # The v1.3.10 correction used ``replace`` which could silently collapse a
+    # foreign or doubled prefix. Exact-once translation refuses both.
+    assert translate_model_id("faigate/deepseek-v4-pro") == "deepseek-v4-pro"
+    with pytest.raises(ModelNamespaceError):
+        translate_model_id("faigate/faigate/deepseek-v4-pro")
+    with pytest.raises(ModelNamespaceError):
+        translate_model_id("openrouter/deepseek-v4-pro")
+
+
+def test_dispatch_qualified_syntax_still_valid_but_not_in_council_data():
+    # The dispatch layer's gateway-qualified id remains a legal input to the
+    # adapter (translated exactly once), while the same id is illegal in Council
+    # profile data. One fixture proves both contexts concurrently.
+    dispatch_id = "faigate/deepseek-v4-pro"
+    assert translate_model_id(dispatch_id) == "deepseek-v4-pro"  # dispatch: valid
+    with pytest.raises(ModelNamespaceError):  # council data: invalid
+        validate_council_model_ids(models=[dispatch_id], chairman=None, source="council")

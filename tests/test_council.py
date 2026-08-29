@@ -624,3 +624,213 @@ class TestJsonOutput:
         assert ok, f"Validation failed: {err}"
         assert data["consensus_score"] == 0.4
         assert data["dissent"] is not None
+
+
+# ── SW1311-COUNCIL-001 — namespace, attribution and degradation ──────
+import sys
+from pathlib import Path
+
+_srcpath = Path(__file__).resolve().parent.parent / "src"
+if str(_srcpath) not in sys.path:
+    sys.path.insert(0, str(_srcpath))
+
+
+class AttributedProvider:
+    """Mock provider that returns AttributedResponse envelopes for attribution tests."""
+
+    def __init__(self, answering_map=None, provider_name="faigate", error=None):
+        self.answering_map = answering_map or {}
+        self.provider_name_v = provider_name
+        self.error = error
+        self.queries = []
+
+    async def query(self, model, messages, temperature=0.5, timeout=None):
+        self.queries.append(model)
+        if self.error:
+            raise self.error
+        answering = self.answering_map.get(model, model)
+        from skillweave.routing.faigate_adapter import AttributedResponse
+        return AttributedResponse(
+            f"answer from {answering}",
+            requested_model=model,
+            answering_model=answering,
+            provider=self.provider_name_v,
+        )
+
+    def provider_name(self):
+        return self.provider_name_v
+
+
+class _MixedProvider:
+    """Provider whose first queried seat errors, and the rest answer normally."""
+
+    def __init__(self, error_first):
+        self.error_first = error_first
+        self._count = 0
+
+    async def query(self, model, messages, temperature=0.5, timeout=None):
+        self._count += 1
+        if self._count == 1:
+            raise self.error_first
+        from skillweave.routing.faigate_adapter import AttributedResponse
+        return AttributedResponse(
+            f"answer from {model}",
+            requested_model=model,
+            answering_model=model,
+            provider="faigate",
+        )
+
+    def provider_name(self):
+        return "faigate"
+
+
+class TestNamespaceTranslation:
+    def test_bare_native_id_passes_through(self):
+        from skillweave.routing.faigate_adapter import translate_model_id
+        assert translate_model_id("deepseek-v4-pro") == "deepseek-v4-pro"
+
+    def test_single_prefix_stripped_once(self):
+        from skillweave.routing.faigate_adapter import translate_model_id
+        assert translate_model_id("faigate/deepseek-v4-pro") == "deepseek-v4-pro"
+
+    def test_double_prefix_raises_typed(self):
+        from skillweave.routing.faigate_adapter import translate_model_id, ModelNamespaceError
+        with pytest.raises(ModelNamespaceError):
+            translate_model_id("faigate/faigate/deepseek-v4-pro")
+
+    def test_foreign_prefix_raises_typed(self):
+        from skillweave.routing.faigate_adapter import translate_model_id, ModelNamespaceError
+        with pytest.raises(ModelNamespaceError):
+            translate_model_id("openrouter/x")
+
+    def test_empty_id_raises_typed(self):
+        from skillweave.routing.faigate_adapter import translate_model_id, ModelNamespaceError
+        with pytest.raises(ModelNamespaceError):
+            translate_model_id("")
+
+    def test_colon_prefix_is_translated_once_not_silently_mangled(self):
+        # The legacy ``faigate:`` form is translated exactly once (never a blind
+        # ``replace``), and a doubled colon prefix is refused.
+        from skillweave.routing.faigate_adapter import translate_model_id, ModelNamespaceError
+        assert translate_model_id("faigate:deepseek-v4-pro") == "deepseek-v4-pro"
+        with pytest.raises(ModelNamespaceError):
+            translate_model_id("faigate:faigate:deepseek-v4-pro")
+
+    def test_foreign_prefix_raises_typed_colon(self):
+        from skillweave.routing.faigate_adapter import translate_model_id, ModelNamespaceError
+        with pytest.raises(ModelNamespaceError):
+            translate_model_id("openrouter:m")
+
+
+class TestProfileValidation:
+    def test_provider_native_profiles_validate(self):
+        from skillweave.routing.faigate_adapter import ROUTER_PROFILES, validate_council_model_ids
+        for name, preset in ROUTER_PROFILES.items():
+            validate_council_model_ids(
+                models=preset["models"], chairman=preset["chairman"], source=name
+            )
+
+    def test_prefixed_council_profile_fails_before_call(self):
+        from skillweave.routing.faigate_adapter import validate_council_model_ids, ModelNamespaceError
+        with pytest.raises(ModelNamespaceError):
+            validate_council_model_ids(
+                models=["faigate/deepseek-v4-pro", "gpt-4o"],
+                chairman="claude-opus-4",
+                source="unit fixture",
+            )
+
+    def test_router_profiles_are_unprefixed(self):
+        from skillweave.routing.faigate_adapter import ROUTER_PROFILES
+        for preset in ROUTER_PROFILES.values():
+            for mid in list(preset["models"]) + [preset["chairman"]]:
+                assert "/" not in mid
+                assert ":" not in mid
+
+
+class TestAttributionPerSeat:
+    def test_matching_roster_records_answered(self):
+        from skillweave.council.engine import CouncilEngine, CouncilConfig
+        provider = AttributedProvider(answering_map={})
+        engine = CouncilEngine(provider)
+        config = CouncilConfig(models=["a", "b"], chairman="c", mode="quick")
+        result = asyncio.run(engine.deliberate("q", config))
+        assert result.stage1[0].status == "answered"
+        assert result.stage1[0].requested_model == "a"
+        assert result.stage1[0].answering_model == "a"
+        assert result.stage1[0].provider == "faigate"
+        assert result.stage1[0].profile_version
+
+    def test_substituted_roster_records_substituted_not_inferred(self):
+        from skillweave.council.engine import CouncilEngine, CouncilConfig
+        provider = AttributedProvider(answering_map={"a": "X", "b": "b"})
+        engine = CouncilEngine(provider)
+        config = CouncilConfig(models=["a", "b"], chairman="c", mode="quick")
+        result = asyncio.run(engine.deliberate("q", config))
+        first = result.stage1[0]
+        assert first.status == "substituted"
+        assert first.requested_model == "a"
+        assert first.answering_model == "X"
+        assert first.answering_model != first.requested_model  # never inferred from request
+
+    def test_collapsed_roster_is_degraded_not_consensus(self):
+        # Every seat answered by one model -> distinct set collapses below minimum.
+        from skillweave.council.engine import CouncilEngine, CouncilConfig, CouncilDegradedError
+        provider = AttributedProvider(answering_map={"a": "X", "b": "X", "c": "X"})
+        engine = CouncilEngine(provider)
+        config = CouncilConfig(models=["a", "b", "c"], chairman="c", mode="quick", min_models_required=2)
+        with pytest.raises(CouncilDegradedError):
+            asyncio.run(engine.deliberate("q", config))
+
+    def test_below_minimum_is_degraded_never_consensus(self):
+        from skillweave.council.engine import CouncilEngine, CouncilConfig
+        provider = AttributedProvider(answering_map={"a": "X", "b": "X"})
+        engine = CouncilEngine(provider)
+        config = CouncilConfig(models=["a", "b"], chairman="b", mode="quick", min_models_required=2)
+        with pytest.raises(Exception):
+            # distinct = {X}; below min=2 -> degraded path (never consensus)
+            asyncio.run(engine.deliberate("q", config))
+
+    def test_attribution_matrix_complete(self):
+        from skillweave.council.engine import CouncilEngine, CouncilConfig
+        provider = AttributedProvider(answering_map={"a": "X"})
+        engine = CouncilEngine(provider)
+        config = CouncilConfig(models=["a", "b"], chairman="c", mode="quick")
+        result = asyncio.run(engine.deliberate("q", config))
+        matrix = result.attribution_matrix()
+        assert len(matrix) == 2
+        keys = set(matrix[0].keys())
+        assert {"requested", "resolved", "answering", "status", "provider", "profile_version"} <= keys
+
+
+class TestErrorClassification:
+    def test_rate_limited_seat_status(self):
+        from skillweave.routing.faigate_adapter import RateLimitedError
+        from skillweave.council.engine import CouncilEngine, CouncilConfig
+        provider = AttributedProvider(error=RateLimitedError("a"))
+        engine = CouncilEngine(provider)
+        config = CouncilConfig(models=["a", "healthy"], chairman="a", mode="quick", min_models_required=1)
+        # only "a" matches the error mapping path? No — the provider errors for
+        # every seat. Produce a mixed provider: error only on the first seat.
+        mixed = _MixedProvider(error_first=RateLimitedError("a"))
+        engine2 = CouncilEngine(mixed)
+        result = asyncio.run(engine2.deliberate("q", config))
+        assert result.stage1[0].status == "rate_limited"
+        assert result.stage1[1].status == "answered"
+
+    def test_unavailable_seat_status(self):
+        from skillweave.routing.faigate_adapter import UnavailableModelError
+        from skillweave.council.engine import CouncilEngine, CouncilConfig
+        mixed = _MixedProvider(error_first=UnavailableModelError("a"))
+        engine = CouncilEngine(mixed)
+        config = CouncilConfig(models=["a", "healthy"], chairman="a", mode="quick", min_models_required=1)
+        result = asyncio.run(engine.deliberate("q", config))
+        assert result.stage1[0].status == "unavailable"
+        assert result.stage1[1].status == "answered"
+
+    def test_all_unreachable_raises_degredated(self):
+        from skillweave.council.engine import CouncilEngine, CouncilConfig, CouncilDegradedError
+        provider = AttributedProvider(error=RuntimeError("connection refused"))
+        engine = CouncilEngine(provider)
+        config = CouncilConfig(models=["a", "b"], chairman="a", mode="quick", min_models_required=2)
+        with pytest.raises(CouncilDegradedError):
+            asyncio.run(engine.deliberate("q", config))

@@ -34,6 +34,18 @@ drives end to end. It does not import or invoke any simulated executor: the
 canonical path runs real subprocesses, and any `simulate_*` placeholder is
 quarantined behind `skillweave/legacy`.
 
+## Council model namespace
+
+The Council's model ids are **provider-native** — unprefixed ids in the
+provider's own namespace, never gateway-qualified. The `faigate/` gateway
+prefix belongs to the dispatch layer only and is translated exactly once at the
+adapter boundary (`translate_model_id`); a prefix in Council profile data is
+refused before any provider call. Each seat records requested / resolved /
+answering model, status, provider and profile revision — the answering model is
+read from the response envelope, never inferred from the request. Fewer than
+`min_models_required` distinct answering models is a degraded run, never
+consensus.
+
 ## Multi-lane control plane
 
 The control plane is a set of cooperating written surfaces, each with a single

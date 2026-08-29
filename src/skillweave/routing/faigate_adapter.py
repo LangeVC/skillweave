@@ -27,6 +27,119 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+#: The gateway namespace the dispatch layer qualifies model ids with. Council
+#: profile data (ROUTER_PROFILES, ``council-profiles.md``, ``capability.yaml``)
+#: never carries this prefix: it names the outer transport, so it lives only at
+#: the adapter boundary and is translated exactly once here.
+PROVIDER_NAMESPACE = "faigate"
+
+
+class ModelNamespaceError(ValueError):
+    """A model id carried an invalid or doubled outer gateway prefix.
+
+    Translation happens exactly once in this adapter. A doubled prefix
+    (``faigate/faigate/x``), a missing translation, or an unrecognised outer
+    prefix is refused here — never silently stripped — so a downstream provider
+    is never handed a half-mangled id.
+    """
+
+    def __init__(self, model: str, reason: str):
+        super().__init__(f"invalid model namespace for {model!r}: {reason}")
+        self.model = model
+        self.reason = reason
+
+
+class UnavailableModelError(RuntimeError):
+    """The provider confirmed it cannot serve the requested model id."""
+
+    def __init__(self, model: str, provider: str = "faigate"):
+        super().__init__(f"{provider} reports model {model!r} unavailable")
+        self.model = model
+        self.provider = provider
+
+
+class RateLimitedError(RuntimeError):
+    """The provider rate-limited the request (HTTP 429 or an explicit rate message)."""
+
+    def __init__(self, model: str, provider: str = "faigate"):
+        super().__init__(f"{provider} rate-limited the request for {model!r}")
+        self.model = model
+        self.provider = provider
+
+
+def translate_model_id(model: str) -> str:
+    """Return the provider-native model id, translating the outer prefix once.
+
+    This is the single, owning translation point. The rules are exact:
+
+    * a bare provider-native id (no prefix) passes through unchanged;
+    * a single ``faigate/`` prefix (dispatch's gateway form) or a single
+      ``faigate:`` prefix (the legacy form) is stripped exactly once;
+    * a doubled prefix (``faigate/faigate/x``), any other outer prefix
+      (``openrouter/x``, ``omniroute/x``, …) or a dangling ``faigate/`` raises
+      :class:`ModelNamespaceError` — it is never silently collapsed.
+
+    The function is pure: no network, no global state. It exists so that callers
+    (``FaidateProvider``, the council engine) never hand-code ``replace`` on an
+    id, which is how the v1.3.9 prefix leaked and how the v1.3.10 correction
+    left a silent ``replace`` that could collapse an unknown prefix.
+    """
+    if not model:
+        raise ModelNamespaceError(model, "empty model id")
+    if "/" not in model and ":" not in model:
+        return model
+    # A single leading ``faigate/`` or ``faigate:`` prefix translates away
+    # exactly once. Both delimiters name the one outer gateway namespace.
+    if model.startswith(f"{PROVIDER_NAMESPACE}/") or model.startswith(f"{PROVIDER_NAMESPACE}:"):
+        body = model[len(PROVIDER_NAMESPACE) + 1:]
+        if not body:
+            raise ModelNamespaceError(model, "dangling prefix without a body")
+        if body.startswith(f"{PROVIDER_NAMESPACE}/") or body.startswith(f"{PROVIDER_NAMESPACE}:"):
+            raise ModelNamespaceError(model, "prefix applied twice")
+        if "/" in body or ":" in body:
+            raise ModelNamespaceError(model, "prefix followed by a nested namespace")
+        return body
+    # Any other outer prefix is refused rather than silently mangled.
+    raise ModelNamespaceError(model, "unrecognised provider prefix")
+
+
+def validate_council_model_ids(*, models, chairman, source: str = "council profile") -> None:
+    """Refuse any outer gateway prefix in Council profile data, before a call.
+
+    Council data must be provider-native. A ``faigate/`` or other outer prefix
+    leaking into a Council profile is a data error and is refused here — before
+    any provider call — with the offending id and the source named. This is the
+    fail-closed counterpart to :func:`translate_model_id`: the dispatch layer may
+    qualify ids with ``faigate/`` (that remains valid), but that syntax cannot
+    leak into the Council's own casting.
+    """
+    ids = list(models) + ([chairman] if chairman else [])
+    for mid in ids:
+        if "/" in mid or ":" in mid:
+            raise ModelNamespaceError(
+                mid,
+                f"outer gateway prefix is not allowed in {source}; "
+                f"expected a provider-native id like {translate_naive_body(mid)}",
+            )
+
+
+def translate_naive_body(model: str) -> str:
+    """Return the body after a single leading prefix, used only for error text."""
+    return model.split("/", 1)[1] if "/" in model else model
+
+
+def _is_rate_limit(error_text: str) -> bool:
+    """Whether an error string signals a provider rate limit (HTTP 429 etc.).
+
+    Rate-limiting is a *technical* failure, distinct from an unknown/unavailable
+    model. It must surface as :class:`RateLimitedError` so a caller can tell it
+    apart from a substitution or a namespace error, and can retry without
+    re-classifying the seat.
+    """
+    low = (error_text or "").lower()
+    return "429" in low or "rate limit" in low or "rate-limited" in low or "too many requests" in low
+
+
 def _describe_error(exc: Exception, url: str) -> str:
     """Return a human-readable cause for a transport failure, naming timeouts."""
     reason = exc.reason if isinstance(exc, urllib.error.URLError) else None
@@ -53,27 +166,30 @@ class AttributedResponse(str):
 
     The council engine reads ``query()`` as a plain string, so this stays a
     real ``str`` subclass — f-strings, truthiness and slicing all behave like
-    ``str``. It adds two attributes so the run record can see, per seat, which
-    model was requested and which one actually answered.
+    ``str``. It adds ``requested_model``, ``answering_model`` and ``provider``
+    so the run record can see, per seat: which model was requested, which one
+    actually answered, and through which provider.
 
     The provider decides nothing about whether the two differ. That judgement
     belongs to the council; the transport just returns what came back.
     """
 
-    def __new__(cls, content: str, *, requested_model: str, answering_model: str) -> "AttributedResponse":
+    def __new__(cls, content: str, *, requested_model: str, answering_model: str, provider: str = "unknown") -> "AttributedResponse":
         obj = super().__new__(cls, content)
         obj.requested_model = requested_model
         obj.answering_model = answering_model
+        obj.provider = provider
         return obj
 
 
-def _extract_answer(envelope: dict, requested_model: str) -> AttributedResponse:
+def _extract_answer(envelope: dict, requested_model: str, provider: str = "unknown") -> AttributedResponse:
     """Read the answer content and the actual answering model from a response.
 
     ``answering_model`` is read from the envelope's ``model`` field, never
     inferred from the request. When a router omits the field, we fall back to
     the requested model and keep the record cheap — but we never fabricate a
-    model that did not answer.
+    model that did not answer. ``provider`` names the transport that produced
+    the envelope, and is carried verbatim (not guessed from the request).
     """
     content = envelope["choices"][0]["message"]["content"]
     if not content:
@@ -82,7 +198,12 @@ def _extract_answer(envelope: dict, requested_model: str) -> AttributedResponse:
         # than one per provider, because four copies is how one of them drifts.
         raise RuntimeError("model returned an empty completion")
     answering_model = envelope.get("model") or requested_model
-    return AttributedResponse(content, requested_model=requested_model, answering_model=answering_model)
+    return AttributedResponse(
+        content,
+        requested_model=requested_model,
+        answering_model=answering_model,
+        provider=provider,
+    )
 
 
 class CouncilProvider:
@@ -103,6 +224,10 @@ class CouncilProvider:
 
 # ── Router Profiles ────────────────────────────────────────────────
 
+# Council casts use provider-native model ids — no outer ``faigate/`` gateway
+# prefix. The prefix belongs to dispatch qualification and never appears here;
+# it is translated exactly once at the adapter boundary (``translate_model_id``)
+# and refused in Council profile data by ``validate_council_model_ids``.
 ROUTER_PROFILES = {
     "default": {
         "models": ["sonnet", "gpt-4o", "gemini-pro", "deepseek-v4"],
@@ -129,6 +254,12 @@ ROUTER_PROFILES = {
         "temperature": 0.4,
     },
 }
+
+#: The revision of the council profile data in this checkout. Recorded per seat
+#: and per phase by the engine so a run record can tell which profile revision
+#: produced it. This is a DATA revision, not a bundle version: the release that
+#: ships this revision is gate-tagged by the release readiness gate, not here.
+COUNCIL_PROFILE_VERSION = "1.3.11"
 
 
 # ── Provider Detection ──────────────────────────────────────────────
@@ -269,7 +400,16 @@ class FaigateProvider(CouncilProvider):
             return {"error": f"{str(e)} (at {url})"}
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
-        """Check model availability via Faigate GET /v1/models (single call)."""
+        """Check model availability via Faigate GET /v1/models (single call).
+
+        Each model id is translated exactly once before matching; a malformed
+        prefix raises :class:`ModelNamespaceError` rather than being silently
+        stripped. A probe error fails open (UNVERIFIED), matching the resolution
+        path's documented behaviour.
+        """
+        native = {}
+        for m in models:
+            native[m] = translate_model_id(m)
         info = self._req("/models")
         if info.get("error"):
             return {m: True for m in models}  # fail open
@@ -286,8 +426,7 @@ class FaigateProvider(CouncilProvider):
                 available_ids.add(entry)
 
         result = {}
-        for m in models:
-            clean = m.replace("faigate:", "")
+        for m, clean in native.items():
             result[m] = clean in available_ids or any(clean in aid for aid in available_ids)
         return result
 
@@ -295,14 +434,16 @@ class FaigateProvider(CouncilProvider):
         return -1.0  # Faigate doesn't expose credit checking — defer to availability
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
-        clean_model = model.replace("faigate:", "")
+        clean_model = translate_model_id(model)
         body = {"model": clean_model, "messages": messages, "temperature": temperature}
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: (self._req("/chat/completions", "POST", body) if timeout is None
                      else self._req("/chat/completions", "POST", body, timeout)))
         if result.get("error"):
+            if _is_rate_limit(result["error"]):
+                raise RateLimitedError(clean_model)
             raise RuntimeError(f"Faigate query failed: {result['error']}")
-        return _extract_answer(result, clean_model)
+        return _extract_answer(result, clean_model, self.provider_name())
 
     def provider_name(self) -> str:
         return "faigate"
@@ -347,7 +488,7 @@ class OpenRouterProvider(CouncilProvider):
                      else self._req("/chat/completions", body, timeout=timeout)))
         if result.get("error"):
             raise RuntimeError(f"OpenRouter query failed: {result['error']}")
-        return _extract_answer(result, model)
+        return _extract_answer(result, model, self.provider_name())
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         """OpenRouter: check model availability via /models endpoint."""
@@ -399,7 +540,7 @@ class GenericRouterProvider(CouncilProvider):
                      else self._req("/chat/completions", body, timeout=timeout)))
         if result.get("error"):
             raise RuntimeError(f"Router query failed: {result['error']}")
-        return _extract_answer(result, model)
+        return _extract_answer(result, model, self.provider_name())
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         """Try /models endpoint, fall back to assuming all available."""
@@ -473,7 +614,7 @@ class SingleModelProvider(CouncilProvider):
             raise RuntimeError(f"Model query failed: {result['error']}")
         # SingleModelProvider always names itself; still read the envelope so
         # any router in front of it (custom OPENAI_BASE_URL) is attributed too.
-        return _extract_answer(result, self.model)
+        return _extract_answer(result, self.model, self.provider_name())
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
         return {m: True for m in models}

@@ -140,6 +140,11 @@ Convene multiple AI models for research, code review, or architecture decisions:
 - **Profiles**: quick (2 models), default (4), deep (6), expert (4 top-tier)
 - **Web search**: DuckDuckGo (free), Serper, Tavily, Brave, SerpApi, Perplexity
 - **Output**: Markdown or structured JSON with consensus score
+- **Truthful attribution**: provider-native model ids; each seat records
+  requested/resolved/answering model, status, provider and profile revision. The
+  answering model is read from the response envelope, never inferred from the
+  request, and fewer than the minimum distinct answering models is a *degraded*
+  run — never reported as consensus.
 
 ### Testing
 
