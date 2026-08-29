@@ -51,6 +51,23 @@ from skillweave.dispatch.profile_resolution import (
     resolve_dispatch_profile,
 )
 from skillweave.routing.harness import HarnessError
+from skillweave.trace.contracts import (
+    AppendOnlyReceiptLog,
+    EvidenceAvailability,
+    GateVerdict,
+    JobRecord,
+    JobStateNamespace,
+    JobResult,
+    NamespaceCollisionError,
+    RoundKind,
+    StateNamespaceRegistry,
+    TaskVerdict,
+    TerminalEnvelope,
+    TerminalState,
+    build_job_result_for_terminal,
+    classify_evidence,
+    new_append_only_round,
+)
 
 #: The legal execution-model vocabulary at the live consumer (contract
 #: carry-forward: ``cold``/``warm``/``resume``; ``hot`` is refused).
@@ -118,6 +135,22 @@ class ProfileLocationError(OperatorDispatchError):
     def __init__(self, path: str, detail: str):
         self.path = path
         super().__init__(f"profile location '{path}' could not be loaded: {detail}")
+
+
+class BlockedInputError(OperatorDispatchError):
+    """A noninteractive lane requested stdin and must never launch or wait.
+
+    A typed technical failure: it never consumes a task correction round and
+    never becomes ``REVIEW_FAIL``.
+    """
+
+    def __init__(self, lane_id: str, command: Sequence[str]):
+        self.lane_id = lane_id
+        self.command = list(command)
+        super().__init__(
+            f"lane '{lane_id}' requires interactive stdin but this is a "
+            "noninteractive dispatch; refusing to launch"
+        )
 
 
 def generate_run_id() -> str:
@@ -309,6 +342,22 @@ class DispatchRun:
     failures: list[dict[str, Any]] = field(default_factory=list)
     failure_policy: Optional[str] = None
     artifact_store: Optional[Any] = None
+    receipt_log: Optional[Any] = None
+
+    @property
+    def job_records(self) -> list[dict[str, Any]]:
+        """The append-only job records versioned during this run.
+
+        Every dispatch, correction, review and integration attempt is versioned
+        as an immutable ``JobRecord`` in the run's ``receipt_log``. Each record
+        carries a :class:`~skillweave.trace.contracts.JobResult` (process status,
+        task verdict, evidence availability and gate verdict as four separate
+        fields) and a :class:`~skillweave.trace.contracts.TerminalEnvelope`
+        binding the subject SHA, exact command and single machine outcome.
+        """
+        if self.receipt_log is None:
+            return []
+        return [r.to_dict() for r in self.receipt_log.records()]
 
     @property
     def resolver(self) -> Optional[Callable[[str], bytes]]:
@@ -322,6 +371,97 @@ class DispatchRun:
         dry-run).
         """
         return self.artifact_store.resolve if self.artifact_store is not None else None
+
+    def append_attempt(
+        self,
+        *,
+        kind: RoundKind,
+        subject_sha: str,
+        command: Sequence[str],
+        job_id: Optional[str] = None,
+        result: Optional[JobResult] = None,
+        envelope: Optional[TerminalEnvelope] = None,
+        payload: Any = None,
+        round_: Optional[int] = None,
+    ) -> JobRecord:
+        """Append one review or integration attempt onto this run's receipt log.
+
+        This is the reachable public seam for criteria-1 rounds beyond dispatch
+        and correction: a caller (a review lane, an integrator) appends a
+        :class:`~skillweave.trace.contracts.JobRecord` to the *same* append-only
+        log the dispatcher versioned, threading the parent lineage from the
+        current tail. The exact subject identity, command, result dimensions and
+        terminal envelope are recorded verbatim — nothing is hand-built from
+        enum strings, the record is content-addressed and prior digests stay
+        immutable.
+
+        ``round_`` defaults to the next round after the current tail; a caller
+        that track its own round count may pass an explicit value.
+        """
+        if self.receipt_log is None:
+            self.receipt_log = AppendOnlyReceiptLog()
+        parent = self.receipt_log.latest()
+        next_round = (parent.round + 1) if parent is not None else 0
+        if result is None:
+            result = JobResult()
+        if envelope is None:
+            envelope = TerminalEnvelope(
+                subject_sha=subject_sha,
+                command=list(command),
+                terminal_state=TerminalState.COMPLETED,
+            )
+        return new_append_only_round(
+            self.receipt_log,
+            parent_id=parent.record_id if parent is not None else None,
+            round_=next_round if round_ is None else round_,
+            kind=kind,
+            job_id=job_id,
+            result=result,
+            envelope=envelope,
+            payload=payload,
+        )
+
+    def append_review(
+        self,
+        *,
+        subject_sha: str,
+        command: Sequence[str],
+        job_id: Optional[str] = None,
+        result: Optional[JobResult] = None,
+        envelope: Optional[TerminalEnvelope] = None,
+        payload: Any = None,
+    ) -> JobRecord:
+        """Append a REVIEW attempt (see :meth:`append_attempt`)."""
+        return self.append_attempt(
+            kind=RoundKind.REVIEW,
+            subject_sha=subject_sha,
+            command=command,
+            job_id=job_id,
+            result=result,
+            envelope=envelope,
+            payload=payload,
+        )
+
+    def append_integration(
+        self,
+        *,
+        subject_sha: str,
+        command: Sequence[str],
+        job_id: Optional[str] = None,
+        result: Optional[JobResult] = None,
+        envelope: Optional[TerminalEnvelope] = None,
+        payload: Any = None,
+    ) -> JobRecord:
+        """Append an INTEGRATION attempt (see :meth:`append_attempt`)."""
+        return self.append_attempt(
+            kind=RoundKind.INTEGRATION,
+            subject_sha=subject_sha,
+            command=command,
+            job_id=job_id,
+            result=result,
+            envelope=envelope,
+            payload=payload,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -338,6 +478,10 @@ class DispatchRun:
             # The configured wave failure policy (profile ``on_model_failure``)
             # is applied to the surface so unlike failures never collapse.
             "failure_policy": self.failure_policy,
+            # Versioned append-only job records (dispatch/correction/review/
+            # integration attempts), each with separated outcome dimensions and
+            # a binding terminal envelope.
+            "job_records": self.job_records,
             # Result metadata is explicit about the experimental, wave-scoped
             # nature of this command and makes no stable-transport claim.
             "experimental": True,
@@ -370,6 +514,7 @@ class OperatorDispatchApplication:
         repo_root: Optional[str] = None,
         cwd: Optional[str] = None,
         artifact_store: Optional[Any] = None,
+        namespace_registry: Optional[StateNamespaceRegistry] = None,
     ):
         self._workspace_seam = workspace_seam
         self._fanout_seam = fanout_seam
@@ -379,6 +524,12 @@ class OperatorDispatchApplication:
         self._active_store: Optional[Any] = None
         self._last_success: dict[str, bool] = {}
         self._typed_failure: dict[str, bool] = {}
+        self._namespace_registry: Optional[StateNamespaceRegistry] = namespace_registry
+        self._claimed_namespaces: dict[str, JobStateNamespace] = {}
+
+    def _generate_run_id(self) -> str:
+        """Generate the run identifier (overridable in tests)."""
+        return generate_run_id()
 
     def _fanout(self) -> Callable[..., Any]:
         if self._fanout_seam is not None:
@@ -428,6 +579,14 @@ class OperatorDispatchApplication:
                 lane.required_evidence = (
                     [] if "required_evidence" in raw_lane else None
                 )
+            # Noninteractive stdin demand rides on the lane the same way: a
+            # lane that declares ``interactive: true`` (or ``requires_stdin``)
+            # must be refused before launch, not left to wait on a tty.
+            lane.requires_stdin = bool(
+                raw_lane.get("interactive")
+                or raw_lane.get("requires_stdin")
+                or raw_lane.get("stdin") == "required"
+            )
 
         try:
             resolved = resolve_dispatch_profile(
@@ -481,9 +640,12 @@ class OperatorDispatchApplication:
         declaration, resolved, report = self.load(
             sequence_path, profile_path, required_criteria=required_criteria
         )
-        run_id = generate_run_id()
+        run_id = self._generate_run_id()
         self._last_success = {}
         self._typed_failure = {}
+        if self._namespace_registry is None:
+            self._namespace_registry = StateNamespaceRegistry()
+        self._claimed_namespaces = {}
         self._active_store = (
             self._artifact_store
             if self._artifact_store is not None
@@ -491,6 +653,7 @@ class OperatorDispatchApplication:
         )
         self._results: list[dict[str, Any]] = []
         self._failures: list[dict[str, Any]] = []
+        self._receipt_log = AppendOnlyReceiptLog()
         stream = DispatchEventStream(run_id, sink if sink is not None else sys.stdout)
         stream.wave_started(wave=wave)
 
@@ -623,6 +786,7 @@ class OperatorDispatchApplication:
             failures=self._failures,
             failure_policy=_failure_policy_of(resolved),
             artifact_store=self._active_store,
+            receipt_log=self._receipt_log,
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -740,6 +904,114 @@ class OperatorDispatchApplication:
             }
         )
 
+    def _record_job_attempt(
+        self,
+        lane: Lane,
+        children: list[Any],
+        *,
+        round_: int,
+    ) -> None:
+        """Version each child attempt into the run's append-only receipt log.
+
+        Every dispatch (round 0) and correction (round > 0) attempt is appended
+        as one immutable :class:`~skillweave.trace.contracts.JobRecord` whose
+        :class:`~skillweave.trace.contracts.JobResult` separates the four outcome
+        dimensions and whose terminal envelope binds subject SHA, command and the
+        single machine outcome. Prior digests remain unchanged (append-only).
+
+        Evidence integrity is verified *here, before* a ``done``/``pass`` is
+        recorded: the run's real artifact resolver is bound to the completion,
+        so a missing or unresolvable required artifact downgrades the gate and
+        task verdict — exit zero or non-empty stdout alone never records a
+        passing completion (criteria 1, 7).
+        """
+        resolver = (
+            self._active_store.resolve if self._active_store is not None else None
+        )
+        required = _required_evidence_of(lane)
+        for child in children:
+            job_id = getattr(child, "child_run_id", None)
+            outcome = _child_outcome(child)
+            process_result = getattr(child, "result", None)
+            exit_code = getattr(process_result, "exit_code", None)
+            signal = getattr(process_result, "signal", None)
+            termination = getattr(process_result, "termination", "exited")
+            stdout_bytes = getattr(child, "raw_bytes", None) or b""
+            command = getattr(child, "command", None) or []
+            ref_objects = _receipt_refs_of([child])
+            refs = [r.artifact_id for r in ref_objects]
+            # Content-addressed digests the run's store can resolve directly; the
+            # envelope's completion check binds these to the real resolver.
+            ref_digests = [r.sha256 for r in ref_objects]
+
+            # ── Evidence classification with the real resolver ─────────────
+            # Refers to the actual ReceiptReference objects so digest/length/
+            # encoding mismatches surface as UNRESOLVABLE, never as recorded.
+            evidence_available, evidence_reason = classify_evidence(
+                required=required,
+                refs=ref_objects,
+                resolver=resolver,
+            )
+
+            terminal_state = _terminal_state_for(child)
+            job_result = build_job_result_for_terminal(
+                terminal_state=terminal_state,
+                exit_code=exit_code,
+                signal=signal,
+                termination=termination,
+                stdout=stdout_bytes,
+                required_evidence=required,
+                artifact_refs=refs,
+            )
+
+            envelope = TerminalEnvelope(
+                subject_sha=lane.base or "",
+                command=list(command),
+                terminal_state=terminal_state,
+                exit_code=exit_code,
+                signal=signal,
+                timed_out=terminal_state is TerminalState.TIMED_OUT,
+                artifact_refs=list(ref_digests),
+                declared_inputs=list(required) if required else [],
+            )
+
+            # ── Fail-closed completion (criteria 2, 7) ─────────────────────
+            # The envelope's own fail-closed completion check is the authority:
+            # subject identity omitted, required evidence missing, or a
+            # referenced artifact that cannot resolve through the run's real
+            # store all block the completion. Any blocker downgrades the
+            # recorded outcome from done/pass to a non-passing terminal, never
+            # a PASS on the strength of process output alone.
+            completion_blocked = envelope.completion_error(
+                required_evidence=required or (), resolver=resolver
+            )
+            if completion_blocked is None:
+                # No envelope-level blocker; the technical terminal state and
+                # evidence classification are the remaining fail-closed checks.
+                completion_blocked = _completion_blocking_reason(
+                    envelope=envelope,
+                    required=required,
+                    evidence_available=evidence_available,
+                    evidence_reason=evidence_reason,
+                    terminal_state=terminal_state,
+                )
+            job_result.evidence_available = evidence_available
+            if completion_blocked is not None:
+                if job_result.task_verdict is TaskVerdict.DONE:
+                    job_result.task_verdict = TaskVerdict.INCONCLUSIVE
+                if job_result.gate_verdict is GateVerdict.PASS:
+                    job_result.gate_verdict = GateVerdict.FAIL
+
+            parent = self._receipt_log.latest()
+            new_append_only_round(
+                self._receipt_log,
+                parent_id=parent.record_id if parent is not None else None,
+                round_=round_,
+                kind=(RoundKind.CORRECTION if round_ else RoundKind.DISPATCH),
+                job_id=job_id,
+                result=job_result,
+                envelope=envelope,
+            )
     def _gate_required_evidence(
         self,
         lane: Lane,
@@ -776,6 +1048,91 @@ class OperatorDispatchApplication:
             return pw.path
         return self._cwd
 
+    def _claim_namespace(
+        self,
+        lane: Lane,
+        run_id: str,
+        provisioned: dict[str, ProvisionedWorkspace],
+    ) -> JobStateNamespace:
+        """Claim a unique run id / working directory / state namespace per lane.
+
+        Wired into the live preflight (criterion 6): before any child for the
+        lane launches, the lane receives a distinct run id and state namespace
+        and it is *claimed* in the run's registry. A duplicate/shared run id or
+        namespace is refused here as a typed technical failure
+        (:class:`~skillweave.trace.contracts.NamespaceCollisionError`), never a
+        ``REVIEW_FAIL`` nor a consumed correction round.
+        """
+        if self._namespace_registry is None:
+            self._namespace_registry = StateNamespaceRegistry()
+        # Idempotent across the correction budget: the *same* lane re-dispatched
+        # in a later correction round reuses its already-claimed namespace. The
+        # per-lane memo keeps that separate from a genuine cross-lane collision,
+        # which still fails preflight through the shared registry (criterion 6).
+        existing = self._claimed_namespaces.get(lane.id)
+        if existing is not None:
+            return existing
+        cwd = self._lane_cwd(lane, provisioned) or ""
+        namespace = JobStateNamespace(
+            run_id=f"{run_id}-{lane.id}",
+            working_directory=cwd,
+            state_namespace=f"sw-state/{run_id}/{lane.id}",
+        )
+        self._namespace_registry.claim(namespace)
+        self._claimed_namespaces[lane.id] = namespace
+        return namespace
+
+    def _record_preflight_terminal(
+        self,
+        lane: Lane,
+        *,
+        round_: int,
+        terminal_state: TerminalState,
+        command: Sequence[str],
+        detail: str,
+        run_id: str,
+        wave: str,
+        stream: DispatchEventStream,
+    ) -> None:
+        """Record a pre-launch terminal (blocked input / preflight failure).
+
+        Such a lane never reaches the fan-out: it produces a deterministic typed
+        terminal state in the receipt log and a distinct failure, so a
+        noninteractive stdin demand or a namespace collision fails *before* any
+        child launches or waits (criteria 4, 6).
+        """
+        job_result = build_job_result_for_terminal(
+            terminal_state=terminal_state,
+            exit_code=None,
+            signal=None,
+            termination=None,
+            stdout=b"",
+            required_evidence=_required_evidence_of(lane),
+            artifact_refs=[],
+        )
+        envelope = TerminalEnvelope(
+            subject_sha=lane.base or "",
+            command=list(command),
+            terminal_state=terminal_state,
+        )
+        parent = self._receipt_log.latest()
+        new_append_only_round(
+            self._receipt_log,
+            parent_id=parent.record_id if parent is not None else None,
+            round_=round_,
+            kind=(RoundKind.CORRECTION if round_ else RoundKind.DISPATCH),
+            job_id=f"{run_id}-{lane.id}",
+            result=job_result,
+            envelope=envelope,
+        )
+        self._record_failure(lane, outcome=terminal_state.value, detail=detail, round_=round_)
+        self._last_success[lane.id] = False
+        self._typed_failure[lane.id] = True
+        self._emit_status(
+            stream, run_id, wave, lane, False, round_,
+            outcome=terminal_state.value,
+        )
+
     def _run_lane(
         self,
         run_id: str,
@@ -798,9 +1155,40 @@ class OperatorDispatchApplication:
             )
             return True
 
+        provisioned = provisioned or {}
+
+        # Noninteractive stdin demand fails before launch/wait (criterion 4).
+        if getattr(lane, "requires_stdin", False):
+            self._record_preflight_terminal(
+                lane,
+                round_=round_,
+                terminal_state=TerminalState.BLOCKED_INPUT,
+                command=command,
+                detail="lane requires interactive stdin in a noninteractive dispatch",
+                run_id=run_id,
+                wave=wave,
+                stream=stream,
+            )
+            return False
+
+        # Unique state namespace claimed before any child launches (criterion 6).
+        try:
+            self._claim_namespace(lane, run_id, provisioned)
+        except NamespaceCollisionError as exc:
+            self._record_preflight_terminal(
+                lane,
+                round_=round_,
+                terminal_state=TerminalState.PREFLIGHT_FAILED,
+                command=command,
+                detail=str(exc),
+                run_id=run_id,
+                wave=wave,
+                stream=stream,
+            )
+            return False
+
         role = resolved.role(lane.role)
         fanout = self._fanout()
-        provisioned = provisioned or {}
         result = fanout(
             [command],
             run_id=run_id,
@@ -814,6 +1202,7 @@ class OperatorDispatchApplication:
         )
         children = _fanout_children(result)
         self._record_child_results(lane, children, round_=round_)
+        self._record_job_attempt(lane, children, round_=round_)
         received_refs = _receipt_refs_of(children)
 
         succeeded = _result_succeeded(result)
@@ -863,10 +1252,52 @@ class OperatorDispatchApplication:
         for lane in group:
             stream.lane_started(wave=wave, lane_id=lane.id)
 
+        provisioned = provisioned or {}
+
+        # Preflight each lane before any child in the group launches: a
+        # noninteractive stdin demand and a namespace collision both fail as a
+        # deterministic terminal *before* the fan-out hands off to the runner
+        # (criteria 4, 6). Only lanes that pass preflight are launched.
+        launchable: list[tuple[Lane, list[str]]] = []
+        for lane, command in zip(group, commands):
+            if command is None:
+                continue
+            if getattr(lane, "requires_stdin", False):
+                self._record_preflight_terminal(
+                    lane,
+                    round_=round_,
+                    terminal_state=TerminalState.BLOCKED_INPUT,
+                    command=command,
+                    detail="lane requires interactive stdin in a noninteractive dispatch",
+                    run_id=run_id,
+                    wave=wave,
+                    stream=stream,
+                )
+                continue
+            try:
+                self._claim_namespace(lane, run_id, provisioned)
+            except NamespaceCollisionError as exc:
+                self._record_preflight_terminal(
+                    lane,
+                    round_=round_,
+                    terminal_state=TerminalState.PREFLIGHT_FAILED,
+                    command=command,
+                    detail=str(exc),
+                    run_id=run_id,
+                    wave=wave,
+                    stream=stream,
+                )
+                continue
+            launchable.append((lane, command))
+
         from skillweave.fanout.dispatch import FanOutLaunchContext
         from skillweave.routing.modelspec import from_value
 
-        provisioned = provisioned or {}
+        group = [ln for ln, _ in launchable]
+        commands = [cmd for _, cmd in launchable]
+        if not group:
+            return
+
         models = [from_value(self._model_for(lane, resolved)) for lane in group]
         # Each lane carries its own repo/base/tool/cwd; never broadcast the
         # group leader's identity onto its siblings (criterion-4 blocker).
@@ -896,6 +1327,7 @@ class OperatorDispatchApplication:
         for lane, child in zip(group, children):
             child_list = [child]
             self._record_child_results(lane, child_list, round_=round_)
+            self._record_job_attempt(lane, child_list, round_=round_)
             refs = _receipt_refs_of(child_list)
             succeeded = _child_succeeded(child)
             evidence_failed = False
@@ -1012,6 +1444,8 @@ def _child_outcome(child: Any) -> Optional[str]:
         return "timed_out"
     if termination == "launch_failed":
         return "launch_failed"
+    if termination == "heartbeat_expired":
+        return "heartbeat_expired"
     if getattr(result, "signal", None) is not None:
         return "signal"
     return "exit_code"
@@ -1020,6 +1454,28 @@ def _child_outcome(child: Any) -> Optional[str]:
 def _first_outcome(children: list[Any]) -> Optional[str]:
     """The single machine outcome of the first child, or ``None`` when empty."""
     return _child_outcome(children[0]) if children else None
+
+
+def _terminal_state_for(child: Any) -> TerminalState:
+    """Map a child's machine outcome to its deterministic terminal state.
+
+    Heartbeat expiry, timeout, cancel and launch failure each map to a distinct
+    :class:`~skillweave.trace.contracts.TerminalState`; a clean exit maps to
+    ``completed``. This is the dispatcher's typed replacement for inferring the
+    child's fate from a raw exit code or log line.
+    """
+    outcome = _child_outcome(child)
+    if outcome == "timed_out":
+        return TerminalState.TIMED_OUT
+    if outcome == "signal":
+        return TerminalState.CANCELLED
+    if outcome == "launch_failed":
+        return TerminalState.LAUNCH_FAILED
+    if outcome == "heartbeat_expired":
+        return TerminalState.HEARTBEAT_EXPIRED
+    if outcome == "blocked_input":
+        return TerminalState.BLOCKED_INPUT
+    return TerminalState.COMPLETED
 
 
 def _first_failure_message(children: list[Any]) -> str:
@@ -1153,6 +1609,46 @@ def resolve_required_evidence(
             ) from exc
         resolved.append({"stream": stream, "artifact_id": ref.artifact_id, "byte_length": length})
     return resolved
+
+
+def _completion_blocking_reason(
+    *,
+    envelope: TerminalEnvelope,
+    required: Optional[Sequence[str]],
+    evidence_available: EvidenceAvailability,
+    evidence_reason: Optional[str],
+    terminal_state: TerminalState,
+) -> Optional[str]:
+    """Return why a completion is blocked, or ``None`` when unblocked.
+
+    Fail-closed in three directions, mirroring the trace envelope contract:
+
+    * subject identity omitted (empty subject SHA);
+    * required evidence declared but missing/unresolvable;
+    * a technical terminal state (blocked input, preflight failure, launch
+      failure, timeout, cancel, heartbeat expiry) — which is never a
+      ``done``/``pass`` regardless of process output.
+
+    This is the dispatcher's active binding of ``TerminalEnvelope`` semantics:
+    it is consulted before a ``done``/``pass`` result is recorded.
+    """
+    if terminal_state in (
+        TerminalState.BLOCKED_INPUT,
+        TerminalState.PREFLIGHT_FAILED,
+        TerminalState.LAUNCH_FAILED,
+        TerminalState.TIMED_OUT,
+        TerminalState.CANCELLED,
+        TerminalState.HEARTBEAT_EXPIRED,
+    ):
+        return terminal_state.value
+    if not envelope.subject_sha:
+        return "subject identity omitted"
+    if required is not None:
+        if evidence_available is EvidenceAvailability.MISSING:
+            return evidence_reason or "required evidence missing"
+        if evidence_available is EvidenceAvailability.UNRESOLVABLE:
+            return evidence_reason or "unresolvable artifact"
+    return None
 
 
 def _build_report(
