@@ -13,10 +13,14 @@ Hermetic: reads the tree, writes only to the pytest ``tmp_path``.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -103,41 +107,68 @@ class TestTagBinding:
 class TestChangelogBoundary:
     def test_changelog_is_declared_unmanaged(self):
         topo = _load_topology()
-        assert "changelog" in topo, "changelog exclusion must be stated explicitly"
-        ch = topo["changelog"]
-        assert ch.get("managed") is False, "CHANGELOG must not be auto-bumped"
+        assert "changelog_managed" in topo, "changelog exclusion must be stated explicitly"
+        assert topo["changelog_managed"] is False, "CHANGELOG must not be auto-bumped"
+        assert topo["changelog_path"] == "CHANGELOG.md", "CHANGELOG path must be named"
 
     def test_changelog_path_is_not_among_locations(self):
         topo = _load_topology()
         paths = {loc["path"] for loc in topo["locations"]}
-        assert topo["changelog"]["path"] not in paths, (
+        assert topo["changelog_path"] not in paths, (
             "CHANGELOG.md must not be an automatic bump location"
+        )
+
+    def test_changelog_boundary_is_a_flat_scalar_not_a_nested_map(self):
+        # The canonical version-sync parser accepts only a restricted YAML
+        # subset (flat top-level scalars + the `locations` list). A nested
+        # `changelog:` map is unparseable and makes `check`/`check-tag` exit 2
+        # before any comparison. The boundary must therefore be flat scalars.
+        topo = _load_topology()
+        assert "changelog" not in topo, (
+            "changelog must be flat top-level scalars, not a nested map"
         )
 
 
 # ── Criterion 9: 1.3.11 → 1.3.12 rehearsal ─────────────────────────────────
+#
+# The rehearsal drives the *actual* canonical `version-sync.py` tool (the same
+# one the release gate fetches from ops-engine and runs as `check-tag`) through
+# subprocess, rather than a parallel reference bump. This proves the expanded
+# declaration is consumable by the shipped gate/bump tooling, not merely by the
+# test's own logic. The tool is resolved from (in order) `$VERSION_SYNC`, a
+# sibling `ops-engine` checkout, or a `langevc/ops-engine` checkout next to the
+# repo; when none is present the rehearsal is skipped rather than silently
+# substituted for a self-fulfilling reimplementation.
 
 
-def _apply_bump(repo: Path, topo: dict, old: str, new: str) -> None:
-    """Reference bump: rewrite every declared location's matching version to
-    ``new``. Consumes only .version.yaml locations (no hardcoded inventory)."""
-    for loc in topo["locations"]:
-        p = repo / loc["path"]
-        text = p.read_text()
-        match = re.search(loc["pattern"], text, re.MULTILINE)
-        assert match, f"no match for {loc['role']} at {loc['path']}"
-        # bundle_member_pins names a single path whose pattern matches many
-        # lines (one per member); replace every occurrence. Other roles match
-        # exactly one surface, so "all" is equivalent to "one".
-        count = 0 if loc.get("role") == "bundle_member_pins" else 1
-        new_text = re.sub(
-            loc["pattern"],
-            lambda m: m.group(0).replace(old, new),
-            text,
-            count=count,
-            flags=re.MULTILINE,
-        )
-        p.write_text(new_text)
+def _canonical_version_sync() -> Path | None:
+    """Resolve the canonical version-sync.py; None when not present locally."""
+    candidates: list[Path] = []
+    env = os.environ.get("VERSION_SYNC")
+    if env:
+        candidates.append(Path(env))
+    # SkillWeave lives under <group>/skillweave/skillweave and the canonical
+    # tool under <group>/ops-engine/scripts/version-sync.py (OSS, publicly
+    # mirrored) — the same source the release gate fetches at runtime.
+    candidates.append(
+        REPO_ROOT.parent.parent.parent / "langevc" / "ops-engine" / "scripts" / "version-sync.py"
+    )
+    candidates.append(REPO_ROOT.parent.parent.parent / "ops-engine" / "scripts" / "version-sync.py")
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
+def _run_version_sync(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    tool = _canonical_version_sync()
+    if tool is None:
+        pytest.skip("canonical version-sync.py not found (set VERSION_SYNC or clone ops-engine)")
+    return subprocess.run(
+        [sys.executable, str(tool), *args, "--repo", str(repo)],
+        capture_output=True,
+        text=True,
+    )
 
 
 def _copy_tree(tmp: Path, src=REPO_ROOT) -> Path:
@@ -159,18 +190,22 @@ class TestRehearsal:
 
     def test_old_two_locations_fails_red(self, tmp_path):
         # The old declaration trusted only pyproject.toml and capability.yaml.
-        # A 1.3.11 → 1.3.12 bump against those two leaves every skill manifest
-        # (and the bundle pins) at 1.3.11 → fail red.
+        # A bump through the canonical tool against those two leaves every skill
+        # manifest (and the bundle pins) at 1.3.11 → fail red.
         repo = _copy_tree(tmp_path)
         old = "1.3.11"
         new = "1.3.12"
         old_topo = {
+            "schema": 1,
+            "source_of_truth": "pyproject.toml",
             "locations": [
                 {"path": "pyproject.toml", "pattern": '^version\\s*=\\s*"(\\d+\\.\\d+\\.\\d+)"'},
                 {"path": "capability.yaml", "pattern": "^version:\\s*(\\S+)"},
-            ]
+            ],
         }
-        _apply_bump(repo, old_topo, old, new)
+        (repo / ".version.yaml").write_text(yaml.safe_dump(old_topo))
+        proc = _run_version_sync(repo, "bump", new)
+        assert proc.returncode == 0, f"bump failed: {proc.stderr}"
         skill_versions = set()
         for skill in sorted((repo / "skills").iterdir()):
             cap = skill / "capability.yaml"
@@ -180,13 +215,21 @@ class TestRehearsal:
         assert "1.3.12" not in skill_versions, (
             "skills must NOT have been reached by the old two-location bump"
         )
-        assert skill_versions == {"1.3.11"}, f"unexpected skill version set {skill_versions}"
+        assert skill_versions == {old}, f"unexpected skill version set {skill_versions}"
 
     def test_expanded_declaration_finishes_synchronized(self, tmp_path):
         repo = _copy_tree(tmp_path)
-        old = "1.3.11"
         new = "1.3.12"
-        _apply_bump(repo, self.TOPO, old, new)
+
+        # The canonical tool must parse and bump the full declaration. If the
+        # declaration is outside the tool's YAML subset, `bump` exits 2 here —
+        # which is exactly the blocking regression this test guards against.
+        proc = _run_version_sync(repo, "bump", new)
+        assert proc.returncode == 0, f"bump failed (exit {proc.returncode}): {proc.stderr}"
+
+        # `bump` self-checks; run `check` again for an explicit gate verdict.
+        chk = _run_version_sync(repo, "check")
+        assert chk.returncode == 0, f"check failed (exit {chk.returncode}): {chk.stderr}"
 
         surfaces = _version_surfaces(repo, self.TOPO)
         # Every declared surface — runtime, bundle, bundle pins and all skills —
@@ -205,6 +248,7 @@ class TestRehearsal:
     def test_changelog_untouched_by_bump(self, tmp_path):
         repo = _copy_tree(tmp_path)
         before = (repo / "CHANGELOG.md").read_text()
-        _apply_bump(repo, self.TOPO, "1.3.11", "1.3.12")
+        proc = _run_version_sync(repo, "bump", "1.3.12")
+        assert proc.returncode == 0, f"bump failed: {proc.stderr}"
         after = (repo / "CHANGELOG.md").read_text()
         assert before == after, "CHANGELOG.md must not be rewritten by the bump"

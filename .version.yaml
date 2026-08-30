@@ -23,10 +23,12 @@ source_of_truth: pyproject.toml
 # heading per release and is written by hand; it is deliberately kept out of
 # `locations` so an automatic bump can never rewrite history. Maintaining the
 # CHANGELOG is a manual release-note responsibility, not an automated step.
-changelog:
-  path: CHANGELOG.md
-  managed: false
-  responsibility: manual
+# These are flat top-level scalars (not a nested map) because the canonical
+# version-sync parser accepts only a restricted YAML subset: flat scalar keys
+# and the `locations` list. A nested `changelog:` map would be unparseable.
+changelog_path: CHANGELOG.md
+changelog_managed: false
+changelog_responsibility: manual
 
 locations:
   # Runtime / product source.
