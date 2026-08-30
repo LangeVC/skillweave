@@ -417,7 +417,10 @@ a profile chain.
 5. **Dependencies** — a step's handoff must reference its actual predecessor
    phase (`handoff:<prev>-><next>`); a broken chain link is a violation.
 6. **Handoffs** — every non-first step carries exactly one handoff naming the
-   preceding phase, and the handoff list matches the phase count minus one.
+   preceding phase, and the handoff list matches the phase count minus one. Each
+   handoff must also carry the four identity fields (`profile_id`,
+   `profile_version`, `sdk_digest`, `effective_digest`); a handoff that omits
+   any identity field is a violation, never a bare phase-pair string.
 
 **Preview boundary:** a sequence that asks to *execute* a preview-only runtime
 dimension (`phases`, `topology`, `control`, `human_coupling`, `change_surfaces`,

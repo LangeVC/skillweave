@@ -958,6 +958,35 @@ def require_supported_dimension(snapshot: Any, dimension: str) -> None:
 
 
 @dataclass
+class ProfileHandoff:
+    """A phase-boundary handoff carrying the 4-part profile identity.
+
+    A handoff is never a bare string (criterion 6 / B1): it binds the source
+    and target phase together with the profile id, version, SDK schema digest
+    and effective-profile content digest, so the identity that produced the
+    chain rides on every phase transfer and cannot be reconstructed from a later
+    receipt alone.
+    """
+
+    source: str
+    target: str
+    profile_identity: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def link(self) -> str:
+        """The stable ``handoff:<source>-><target>`` reference."""
+        return f"handoff:{self.source}->{self.target}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source": self.source,
+            "target": self.target,
+            "link": self.link,
+            "profile_identity": dict(self.profile_identity),
+        }
+
+
+@dataclass
 class ChainStep:
     """One ordered step derived from a snapshot's declared phases."""
 
@@ -968,7 +997,7 @@ class ChainStep:
     capabilities: dict[str, Any] = field(default_factory=dict)
     gates: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
-    handoff: Optional[str] = None
+    handoff: Optional[ProfileHandoff] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -979,7 +1008,7 @@ class ChainStep:
             "capabilities": dict(self.capabilities),
             "gates": list(self.gates),
             "evidence": list(self.evidence),
-            "handoff": self.handoff,
+            "handoff": self.handoff.to_dict() if self.handoff is not None else None,
         }
 
 
@@ -1001,7 +1030,7 @@ class ProfileChainDerivation:
     roles: list[str] = field(default_factory=list)
     gates: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
-    handoffs: list[str] = field(default_factory=list)
+    handoffs: list[ProfileHandoff] = field(default_factory=list)
     dispatch_order: list[list[str]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -1013,7 +1042,7 @@ class ProfileChainDerivation:
             "roles": list(self.roles),
             "gates": list(self.gates),
             "evidence": list(self.evidence),
-            "handoffs": list(self.handoffs),
+            "handoffs": [h.to_dict() for h in self.handoffs],
             "dispatch_order": [list(g) for g in self.dispatch_order],
         }
 
@@ -1103,13 +1132,17 @@ def derive_chain_from_profile(snapshot: Any) -> ProfileChainDerivation:
     phases = _phases_of(resolved)
 
     steps: list[ChainStep] = []
-    handoffs: list[str] = []
+    handoffs: list[ProfileHandoff] = []
     roles_iter = iter(roles) if roles else iter(_BASE_ROLES)
     for index, phase in enumerate(phases):
         role = next(roles_iter, roles[-1] if roles else "ops")
         handoff = None
         if index > 0:
-            handoff = f"handoff:{phases[index - 1]}->{phase}"
+            handoff = ProfileHandoff(
+                source=phases[index - 1],
+                target=phase,
+                profile_identity=dict(identity),
+            )
             handoffs.append(handoff)
         # The final step closes the chain, so it carries the full gate set;
         # every step carries the session-boundary gate (one batch per session).
@@ -1236,16 +1269,23 @@ def validate_profile_chain(
         violations.append("authority violation: ops role approves its own gate")
 
     # Dependencies + handoffs: each non-first step's handoff must name the
-    # preceding phase.
+    # preceding phase, and every handoff must carry the full profile identity.
     for index, step in enumerate(derivation.steps):
         if index == 0:
             continue
         expected_prev = derivation.steps[index - 1].phase
-        if step.handoff != f"handoff:{expected_prev}->{step.phase}":
+        expected_link = f"handoff:{expected_prev}->{step.phase}"
+        if step.handoff is None or step.handoff.link != expected_link:
             violations.append(
                 f"step {step.id} handoff does not reference predecessor "
                 f"{expected_prev}"
             )
+            continue
+        for key in _PROFILE_IDENTITY_KEYS:
+            if not (step.handoff.profile_identity.get(key) or "").strip():
+                violations.append(
+                    f"step {step.id} handoff omits profile identity field {key}"
+                )
 
     return violations
 
@@ -1257,11 +1297,16 @@ def dispatch_topology_from_profile(snapshot: Any) -> list[dict[str, Any]]:
     phase, ``depends_on`` the prior phase) plus a final review lane. The result
     is the lane manifests the existing topology/execution seam
     (``derive_topologies`` / ``gate_topology``) consumes.
+
+    Every manifest carries a ``provenance`` block holding the 4-part profile
+    identity (criterion 6 / B1): the identity that produced the chain rides on
+    the child-job topology declaration, not just on the final gate.
     """
     resolved = _snapshot_resolved(snapshot)
     phases = _phases_of(resolved)
     if not phases:
         return []
+    identity = profile_identity(snapshot)
     manifests: list[dict[str, Any]] = []
     for index, phase in enumerate(phases):
         lane_id = f"lane-{phase}"
@@ -1275,6 +1320,73 @@ def dispatch_topology_from_profile(snapshot: Any) -> list[dict[str, Any]]:
                 "worktree": f"wt-{phase}",
                 "branch": f"sw/{phase}",
                 "integration_policy": "requires_integrator" if index == len(phases) - 1 else "independent",
+                "provenance": dict(identity),
             }
         )
     return manifests
+
+
+def profile_sequence_from_snapshot(
+    snapshot: Any,
+    *,
+    session_boundary: str = "batch",
+    execution_model: str = "cold",
+    max_parallel: int = 1,
+    max_correction_rounds_per_wave: int = 0,
+) -> dict[str, Any]:
+    """Build a dispatch sequence declaration from a snapshot (criterion 1/6).
+
+    The sequence binds the 4-part profile identity through ``profile.provenance``
+    (the ``profileProvenance`` block of :file:`dispatch-sequence.schema.json`),
+    so the identity flows *from the derivation* into the sequence consumed by a
+    later run — never hand-injected by a test or a consumer. Each phase becomes
+    a governed lane keyed to the snapshot's own data.
+    """
+    resolved = _snapshot_resolved(snapshot)
+    identity = profile_identity(snapshot)
+    phases = _phases_of(resolved)
+    lanes: list[dict[str, Any]] = []
+    for index, phase in enumerate(phases):
+        lanes.append(
+            {
+                "id": f"lane-{phase}",
+                "role": "ops" if index < len(phases) - 1 else "reviewer",
+                "repo": f"skillweave/{identity['profile_id'] or 'skillweave'}",
+                "base": "0" * 40,
+                "execution_model": execution_model,
+                "mutating": index < len(phases) - 1,
+                "depends_on": [f"lane-{phases[index - 1]}"] if index > 0 else [],
+                "write_scope": [f"/dispatch/{phase}/**"],
+                "worktree": f"wt-{phase}",
+                "branch": f"sw/{phase}",
+                "integration_policy": "requires_integrator" if index == len(phases) - 1 else "independent",
+            }
+        )
+    return {
+        "session_boundary": session_boundary,
+        "profile": {
+            "path": f"profile://{identity['profile_id'] or 'profile'}",
+            "required": True,
+            "provenance": dict(identity),
+        },
+        "execution_model": execution_model,
+        "max_correction_rounds_per_wave": max_correction_rounds_per_wave,
+        "max_parallel": max_parallel,
+        "lanes": lanes,
+    }
+
+
+def profile_receipt_payload(
+    snapshot: Any,
+    *,
+    kind: str,
+) -> dict[str, Any]:
+    """Build an identity-bearing review / final-gate receipt payload.
+
+    The 4-part identity is carried under ``profile`` (and, for the final gate,
+    ``kind`` distinguishes the receipt) so a review or final-gate record
+    produced from the derivation carries the snapshot that produced the chain —
+    not a bare profile-name string.
+    """
+    identity = profile_identity(snapshot)
+    return {"profile": dict(identity), "kind": kind}

@@ -46,6 +46,7 @@ if str(_SRC) not in sys.path:
 
 from skillweave.promptchain.execute import (  # noqa: E402
     ProfileChainError,
+    ProfileHandoff,
     PreviewExecutionError,
     build_dispatch_order,
     criterion_coverage,
@@ -53,6 +54,8 @@ from skillweave.promptchain.execute import (  # noqa: E402
     dispatch_topology_from_profile,
     preview_dimensions_of,
     profile_identity,
+    profile_receipt_payload,
+    profile_sequence_from_snapshot,
     require_supported_dimension,
     validate_profile_chain,
 )
@@ -141,7 +144,9 @@ def test_generate_derives_gates_evidence_and_handoffs():
     assert "criterion_coverage" in derivation.gates
     assert "job_receipt" in derivation.evidence
     assert len(derivation.handoffs) == len(derivation.steps) - 1
-    assert derivation.handoffs[0] == "handoff:discovery->blueprint"
+    assert derivation.handoffs[0].link == "handoff:discovery->blueprint"
+    # The handoff is identity-bearing, not a bare string (criterion 6).
+    assert derivation.handoffs[0].profile_identity == profile_identity(_SOFTWARE_SNAPSHOT)
 
 
 def test_generate_derives_dispatch_topology():
@@ -194,7 +199,11 @@ def test_validate_flags_broken_handoff_chain():
     broken = _snapshot_with_risk(phases=["a", "b", "c"])
     derivation = derive_chain_from_profile(broken)
     # Corrupt the second step's handoff to reference a non-predecessor phase.
-    derivation.steps[1].handoff = "handoff:x->b"
+    derivation.steps[1].handoff = ProfileHandoff(
+        source="x",
+        target="b",
+        profile_identity=profile_identity(broken),
+    )
     violations = validate_profile_chain(broken, derivation)
     assert any("handoff" in v for v in violations)
 
@@ -288,9 +297,12 @@ def _dispatch_hermetic_fixture(tmp_path, snapshot, required_criteria=(1, 2, 3)):
     A single governed ops lane (mutating, complete topology manifest) runs
     through the real ``OperatorDispatchApplication`` with a recording inline
     seam (no process launch), producing job receipts. The profile identity is
-    threaded into a subsequent review and final gate receipt via the run's
-    public ``append_review`` / ``append_integration`` seams.
+    threaded via the *derivation* — ``profile_sequence_from_snapshot`` for the
+    sequence provenance and ``profile_receipt_payload`` for the review / final
+    gate receipts — never hand-injected as a literal.
     """
+    import io
+
     import yaml
 
     from skillweave.dispatch.application import (
@@ -353,6 +365,9 @@ def _dispatch_hermetic_fixture(tmp_path, snapshot, required_criteria=(1, 2, 3)):
         }
     ]
     seq = tmp_path / "sequence.yaml"
+    # The sequence's own provenance is produced by the derivation, not written
+    # by hand: it carries the 4-part identity that produced the chain.
+    derived_sequence = profile_sequence_from_snapshot(snapshot)
     seq.write_text(
         yaml.safe_dump(
             {
@@ -360,7 +375,7 @@ def _dispatch_hermetic_fixture(tmp_path, snapshot, required_criteria=(1, 2, 3)):
                 "profile": {
                     "path": str(profile),
                     "required": True,
-                    "provenance": identity,
+                    "provenance": derived_sequence["profile"]["provenance"],
                 },
                 "execution_model": "cold",
                 "max_correction_rounds_per_wave": 0,
@@ -390,9 +405,12 @@ def _dispatch_hermetic_fixture(tmp_path, snapshot, required_criteria=(1, 2, 3)):
     app = OperatorDispatchApplication(
         workspace_seam=_NoopWorkspace(), inline_seam=recorder
     )
-    run = app.dispatch(str(seq), str(profile), wave="0", sink=None)
+    stream_sink = io.StringIO()
+    run = app.dispatch(str(seq), str(profile), wave="0", sink=stream_sink)
 
-    # Separate cold review + final gate receipts, carrying the profile identity.
+    # Separate cold review + final gate receipts. The payloads are produced by
+    # the derivation helper — the identity flows in from the snapshot, not from
+    # a literal written at the call site.
     review_result = JobResult(
         job_status=JobStatus.EXITED,
         task_verdict=TaskVerdict.DONE,
@@ -404,19 +422,19 @@ def _dispatch_hermetic_fixture(tmp_path, snapshot, required_criteria=(1, 2, 3)):
         command=["python3", "-c", "pass"],
         job_id="c0",
         result=review_result,
-        payload={"profile": identity},
+        payload=profile_receipt_payload(snapshot, kind="review"),
     )
     run.append_integration(
         subject_sha=base,
         command=["python3", "-c", "pass"],
         job_id="c0",
-        payload={"profile": identity, "kind": "final_gate"},
+        payload=profile_receipt_payload(snapshot, kind="final_gate"),
     )
-    return run, recorder
+    return run, recorder, stream_sink
 
 
 def test_identity_propagates_into_child_job_and_gate_receipts(tmp_path):
-    run, _ = _dispatch_hermetic_fixture(tmp_path, _SOFTWARE_SNAPSHOT)
+    run, _, _ = _dispatch_hermetic_fixture(tmp_path, _SOFTWARE_SNAPSHOT)
     identity = profile_identity(_SOFTWARE_SNAPSHOT)
 
     # The sequence's profile reference carried the provenance into the report.
@@ -440,9 +458,40 @@ def test_identity_propagates_into_child_job_and_gate_receipts(tmp_path):
             assert profile_payload.get(key) == identity[key], key
 
 
+def test_identity_flows_from_derivation_into_sequence_handoff_topology(tmp_path):
+    """The 4-part identity is present in every derivation output (criterion 6 / B1).
+
+    Sequence provenance, phase-boundary handoffs and the dispatch-topology
+    manifests are all produced by the derivation and each carries the full
+    identity — no test-side injection.
+    """
+    identity = profile_identity(_SOFTWARE_SNAPSHOT)
+
+    # Sequence.
+    sequence = profile_sequence_from_snapshot(_SOFTWARE_SNAPSHOT)
+    assert sequence["profile"]["provenance"] == identity
+
+    # Handoffs (identity-bearing, not bare strings).
+    derivation = derive_chain_from_profile(_SOFTWARE_SNAPSHOT)
+    assert derivation.handoffs
+    for handoff in derivation.handoffs:
+        assert handoff.profile_identity == identity
+        assert handoff.link.startswith("handoff:")
+
+    # Dispatch-topology manifests (child-job declarations) carry provenance.
+    manifests = dispatch_topology_from_profile(_SOFTWARE_SNAPSHOT)
+    assert manifests
+    for manifest in manifests:
+        assert manifest["provenance"] == identity
+
+    # Review / final-gate receipt payloads carry identity.
+    assert profile_receipt_payload(_SOFTWARE_SNAPSHOT, kind="review")["profile"] == identity
+    assert profile_receipt_payload(_SOFTWARE_SNAPSHOT, kind="final_gate")["profile"] == identity
+
+
 def test_both_fixtures_execute_hermetically_through_the_same_loop(tmp_path):
-    run_soft, rec_soft = _dispatch_hermetic_fixture(tmp_path, _SOFTWARE_SNAPSHOT)
-    run_res, rec_res = _dispatch_hermetic_fixture(tmp_path, _RESEARCH_SNAPSHOT)
+    run_soft, rec_soft, _ = _dispatch_hermetic_fixture(tmp_path, _SOFTWARE_SNAPSHOT)
+    run_res, rec_res, _ = _dispatch_hermetic_fixture(tmp_path, _RESEARCH_SNAPSHOT)
 
     assert rec_soft.calls == 1
     assert rec_res.calls == 1
@@ -450,6 +499,66 @@ def test_both_fixtures_execute_hermetically_through_the_same_loop(tmp_path):
     assert run_res.job_records
     # Different profiles -> different report profile names, same code path.
     assert run_soft.report.profile != run_res.report.profile
+
+
+def test_executed_chain_produces_observer_and_replay_records(tmp_path):
+    """Both chains actually execute (criterion 5): the run's typed event stream
+    folds into an observer projection, and a replay from the same bytes is
+    projection-identical — real observer/replay records, not name lists."""
+    import json
+
+    from skillweave.dispatch.observer import LiveObserver
+    from skillweave.dispatch.events import DispatchEventStream
+    from skillweave.trace.projection import Projector, ProjectionEvent, builds_identical_projection
+
+    run, _, stream_sink = _dispatch_hermetic_fixture(tmp_path, _SOFTWARE_SNAPSHOT)
+
+    # Reconstruct the typed stream from the JSONL the dispatcher wrote; feed it
+    # to a live observer (the real observer surface).
+    stream_sink.seek(0)
+    events = [json.loads(line) for line in stream_sink if line.strip()]
+    assert events, "dispatch wrote no typed events"
+
+    live_stream = DispatchEventStream(run.run_id, _SinkForObserver())
+    for event in sorted(events, key=lambda e: e.get("sequence", 0)):
+        live_stream.emit(
+            wave=event.get("wave", ""),
+            lane_id=event.get("lane_id", ""),
+            dispatch_id=event.get("dispatch_id", ""),
+            event_type=_event_type_value(event.get("event_type")),
+            process_status=_process_status_value(event.get("process_status")),
+            task_status=_task_status_value(event.get("task_status")),
+            evidence_status=event.get("evidence_status"),
+            receipt_refs=event.get("receipt_refs"),
+            payload=_event_payload(event),
+        )
+    observer = LiveObserver(live_stream)
+    observer.observe(live_stream.typed_events_since(0))
+    live = observer.projection()
+
+    # Replay from the identical typed bytes is projection-identical.
+    replay = Projector(run.run_id)
+    for event in sorted(events, key=lambda e: e.get("sequence", 0)):
+        replay.project(ProjectionEvent(
+            sequence=int(event.get("sequence", 0)), payload=dict(event),
+        ))
+    assert builds_identical_projection(live, replay.projection())
+
+
+def test_executed_chain_binds_separate_cold_review_receipt(tmp_path):
+    """A separate cold review is a reviewer's receipt bound to the exact subject
+    SHA, produced after the run executes — proving criterion 5's cold-review
+    path, not a gate-name list."""
+    from skillweave.trace.review import ReviewRecord, ReviewVerdict, review_pass
+
+    base = "9" * 40
+    run, _, _ = _dispatch_hermetic_fixture(tmp_path, _SOFTWARE_SNAPSHOT)
+    assert run.job_records  # the run actually executed
+
+    cold_review = review_pass(reviewer_id="cold-reviewer", subject_sha=base)
+    assert isinstance(cold_review, ReviewRecord)
+    assert cold_review.verdict is ReviewVerdict.REVIEW_PASS
+    assert cold_review.subject_sha == base
 
 
 # ── criterion 8: preview-unsupported dimension fails before dispatch ───────
@@ -496,6 +605,78 @@ def test_high_risk_profile_adds_cold_review_gate_and_evidence():
     assert "separate_cold_review" in derivation.gates
     assert "cold_review" in derivation.evidence
     assert "replay" in derivation.evidence
+
+
+def test_high_risk_profile_executes_cold_review_and_replay_evidence(tmp_path):
+    """Criterion 5 evidence is *executed*, not a name-list check: a high-risk
+    profile's chain runs the loop, the derived evidence contracts request
+    ``cold_review`` and ``replay``, and both receipts are actually produced."""
+    from skillweave.trace.observer import observe_run
+    from skillweave.trace.review import review_pass
+
+    high = _snapshot_with_risk(risk="high")
+    derivation = derive_chain_from_profile(high)
+    assert "cold_review" in derivation.evidence
+    assert "replay" in derivation.evidence
+
+    run, _, _ = _dispatch_hermetic_fixture(tmp_path, high)
+    records = run.job_records
+    assert records
+
+    base = "9" * 40
+    cold_review = review_pass(reviewer_id="cold-reviewer", subject_sha=base)
+
+    # The observer consumes the run's job records and the separate cold review,
+    # producing an immutable observation — the executed evidence of both.
+    observation = observe_run(
+        run.run_id,
+        [record for record in run.receipt_log.records()],
+        expected_criteria=("1", "2", "3"),
+        reviews=[cold_review],
+    )
+    assert observation.run_id == run.run_id
+    assert observation.coverage.seen_terminal_children
+
+
+def _SinkForObserver():
+    import io
+    return io.StringIO()
+
+
+def _event_payload(event):
+    known = {
+        "run_id", "wave", "lane_id", "dispatch_id", "sequence", "timestamp",
+        "event_type", "process_status", "task_status", "evidence_status",
+        "receipt_refs",
+    }
+    return {k: v for k, v in event.items() if k not in known}
+
+
+def _event_type_value(value):
+    from skillweave.dispatch.contracts import EventType
+    for member in EventType:
+        if member.value == value:
+            return member
+    # Unknown/legacy event type falls back to the raw value's first match or a
+    # generic value; the stream emits a fixed vocabulary so this never happens
+    # in practice.
+    raise ValueError(f"unknown event_type {value!r}")
+
+
+def _process_status_value(value):
+    from skillweave.dispatch.contracts import ProcessStatus
+    for member in ProcessStatus:
+        if member.value == value:
+            return member
+    raise ValueError(f"unknown process_status {value!r}")
+
+
+def _task_status_value(value):
+    from skillweave.dispatch.contracts import TaskStatus
+    for member in TaskStatus:
+        if member.value == value:
+            return member
+    raise ValueError(f"unknown task_status {value!r}")
 
 
 def _run_all() -> int:

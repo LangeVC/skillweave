@@ -493,9 +493,14 @@ name:
    `roles`; the fixed separation `ops` / `reviewer` / `observer` holds.
 4. **Gates / evidence** — derived from the profile's `control.risk` (high/critical
    adds a `separate_cold_review` gate and cold-review + replay evidence).
-5. **Handoffs** — one per phase boundary (`handoff:<prev>-><next>`).
+5. **Handoffs** — one per phase boundary (`handoff:<prev>-><next>`), each an
+   identity-bearing transfer carrying the four profile identity fields
+   (`profile_id`, `profile_version`, `sdk_digest`, `effective_digest`) so the
+   snapshot that produced the chain rides on every phase transfer, never as a
+   bare string.
 6. **Dispatch topology** — one governed lane per phase (disjoint `write_scope`
-   under the phase, `depends_on` the prior phase) plus a final integration lane.
+   under the phase, `depends_on` the prior phase) plus a final integration lane;
+   each lane manifest carries a `provenance` block with the four identity fields.
 
 **Fail-explicit preview boundary:** preview-only runtime dimensions (`phases`,
 `kernel_stage`, `topology`, `control`, `human_coupling`, `change_surfaces`,
