@@ -88,6 +88,38 @@
         },
         "required": {
           "type": "boolean"
+        },
+        "provenance": {
+          "$ref": "#/$defs/profileProvenance"
+        }
+      },
+      "additionalProperties": false
+    },
+    "profileProvenance": {
+      "type": "object",
+      "description": "The four profile identity fields a chain and its receipts carry end to end (SW1312-CHAIN-001): the profile id, its artifact version, the SDK schema digest it was bound to, and the immutable effective-profile content digest. Each is a non-empty string; an explicit profile selection must bind all four so a later run can re-trace which snapshot produced the chain.",
+      "required": [
+        "profile_id",
+        "profile_version",
+        "sdk_digest",
+        "effective_digest"
+      ],
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sdk_digest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effective_digest": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

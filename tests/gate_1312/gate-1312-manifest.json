@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "gate": {
+    "id": "SW-GATE-1312",
+    "name": "LIFECYCLE_PROFILE_PREVIEW_PASS",
+    "base_sha": "52280008b5e9ce9a6e7435c5a1fe67feee581c6b",
+    "subject_sha": "0000000000000000000000000000000000000000"
+  },
+  "shas": {
+    "skillweave-sdk": "ec764279f7f817bba22810847793f423ef8d62f0",
+    "skillweave-sdk-profile-contract": "5db7f44d7a3350d245737dc99e43fbaf386d27cf",
+    "skillweave-profiles": "5b3bc99f3d70dfac7abd26e998bdb5a7257ae437",
+    "skillweave-profiles-base-profiles": "a7c9741fe5edb207c6d89833d277c170bd2d4c2d",
+    "skillweave-packs-pro": "ad84201187bdcf91e4cec31d31c419944335199d",
+    "skillweave-packs-pro-cms-pack": "b2b2352bfa940930a36ceadebaa80c43a2db9731",
+    "skillweave-packs-pro-cms-proof": "6b8e3777510014e98985d060d63ff33627fc3e31"
+  },
+  "digests": {
+    "schema": "2a52a4b820f0a1263149433e2f7e47e113133f54e6b38fd59c4cc93f7272e83e"
+  },
+  "commands": [
+    {
+      "command": "python -m pytest tests/gate_1312 -q",
+      "exit": 0
+    }
+  ],
+  "evidence": [
+    {
+      "path": "schemas/gate-1312-manifest.schema.json",
+      "sha256": "893f39d7989ce783c7875fcfe4c70894256acf9b604b98ca811a31b0bba448ef"
+    },
+    {
+      "path": "tests/gate_1312/__init__.py",
+      "sha256": "ce4eefb04328379d87db361d6b9c2833e106d0e77d5a0179705c54a20fa4c51c"
+    },
+    {
+      "path": "tests/gate_1312/test_criterion_map.py",
+      "sha256": "7ada8f9e765c97bf87272af6b683982b15a7959b72b71903864895d1e6e1c8cc"
+    }
+  ],
+  "reviewer_brief": {
+    "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "deferrals": [
+    "1.3.13"
+  ]
+}
