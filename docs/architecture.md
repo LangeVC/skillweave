@@ -96,6 +96,43 @@ Thirteen skills ship as `skillweave-*` packages:
 12. `skillweave-releasechain`
 13. `skillweave-repo-health`
 
+## Repository boundary
+
+SkillWeave is four repositories with one owner per concern. This document's
+claim is a pointer: the boundary is enforced, not merely described, by
+`tests/contract/test_preview_core_pro_boundary.py`.
+
+| Repo | Owns | Licence | Public |
+|------|------|---------|--------|
+| `skillweave-sdk` | the **contract** — schema bytes and the taxonomy value set | Apache-2.0 | yes |
+| `skillweave` | the **execution** — runtime, kernel, engine (this repo) | Apache-2.0 | yes |
+| `skillweave-profiles` | the **meaning** — provider-free profile opinion | Apache-2.0 | yes |
+| `skillweave-packs-pro` | **commercial opinion** — CMS behaviour and provider mappings | proprietary | no |
+
+The rules the machine checks:
+
+* **SDK owns the contract bytes.** Core consumes a pinned SDK version
+  (`skillweave-sdk==0.1.0` in `pyproject.toml`) and never re-authors the
+  lifecycle/work-profile/deliverable/evidence/subject schemas or a pack schema
+  in its own tree.
+* **Base profiles are provider-free.** `skillweave-profiles` encodes no concrete
+  provider, model, harness or launch command. Core's own `profiles/` holds a
+  worked example, not a shipped provider-free base profile.
+* **A private pack cannot weaken Core authority.** Core owns the gate decision
+  and the authority matrix; a pack may add stricter gates but cannot override a
+  Core evidence verdict, gate decision or authority statement. The gate
+  reconciliation result exposes no override/force-pass field, and too little
+  evidence is `reconciled=False`, never a pass.
+* **Private direct-install metadata is declarative, not state.** A
+  `skillweave-packs-pro` manifest declares proprietary `license`,
+  `compatibility`, `upgrade`, `support` and `service_tier` identifiers.
+  Secrets, billing and entitlement state remain external and appear as no field
+  of a verification record.
+* **No premature 2.0 marketplace.** A 1.3.12 artefact claims no marketplace
+  discovery, verified badge, rev-share, license enforcement or default routing
+  cutover; those are deferred to 2.0 and named only on the roadmap as future
+  work.
+
 ## Agent-agnostic design
 
 * **Capability-based routing**: tasks are assigned by declared capability, never
