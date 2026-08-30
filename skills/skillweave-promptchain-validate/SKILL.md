@@ -394,3 +394,36 @@ Use these files if present:
 - `references/sequence-type-detection.md`
 - `assets/prompt-sequence.schema.json`
 - `assets/workflow-context.schema.json`
+
+## Effective-profile contract validation (SW1312-CHAIN-001)
+
+When the input is a **profile-derived sequence** (produced by
+`skillweave-promptchain-generate` from an effective-profile snapshot), validate
+against the **profile contract**, in addition to the existing structural rules
+above (build or topic format). Do not apply the twelve-section topic checklist to
+a profile chain.
+
+**Profile contract checks** (each fail-closed, returned as a violation):
+
+1. **Profile contract present** — the sequence binds `profile_id`,
+   `profile_version`, `sdk_digest` and `effective_digest`; a missing identity
+   field is a violation, never an empty default.
+2. **Evidence contracts** — the profile declares evidence contracts (`job_receipt`,
+   `verification`, and for high/critical risk `cold_review` and `replay`).
+3. **Surfaces** — every mutating (ops) step owns a non-empty write surface; a
+   surface-free mutating step is a violation.
+4. **Authority** — an `ops` role must never approve a gate on its own work
+   (`can_approve_gate` on ops is refused).
+5. **Dependencies** — a step's handoff must reference its actual predecessor
+   phase (`handoff:<prev>-><next>`); a broken chain link is a violation.
+6. **Handoffs** — every non-first step carries exactly one handoff naming the
+   preceding phase, and the handoff list matches the phase count minus one.
+
+**Preview boundary:** a sequence that asks to *execute* a preview-only runtime
+dimension (`phases`, `topology`, `control`, `human_coupling`, `change_surfaces`,
+`autonomy_bounds`, `skills`, `capabilities`, `kernel_stage`) is invalid: those
+dimensions are declarations only. Validation reports the dimension and refuses to
+mark the sequence dispatchable, never silently accepting a fall-back.
+
+**Backward compatibility:** without an explicit profile, the existing
+build/topic validation rules above are unchanged.

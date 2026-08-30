@@ -464,3 +464,44 @@ Use these files if present:
 - `references/complexity-analysis.md` - PRD complexity assessment guide
 - `assets/prompt-sequence.schema.json` - JSON schema for prompt sequences
 - `assets/workflow-context.schema.json` - Schema for workflow context data
+
+## Effective-profile chain derivation (SW1312-CHAIN-001)
+
+When an explicit effective-profile artifact is supplied, generation is driven by
+that **immutable snapshot**, not by the legacy topic/PRD path. The snapshot is
+the resolver's output (`skillweave.profiles.effective`); this skill consumes it
+as a read-only input and never re-resolves a profile.
+
+**Invocation (profile path):**
+
+```
+/skillweave-promptchain-generate profile="path/to/effective-profile.snapshot.json"
+```
+
+**How the chain is derived** — the resolver exposes a resolved content mapping and
+preview-only runtime dimensions. Generation reads the profile's *data*, never its
+name:
+
+1. **Ordered steps** — one step per phase in the snapshot's declared `phases`,
+   in order, each carrying the phase, a role, the skill set, capabilities, gate
+   and evidence contracts.
+2. **Skills** — the skill set for the profile's `primaryCategory` (a data-driven
+   category→skill map, e.g. `build` → blueprint/design/generate/validate/execute/
+   releasechain, `research` → discovery/generate/validate/execute/observe), or
+   the snapshot's declared `skills` when present.
+3. **Capabilities / roles** — from the snapshot's declared `capabilities` and
+   `roles`; the fixed separation `ops` / `reviewer` / `observer` holds.
+4. **Gates / evidence** — derived from the profile's `control.risk` (high/critical
+   adds a `separate_cold_review` gate and cold-review + replay evidence).
+5. **Handoffs** — one per phase boundary (`handoff:<prev>-><next>`).
+6. **Dispatch topology** — one governed lane per phase (disjoint `write_scope`
+   under the phase, `depends_on` the prior phase) plus a final integration lane.
+
+**Fail-explicit preview boundary:** preview-only runtime dimensions (`phases`,
+`kernel_stage`, `topology`, `control`, `human_coupling`, `change_surfaces`,
+`autonomy_bounds`, `skills`, `capabilities`) are carried as *declarations* only.
+Requesting their execution fails before dispatch with an actionable message; the
+generator never falls back silently to the legacy plan/build/mixed path.
+
+**Backward compatibility:** with no explicit profile, the legacy topic/PRD path
+above is unchanged.
