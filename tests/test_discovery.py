@@ -1,6 +1,10 @@
 """
 Test suite for Discovery & Design Thinking features.
 Covers: lens configuration, prompt library, artifacts, ideation, assumptions, iteration.
+
+All repository resources are resolved from an explicit repository root so the
+suite passes identically regardless of the caller's working directory. No product
+or test path depends on Path.cwd or a relative glob rooted at the caller.
 """
 
 import sys
@@ -8,25 +12,39 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '.skillweave', 'lib'))
 
-import glob
 import yaml
 import tempfile
 from pathlib import Path
 
-from skillweave.design_thinking import DesignThinkingLens, DesignThinkingConfig
+from skillweave.design_thinking import (
+    DesignThinkingLens,
+    resolve_discovery_asset,
+)
 from skillweave.persistence import SkillWeavePersistence
 
-from ideation import IdeationSession, IdeationConfig, IdeationMode, IdeationOption
+from ideation import IdeationSession, IdeationConfig, IdeationMode
 from assumptions import AssumptionTracker, Assumption
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PROMPTS_DIR = REPO_ROOT / ".skillweave" / "prompts" / "discovery"
+TEMPLATES_DIR = REPO_ROOT / ".skillweave" / "templates" / "discovery"
+
+
+def _lens_data():
+    path = resolve_discovery_asset(REPO_ROOT, "lenses", "design-thinking.yaml")
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+def _prompt_files():
+    return sorted(PROMPTS_DIR.glob("*.md"))
 
 
 # ===== Lens Configuration Tests =====
 
 def test_lens_config_has_six_rules():
-    path = Path('.skillweave/lenses/design-thinking.yaml')
-    assert path.exists()
-    with open(path) as f:
-        data = yaml.safe_load(f)
+    data = _lens_data()
     rules = data['lens']['workshop_rules']
     assert len(rules) == 6
     rule_ids = [r['id'] for r in rules]
@@ -35,9 +53,7 @@ def test_lens_config_has_six_rules():
 
 
 def test_lens_config_has_five_principles():
-    path = Path('.skillweave/lenses/design-thinking.yaml')
-    with open(path) as f:
-        data = yaml.safe_load(f)
+    data = _lens_data()
     principles = data['lens']['ux_principles']
     assert len(principles) == 5
     pids = [p['id'] for p in principles]
@@ -46,15 +62,13 @@ def test_lens_config_has_five_principles():
 
 
 def test_lens_opt_in_by_default():
-    path = Path('.skillweave/lenses/design-thinking.yaml')
-    with open(path) as f:
-        data = yaml.safe_load(f)
+    data = _lens_data()
     assert data['lens']['enabled'] is False
     assert data['lens']['activation']['mechanism'] == 'opt-in'
 
 
 def test_config_yaml_lens_section():
-    path = Path('.skillweave/config.yaml')
+    path = REPO_ROOT / ".skillweave" / "config.yaml"
     with open(path) as f:
         data = yaml.safe_load(f)
     assert 'lens' in data
@@ -81,18 +95,18 @@ def test_lens_loading_via_design_thinking_module():
 # ===== Prompt Library Tests =====
 
 def test_prompt_library_completeness():
-    prompts = glob.glob('.skillweave/prompts/discovery/*.md')
+    prompts = _prompt_files()
     assert len(prompts) >= 10
-    empathy = [p for p in prompts if 'empathy-' in p]
-    research = [p for p in prompts if 'research-' in p]
-    framing = [p for p in prompts if 'framing-' in p]
+    empathy = [p for p in prompts if 'empathy-' in p.name]
+    research = [p for p in prompts if 'research-' in p.name]
+    framing = [p for p in prompts if 'framing-' in p.name]
     assert len(empathy) >= 3
     assert len(research) >= 3
     assert len(framing) >= 4
 
 
 def test_prompt_has_io_specs():
-    for p in glob.glob('.skillweave/prompts/discovery/*.md'):
+    for p in _prompt_files():
         with open(p) as f:
             content = f.read()
         assert 'Input Requirements' in content, f'{p} missing input requirements'
@@ -101,8 +115,7 @@ def test_prompt_has_io_specs():
 
 
 def test_prompt_inventory_registered():
-    repo_root = Path(__file__).resolve().parent.parent
-    library = sorted((repo_root / '.skillweave' / 'prompts' / 'discovery').glob('*.md'))
+    library = _prompt_files()
     assert len(library) >= 10
     path = Path(__file__).resolve().parent / 'fixtures' / 'tracking-log' / 'prompt-inventory.yaml'
     assert path.exists()
@@ -111,7 +124,7 @@ def test_prompt_inventory_registered():
     assert data['total_prompts'] >= 10
     assert len(data['inventory']) >= 10
     assert data['total_prompts'] == len(data['inventory'])
-    registered = {(repo_root / entry['file']).resolve() for entry in data['inventory']}
+    registered = {(REPO_ROOT / entry['file']).resolve() for entry in data['inventory']}
     assert registered.issubset({p.resolve() for p in library})
 
 
@@ -120,12 +133,12 @@ def test_prompt_inventory_registered():
 def test_all_five_templates_exist():
     expected = ['persona-card.md', 'competitor-matrix.md', 'assumption-log.yaml', 'opportunity-canvas.md', 'research-summary.md']
     for name in expected:
-        path = Path(f'.skillweave/templates/discovery/{name}')
+        path = resolve_discovery_asset(REPO_ROOT, "templates", f"discovery/{name}")
         assert path.exists(), f'Missing template: {name}'
 
 
 def test_templates_have_placeholders():
-    md_templates = glob.glob('.skillweave/templates/discovery/*.md')
+    md_templates = sorted(TEMPLATES_DIR.glob("*.md"))
     for t in md_templates:
         with open(t) as f:
             content = f.read()
@@ -133,7 +146,7 @@ def test_templates_have_placeholders():
 
 
 def test_assumption_log_yaml_valid():
-    path = Path('.skillweave/templates/discovery/assumption-log.yaml')
+    path = resolve_discovery_asset(REPO_ROOT, "templates", "discovery/assumption-log.yaml")
     with open(path) as f:
         data = yaml.safe_load(f)
     assert 'assumptions' in data
@@ -207,12 +220,28 @@ def test_ideation_reset():
 
 # ===== Assumption Tracking Tests =====
 
-def test_assumption_extraction():
-    tracker = AssumptionTracker(str(Path.cwd()))
+def _assert_no_cwd_mutation(monkeypatch, tmp_path):
+    """Change to an unrelated working directory and assert assumption tracking
+    writes only under its isolated temp root, never beneath the caller's cwd."""
+    foreign = tmp_path / "foreign_cwd"
+    foreign.mkdir()
+    monkeypatch.chdir(foreign)
+    state_dir = tmp_path / "extra_state"
+    state_dir.mkdir()
+    tracker = AssumptionTracker(str(state_dir))
+    tracker.clear()
+    tracker.extract_from_text('Users will adopt the platform quickly. The market will grow.')
+    assert (state_dir / ".skillweave" / "tracking-log" / "assumptions.yaml").exists()
+    assert not (foreign / ".skillweave").exists()
+
+
+def test_assumption_extraction(tmp_path, monkeypatch):
+    tracker = AssumptionTracker(str(tmp_path))
     tracker.clear()
     text = 'Users will adopt the platform quickly. The market will grow 20% YoY. The database should handle 10K users. The team can deliver in 3 months. Users will pay for this feature.'
     extracted = tracker.extract_from_text(text)
     assert len(extracted) >= 5
+    _assert_no_cwd_mutation(monkeypatch, tmp_path)
 
 
 def test_assumption_risk_scoring():
@@ -224,8 +253,8 @@ def test_assumption_risk_scoring():
     assert a2.zone == 'low'
 
 
-def test_assumption_update_and_persistence():
-    tracker = AssumptionTracker(str(Path.cwd()))
+def test_assumption_update_and_persistence(tmp_path):
+    tracker = AssumptionTracker(str(tmp_path))
     tracker.clear()
     text = 'Users will adopt the platform. The market will grow.'
     extracted = tracker.extract_from_text(text)
@@ -236,14 +265,14 @@ def test_assumption_update_and_persistence():
     assert updated[0].id == first_id
 
 
-def test_assumption_categorization():
+def test_assumption_categorization(tmp_path):
     categories = {
         'user': 'Users need this feature',
         'market': 'The market is growing',
         'technical': 'The API should scale',
     }
     for expected_cat, text in categories.items():
-        tracker = AssumptionTracker(str(Path.cwd()))
+        tracker = AssumptionTracker(str(tmp_path))
         tracker.clear()
         extracted = tracker.extract_from_text(text)
         if extracted:
@@ -266,16 +295,35 @@ def test_iteration_log_exists():
 
 
 def test_feedback_synthesis_template_exists():
-    path = Path('.skillweave/templates/discovery/feedback-synthesis.md')
-    assert path.exists()
+    path = resolve_discovery_asset(REPO_ROOT, "templates", "discovery/feedback-synthesis.md")
     with open(path) as f:
         content = f.read()
     assert '{{' in content
 
 
 def test_revision_prompt_requires_evidence():
-    path = Path('.skillweave/prompts/discovery/iteration-revision.md')
-    assert path.exists()
+    path = resolve_discovery_asset(REPO_ROOT, "prompts", "discovery/iteration-revision.md")
     with open(path) as f:
         content = f.read()
     assert 'Evidence' in content or 'evidence' in content
+
+
+# ===== Hermetic Resource Resolution Tests =====
+
+def test_missing_discovery_asset_fails_explicitly(tmp_path):
+    from skillweave.design_thinking import DiscoveryAssetNotFound
+    missing = tmp_path / "pkgroot"
+    expected = (missing / ".skillweave" / "lenses" / "design-thinking.yaml").resolve()
+    try:
+        resolve_discovery_asset(missing, "lenses", "design-thinking.yaml")
+        assert False, "expected DiscoveryAssetNotFound"
+    except DiscoveryAssetNotFound as exc:
+        assert exc.expected_path == expected
+        assert str(expected) in str(exc)
+
+
+def test_discovery_assets_resolve_from_repo_root_not_cwd(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    lens = resolve_discovery_asset(REPO_ROOT, "lenses", "design-thinking.yaml")
+    assert lens == (REPO_ROOT / ".skillweave" / "lenses" / "design-thinking.yaml").resolve()
+    assert lens.exists()

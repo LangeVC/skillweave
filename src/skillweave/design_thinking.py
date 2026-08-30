@@ -13,6 +13,51 @@ from pathlib import Path
 from .persistence import SkillWeavePersistence, ensure_skillweave_folder, is_feature_enabled
 
 
+DISCOVERY_RESOURCE_KINDS = ("lenses", "prompts", "templates")
+
+
+class DiscoveryAssetNotFound(FileNotFoundError):
+    """Raised when a required packaged discovery asset is missing at its resolved path."""
+
+    def __init__(self, expected_path: Path) -> None:
+        self.expected_path = Path(expected_path).resolve()
+        super().__init__(
+            f"Required packaged discovery asset not found at resolved path: {self.expected_path}"
+        )
+
+
+def resolve_discovery_asset(resource_root: Path, kind: str, name: str) -> Path:
+    """
+    Resolve a discovery asset from an explicit resource root.
+
+    The root is anchored absolutely and never falls back to the caller's
+    working directory or a relative glob rooted at the caller. If the asset
+    is missing, failure is explicit and names the exact resolved expected
+    path so a packaged install cannot silently resolve another checkout.
+
+    Args:
+        resource_root: Explicit repository or package resource root.
+        kind: One of DISCOVERY_RESOURCE_KINDS (lenses, prompts, templates).
+        name: Asset path relative to ``<root>/.skillweave/<kind>``, e.g.
+            ``"discovery/iteration-revision.md"`` for a prompt or
+            ``"design-thinking.yaml"`` for a lens.
+
+    Returns:
+        The resolved absolute path to the asset.
+
+    Raises:
+        DiscoveryAssetNotFound: If the asset is absent at the resolved path.
+    """
+    if kind not in DISCOVERY_RESOURCE_KINDS:
+        raise ValueError(
+            f"Unknown discovery resource kind {kind!r}; expected one of {DISCOVERY_RESOURCE_KINDS}"
+        )
+    path = Path(resource_root).resolve() / ".skillweave" / kind / name
+    if not path.exists():
+        raise DiscoveryAssetNotFound(path)
+    return path
+
+
 class DesignRule(str, Enum):
     """Design thinking rules."""
     VALUE_NOISE = "value_noise"  # Value ≥ Noise

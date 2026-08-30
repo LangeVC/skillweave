@@ -37,9 +37,14 @@ BUNDLE_MANIFEST = "capability.yaml"
 #   - name: skillweave-blueprint
 #     source: ./skills/skillweave-blueprint
 #     version: 1.3.0
-# Wir lesen name + version je Eintrag und vergleichen version gegen
-# skills/<name>/capability.yaml Zeile "version: X".
+# Jeder Eintrag ist ein PIN auf das entsprechende Skill-Artefakt auf der Platte,
+# nicht die Versionsautoritaet fuer diesen Skill. Geprueft werden daher drei
+# Felder gegen die Mitgliedsdatei skills/<name>/capability.yaml:
+#   name    == eigener `name:`-Schluessel der Mitgliedsdatei
+#   source  == ./skills/<name>
+#   version == eigener `version:`-Schluessel der Mitgliedsdatei
 ENTRY_NAME_RE = re.compile(r"^-\s+name:\s*(\S+)")
+ENTRY_SOURCE_RE = re.compile(r"^source:\s*(\S+)")
 VERSION_RE = re.compile(r"^version:\s*(\S+)")
 
 
@@ -48,26 +53,23 @@ def _die(msg: str) -> NoReturn:
     sys.exit(2)
 
 
-def load_member_version(repo: Path, name: str) -> str:
-    """Lese version: aus skills/<name>/capability.yaml; None wenn fehlt."""
+def load_member_field(repo: Path, name: str, field: str) -> str | None:
+    """Lies `field:` aus skills/<name>/capability.yaml; None wenn fehlt."""
     p = repo / "skills" / name / "capability.yaml"
     if not p.exists():
         return None
-    for line in p.read_text().splitlines():
-        s = line.strip()
-        m = VERSION_RE.match(s)
-        if m:
-            return m.group(1)
-    return None
+    m = re.search(rf"^{field}:\s*(\S+)", p.read_text(), re.MULTILINE)
+    return m.group(1) if m else None
 
 
-def parse_manifest(repo: Path) -> list[tuple[str, str]]:
-    """Lies name + version je capabilities:-Eintrag der Bundle-capability.yaml."""
+def parse_manifest(repo: Path) -> list[tuple[str, str, str]]:
+    """Lies (name, source, version) je capabilities:-Eintrag."""
     p = repo / BUNDLE_MANIFEST
     if not p.exists():
         _die(f"no {BUNDLE_MANIFEST}")
-    entries: list[tuple[str, str]] = []
+    entries: list[tuple[str, str, str]] = []
     cur_name: str | None = None
+    cur_source: str | None = None
     in_caps = False
     for raw in p.read_text().splitlines():
         if raw.strip() == "capabilities:":
@@ -82,11 +84,16 @@ def parse_manifest(repo: Path) -> list[tuple[str, str]]:
         if m:
             cur_name = m.group(1)
             continue
+        m = ENTRY_SOURCE_RE.match(raw.strip())
+        if m:
+            cur_source = m.group(1)
+            continue
         if cur_name is not None:
             v = VERSION_RE.match(raw.strip())
             if v:
-                entries.append((cur_name, v.group(1)))
+                entries.append((cur_name, cur_source or "", v.group(1)))
                 cur_name = None
+                cur_source = None
     if not entries:
         _die(f"no capabilities entries found in {BUNDLE_MANIFEST}")
     return entries
@@ -100,15 +107,24 @@ def main() -> int:
 
     entries = parse_manifest(repo)
     failed = False
-    for name, declared in entries:
-        actual = load_member_version(repo, name)
-        if actual is None:
+    for name, source, declared in entries:
+        on_disk_name = load_member_field(repo, name, "name")
+        actual = load_member_field(repo, name, "version")
+        expected_source = f"./skills/{name}"
+        if on_disk_name is None or actual is None:
             print(f"  MISSING   {name}: skills/{name}/capability.yaml fehlt (Manifest sagt {declared})")
             failed = True
-        elif actual != declared:
+            continue
+        if on_disk_name != name:
+            print(f"  MISMATCH  {name}: Manifest name {name}, Datei name {on_disk_name}")
+            failed = True
+        if source != expected_source:
+            print(f"  MISMATCH  {name}: Manifest source {source!r}, erwartet {expected_source!r}")
+            failed = True
+        if actual != declared:
             print(f"  MISMATCH  {name}: Manifest sagt {declared}, Datei sagt {actual}")
             failed = True
-        else:
+        if on_disk_name == name and source == expected_source and actual == declared:
             print(f"  ok        {name} = {actual}")
 
     if failed:

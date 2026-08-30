@@ -1,19 +1,107 @@
-# .version.yaml — deklariert die Versionsorte der BUNDLE-Release-Linie.
+# .version.yaml — declares every version-bearing surface in the SkillWeave
+# product and the role each one plays, plus the release policy that binds them.
+#
+# This file is the single declarative input for the generic version-sync check
+# and bump, and for release-gate tag validation. A tool that reads `locations`
+# and honours `path`/`pattern`/`required` needs no other hardcoded inventory.
 schema: 1
 
-# Die Wahrheitsquelle der Bundle-Release-Linie. pyproject.toml traegt die
-# eine Version, die der Bump als Referenz bekommt und der das Gate folgt.
+# release_policy names how the distinct artifact roles below relate to one
+# another for this release train. `lockstep` means every surface carries the
+# same version for this train. It deliberately does NOT collapse the roles:
+# runtime, bundle, bundle member pins and separately installable skill
+# capabilities remain distinct artifacts, and a future policy (e.g. decoupled
+# skill versions) only needs a different `release_policy` value, not a new
+# declarative inventory.
+release_policy: lockstep
+
+# The single authority whose version the bump reads as its reference and whose
+# version the release tag is bound to.
 source_of_truth: pyproject.toml
 
-# CHANGELOG.md traegt 1.3.0 in einer Ueberschrift ("## 1.3.0 — ..."). Ein
-# Bump per Regex schriebe dort Historie um. Prosa-Historie ist kein
-# Versionsort dieser Release-Linie; sie wird nicht automatisch gepflegt und
-# steht deshalb NICHT in der Liste. (Entscheidung nach dem readme.txt-Muster
-# aus elementeer-mcp: stillschweigend weglassen gilt nicht, also hier notiert.)
+# Prose release history is NOT a version surface. CHANGELOG.md carries a prose
+# heading per release and is written by hand; it is deliberately kept out of
+# `locations` so an automatic bump can never rewrite history. Maintaining the
+# CHANGELOG is a manual release-note responsibility, not an automated step.
+# These are flat top-level scalars (not a nested map) because the canonical
+# version-sync parser accepts only a restricted YAML subset: flat scalar keys
+# and the `locations` list. A nested `changelog:` map would be unparseable.
+changelog_path: CHANGELOG.md
+changelog_managed: false
+changelog_responsibility: manual
+
 locations:
+  # Runtime / product source.
   - path: pyproject.toml
+    role: runtime_product
     pattern: '^version\s*=\s*"(\d+\.\d+\.\d+)"'
     required: true
+
+  # Capacium distribution-bundle manifest (root capability.yaml).
   - path: capability.yaml
+    role: distribution_bundle
+    pattern: '^version:\s*(\S+)'
+    required: true
+
+  # The bundle's `capabilities[]` entries are dependency pins to member
+  # skills, not the version authority for those skills. Pattern targets the
+  # indented `version:` lines inside the capabilities block.
+  - path: capability.yaml
+    role: bundle_member_pins
+    pattern: '^  version:\s*(\S+)'
+    required: true
+
+  # Every independently installable skill-capability artifact. One explicit
+  # entry per shipped skill; each is a separate artifact in its own right.
+  - path: skills/skillweave-blueprint/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-council/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-design/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-discovery/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-launch/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-lifecycle/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-observe/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-post-release/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-promptchain-execute/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-promptchain-generate/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-promptchain-validate/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-releasechain/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: true
+  - path: skills/skillweave-repo-health/capability.yaml
+    role: skill_capability
     pattern: '^version:\s*(\S+)'
     required: true

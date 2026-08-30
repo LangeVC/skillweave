@@ -11,4 +11,4 @@ Use `gh pr checks <PR#> --watch` and `gh run watch <run-id>` instead of polling 
 1. Version in `pyproject.toml`, CHANGELOG.md entry, README badge updated
 2. Release title: exactly `SkillWeave vX.Y.Z` (no extra text)
 3. Tag format: `vX.Y.Z`
-4. Use `auto-tag-release.yml` workflow when possible; manual `gh release create` must follow same naming convention
+4. Release model is Forgejo-first: the ops-engine `ReleaseHandler` creates the canonical tag and release object on Forgejo; GitHub is distribution-only. Local detail: `docs/release-flow.md` (authority: `lvc-ops/docs/release-flow-division.md`)
