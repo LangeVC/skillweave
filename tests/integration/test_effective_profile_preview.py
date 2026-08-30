@@ -359,6 +359,63 @@ def test_lower_precedence_override_is_visible_not_silent():
     )
 
 
+def test_same_precedence_nested_conflict_fails_with_exact_paths():
+    # Two sources of the SAME precedence set a nested non-mergeable scalar to
+    # different values. The conflict must be detected at the nested leaf and
+    # name both exact paths, never silently prefer the first writer.
+    a = _source(
+        _core_defaults(),
+        kind="domain_pack",
+        id="software-product-delivery",
+        version="v1-preview",
+        content={"control": {"risk": "low"}},
+    )
+    b = _source(
+        _core_defaults(),
+        kind="domain_pack",
+        id="research-and-synthesis",
+        version="v1-preview",
+        content={"control": {"risk": "high"}},
+    )
+    with pytest.raises(ConflictError) as exc:
+        resolve_effective_profile([a, b, _core_defaults()], schema_set=_SCHEMA_SET)
+    msg = str(exc.value)
+    assert "control.risk" in msg
+    assert "domain_pack/software-product-delivery@v1-preview" in msg
+    assert "domain_pack/research-and-synthesis@v1-preview" in msg
+
+
+def test_weaker_nested_override_is_visible_and_leaf_provenance_preserved():
+    # A stronger source owns a nested mapping; a weaker source overrides one
+    # nestable scalar. The stronger leaf value must win, the weaker override
+    # must be recorded, and both the winning leaf provenance and the parent
+    # provenance stay visible in the snapshot.
+    strong = _source(
+        _core_defaults(),
+        kind="organization_profile",
+        id="org-a",
+        version="1",
+        content={"control": {"risk": "low", "nested": {"timeout": 30}}},
+    )
+    weak = _source(
+        _core_defaults(),
+        kind="domain_pack",
+        id="software-product-delivery",
+        version="v1-preview",
+        content={"control": {"risk": "high"}},
+    )
+    snap = resolve_effective_profile([strong, weak, _core_defaults()], schema_set=_SCHEMA_SET)
+    assert snap.resolved["control"]["risk"] == "low"
+    assert snap.provenance["control.risk"].source_id == "org-a"
+    assert snap.provenance["control.nested.timeout"].source_id == "org-a"
+    assert any(
+        o["key"] == "control.risk"
+        and o["winner"] == "organization_profile/org-a@1"
+        and o["overridden"] == "domain_pack/software-product-delivery@v1-preview"
+        for o in snap.overrides
+    )
+
+
 def test_equal_values_are_not_a_conflict():
     a = _source(
         _core_defaults(),

@@ -310,6 +310,26 @@ def _validate_source_binding(source: ProfileSource, bound_digest: str) -> None:
         )
 
 
+def _record_provenance(
+    provenance: dict[str, ProfileSource],
+    path: str,
+    value: Any,
+    source: ProfileSource,
+) -> None:
+    """Record ``source`` as the winning owner of ``path`` and every nested leaf.
+
+    When the first writer contributes a nested mapping, it owns both the parent
+    key and each nested leaf. Recording leaf provenance up front means a later
+    same-precedence source that diverges on a nested scalar finds a real winner
+    to conflict with, and a weaker nested override stays attributable in the
+    snapshot instead of being silently dropped.
+    """
+    provenance[path] = source
+    if isinstance(value, dict):
+        for sub_key, sub_value in value.items():
+            _record_provenance(provenance, f"{path}.{sub_key}", sub_value, source)
+
+
 def resolve_effective_profile(
     sources: Sequence[Mapping[str, Any]],
     *,
@@ -354,7 +374,7 @@ def resolve_effective_profile(
         for key, value in source.content.items():
             if key not in resolved:
                 resolved[key] = value
-                provenance[key] = source
+                _record_provenance(provenance, key, value, source)
                 continue
             # Key already set by a stronger (earlier) source. Overlay rules:
             # dicts merge recursively; a differing non-mergeable value in a
@@ -400,7 +420,7 @@ def _overlay(
             sub_path = f"{path}.{sub_key}"
             if sub_key not in existing:
                 existing[sub_key] = sub_value
-                provenance[sub_path] = source
+                _record_provenance(provenance, sub_path, sub_value, source)
             else:
                 _overlay(
                     existing,
