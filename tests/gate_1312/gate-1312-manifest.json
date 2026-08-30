@@ -31,11 +31,11 @@
     },
     {
       "path": "tests/gate_1312/__init__.py",
-      "sha256": "32ebc4d44162bddbdc963635cba02b431a1adf0e0f1b8f6469d93f24b08325d7"
+      "sha256": "ce4eefb04328379d87db361d6b9c2833e106d0e77d5a0179705c54a20fa4c51c"
     },
     {
       "path": "tests/gate_1312/test_criterion_map.py",
-      "sha256": "db4e3c39f1ba69fb5aeeb8774d30344e3a85f916370a2d7af335d87809df625a"
+      "sha256": "7ada8f9e765c97bf87272af6b683982b15a7959b72b71903864895d1e6e1c8cc"
     }
   ],
   "reviewer_brief": {

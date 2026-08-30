@@ -14,6 +14,7 @@ fixture, and its declared evidence surfaces are all read-only.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -75,9 +76,18 @@ def test_criterion_09_machine_readable_gate_manifest():
     for entry in manifest["commands"]:
         assert isinstance(entry["exit"], int)
 
-    # --- Evidence hashes are full 64-hex ---------------------------------------
+    # --- Evidence hashes are full 64-hex AND match the committed files ----------
     for ev in manifest["evidence"]:
         assert re_full_hex64(ev["sha256"]), f"evidence {ev['path']} bad hash"
+        # The pinned SHA must equal the actual SHA-256 of the file on disk,
+        # resolved relative to the repository root.
+        ev_path = _core_root() / ev["path"]
+        assert ev_path.is_file(), f"evidence path missing: {ev['path']}"
+        actual = hashlib.sha256(ev_path.read_bytes()).hexdigest()
+        assert actual == ev["sha256"], (
+            f"evidence {ev['path']} hash mismatch: manifest {ev['sha256']}, "
+            f"actual {actual}"
+        )
 
     # --- Reviewer brief digest is 64-hex ---------------------------------------
     assert re_full_hex64(manifest["reviewer_brief"]["digest"])
