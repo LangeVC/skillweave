@@ -29,4 +29,4 @@ Release titles MUST be exactly `SkillWeave vX.Y.Z` — no additional text in the
 
 Regex: `^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$`
 
-This is enforced in CI (`auto-tag-release.yml`), the launch pre-flight checklist, and the releasechain skill. Block release creation if convention is violated.
+This convention applies under the Forgejo-first release model: the ops-engine `ReleaseHandler` creates the canonical tag and release object on Forgejo, and GitHub is distribution-only. Local release detail lives in `docs/release-flow.md`; its authority is `lvc-ops/docs/release-flow-division.md`. Block release creation if convention is violated.
