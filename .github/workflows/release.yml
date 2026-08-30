@@ -1,149 +1,41 @@
-name: Release
+name: Release Distribution Assets
+
+# SW1312-RELEASE-PROVENANCE-001 — distribution assets only.
+#
+# The release object is created on Forgejo by the ops-engine ReleaseHandler;
+# the mirror force-pushes the tag here. This workflow runs on the GitHub side
+# after mirror input and publishes distribution assets that the Linux Forgejo
+# host cannot build (the one named exception). It never creates or moves a tag,
+# never creates a release object, and never publishes from an unverified branch.
+#
+# PyPI: removed. There is no operator-approved PyPI product and no credentialed
+# PyPI release contract, so no workflow publishes to PyPI and no documentation
+# makes a PyPI claim.
+#
+# Capacium: published by release-on-tag.yml keyed to the verified tag, not here.
 
 on:
   release:
-    types: [published, edited]
+    types: [published]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  validate-naming:
-    name: Validate Release Naming Convention
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: HARD GATE — Release name must match "SkillWeave vX.Y.Z"
-        run: |
-          RELEASE_NAME="${{ github.event.release.name }}"
-          TAG_NAME="${{ github.event.release.tag_name }}"
-
-          echo "Release name:  $RELEASE_NAME"
-          echo "Tag name:      $TAG_NAME"
-
-          if ! echo "$RELEASE_NAME" | grep -qE '^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo ""
-            echo "============================================================"
-            echo "  HARD GATE REJECTED"
-            echo "============================================================"
-            echo ""
-            echo "Release name '$RELEASE_NAME' does not follow convention."
-            echo "Required format: SkillWeave vX.Y.Z"
-            echo "Example:         SkillWeave v0.5.1"
-            echo ""
-            echo "Delete this release and create a new one with the correct name."
-            echo ""
-            exit 1
-          fi
-
-          TAG_SUFFIX="${TAG_NAME#v}"
-          VER="${RELEASE_NAME#SkillWeave v}"
-          if [ "$TAG_SUFFIX" != "$VER" ]; then
-            echo ""
-            echo "============================================================"
-            echo "  HARD GATE REJECTED — tag/name mismatch"
-            echo "============================================================"
-            echo ""
-            echo "Tag version ($TAG_SUFFIX) differs from release name version ($VER)."
-            echo "Tag must be vX.Y.Z matching SkillWeave vX.Y.Z"
-            echo ""
-            exit 1
-          fi
-
-          echo "Release naming convention check PASSED."
-
-      - name: HARD GATE — Release version must match capability manifests
-        run: |
-          RELEASE_NAME="${{ github.event.release.name }}"
-          TAG_NAME="${{ github.event.release.tag_name }}"
-          RELEASE_VERSION="${RELEASE_NAME#SkillWeave v}"
-          TAG_VERSION="${TAG_NAME#v}"
-          python3 - <<PY
-          from pathlib import Path
-          import re
-          import sys
-
-          release_version = "$RELEASE_VERSION"
-          tag_version = "$TAG_VERSION"
-          manifests = [Path("capability.yaml"), *sorted(Path("skills").glob("skillweave-*/capability.yaml"))]
-          mismatches = []
-          for path in manifests:
-              match = re.search(r'^version:\s*["\\']?([^"\\'\\n]+)["\\']?\s*$', path.read_text(encoding="utf-8"), re.MULTILINE)
-              capability_version = match.group(1).strip() if match else ""
-              if capability_version != release_version or capability_version != tag_version:
-                  mismatches.append((str(path), capability_version or "missing"))
-
-          print(f"Release version: {release_version}")
-          print(f"Tag version:     {tag_version}")
-          if mismatches:
-              print("")
-              print("============================================================")
-              print("  HARD GATE REJECTED — capability manifest mismatch")
-              print("============================================================")
-              print("")
-              print("Release and tag versions must match every capability manifest exactly.")
-              for path, version in mismatches:
-                  print(f"{path}: {version}")
-              print("")
-              sys.exit(1)
-
-          print(f"Release version matches {len(manifests)} capability manifest(s).")
-          PY
-
-  publish-pypi:
-    name: Publish to PyPI
-    needs: [validate-naming]
-    runs-on: ubuntu-latest
-    if: github.event.action == 'published'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install build tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
-
-      - name: Build package
-        run: python -m build
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
-        continue-on-error: true
-
   update-homebrew:
     name: Update Homebrew Tap Formula
-    needs: [validate-naming]
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Homebrew tap update
+      - name: Trigger Homebrew tap update for the released tag
         uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
-            const releaseName = '${{ github.event.release.name }}';
-            const tagName = '${{ github.event.release.tag_name }}';
-            if (!releaseName.match(/^SkillWeave v\d+\.\d+\.\d+$/)) {
+            const tagName = context.payload.release.tag_name;
+            const releaseName = context.payload.release.name;
+            if (!releaseName || !releaseName.match(/^SkillWeave v\d+\.\d+\.\d+$/)) {
               core.warn("Skipping Homebrew update — naming convention mismatch");
               return;
             }
-            const version = releaseName.replace('SkillWeave v', '');
+            const version = tagName.replace(/^v/, '');
             core.notice(`Ready for Homebrew update: ${repo} v${version}`);
-
-  publish-capacium:
-    name: Publish to Capacium Exchange
-    needs: [validate-naming]
-    if: github.event.action == 'published'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: Capacium/capacium-action-publish@v1
-        with:
-          github_url: ${{ github.event.repository.html_url }}

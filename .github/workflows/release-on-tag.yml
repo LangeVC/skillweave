@@ -1,32 +1,29 @@
-name: Release on Tag
+name: Release Distribution on Tag
 
-# SW-CI-003: ein Tag-Push loest etwas aus. Bisher haengen release.yml und
-# auto-release-notes.yml an `on: release` (Release-OBJEKT), nichts an `tags:`.
-# Ein von Forgejo gespiegelter v*-Tag laeuft hier ein und legt das
-# Release-Objekt an — ohne dass jemand auf GitHub von Hand draufklicken muss.
+# SW1312-RELEASE-PROVENANCE-001 — distribution only, no release object.
 #
-# Der Tag ist auf der kanonischen Seite (Forgejo) bereits durch
-# validate-release-tag.yml gegangen. Hier wird ihm vertraut: er wird NICHT
-# erneut gegen die 13 Mitgliedsmanifeste geprueft — das waere der Fehler, den
-# SW-CI-002-G korrigiert hat (die Mitgliedsversionen sind keine Orte der
-# Bundle-Release-Linie). Geprueft wird hier nur die Namenskonvention, die CI
-# (auto-tag-release.yml) und der Releasechain-Skill ohnehin fordern.
+# Forgejo is canonical. The ops-engine ReleaseHandler creates the release object
+# on Forgejo on tag_push; the mirror force-pushes the tag ref here. This workflow
+# runs on the GitHub side after mirror input and is DISTRIBUTION ONLY: it
+# publishes to the Capacium exchange for the verified, immutable release/tag.
+# It does NOT create a release object, does NOT create or move a tag, and does
+# NOT publish from an unverified branch — the tag it reacts to already passed
+# the canonical Forgejo gate (validate-release-tag.yml) before the mirror pushed
+# it here.
 #
-# github.server_url-Guard: laeuft nur auf GitHub, nie auf dem Forgejo-Runner.
+# Capacium publication is therefore keyed to the verified immutable release/tag
+# path, never to a GitHub-created release object.
 on:
   push:
     tags:
       - 'v*'
 
 permissions:
-  contents: write
-
-env:
-  RELEASE_NAME_PREFIX: "SkillWeave"
+  contents: read
 
 jobs:
-  release:
-    name: Create GitHub Release
+  publish-capacium:
+    name: Publish to Capacium Exchange
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:
@@ -34,23 +31,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Enforce naming convention (SkillWeave vX.Y.Z)
+      - name: Verify tag is on the committed default branch (no unverified branch)
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          NAME="${RELEASE_NAME_PREFIX} ${TAG}"
-          if ! echo "${NAME}" | grep -qE '^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "HARD GATE REJECTED — '${NAME}' passt nicht auf ^SkillWeave vX.Y.Z$"
+          # The tag must be an ancestor of origin's default branch so a stray
+          # tag pushed to a side branch cannot publish. Default branch is
+          # determined, never assumed (mirror model reads it at run time).
+          DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD \
+            | sed 's|origin/||')"
+          if ! git merge-base --is-ancestor "${TAG}" "refs/remotes/origin/${DEFAULT_BRANCH}"; then
+            echo "HARD GATE REJECTED — tag ${TAG} is not on the default branch"
             exit 1
           fi
-          echo "${NAME}" > release-name.txt
+          echo "Tag ${TAG} is on the default branch ${DEFAULT_BRANCH}."
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Publish to Capacium
+        uses: Capacium/capacium-action-publish@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ env.RELEASE_NAME_PREFIX }} ${{ github.ref_name }}
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_url: ${{ github.event.repository.html_url }}

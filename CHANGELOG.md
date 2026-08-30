@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.3.12 — Forgejo-first release provenance
+
+1.3.11 shipped with an ambiguity at the release seam: the visible GitHub release
+object was created by a GitHub-side workflow, not delivered by the mirror from
+the Forgejo canonical. This release resolves that ambiguity before the release
+line is cut again.
+
+### Release artifact policy
+
+The release line follows one artifact policy across three surfaces, and every
+future release is verified against it by the Forgejo-first release contract:
+
+- **Runtime** — `pyproject.toml` carries the one runtime version; it is the
+  declared `source_of_truth` and the version a release tag derives from.
+- **Bundle** — `capability.yaml` carries the same version as the runtime; its
+  member `capabilities[]` pins are a manifest, not a separate version line.
+- **Skill capabilities** — each `skills/skillweave-*/capability.yaml` carries
+  the same version as the runtime under the lockstep policy.
+
+A release is one immutable commit: the Forgejo release object, the canonical tag
+target, the GitHub mirror tag and the distribution receipt must all refer to the
+same commit. Zero Forgejo release objects, or more than one, fail the contract.
+
+### Release path reconciled with the org model
+
+- A single release-object producer remains: the ops-engine `ReleaseHandler` on
+  Forgejo `tag_push`. No SkillWeave GitHub workflow creates a release object.
+- GitHub-side workflows are distribution-only after mirror input. They cannot
+  create or move the canonical tag, alter Forgejo release truth, or publish from
+  an unverified branch.
+- Capacium publication is triggered by the verified immutable release/tag path.
+- The dormant PyPI job is removed; there is no PyPI distribution claim.
+
+### Changelog history restored
+
+The 1.3.8, 1.3.9 and 1.3.10 entries were reconstructed from the immutable tags,
+not backfilled from memory, and are listed below.
+
 ## 1.3.11 — Dispatch operations, and a gate that can fail
 
 1.3.10 closed the Council namespace. This release closes the operational gap
@@ -53,10 +91,27 @@ subject. Criteria that a test process cannot observe are controller-attested,
 and the attestation now binds the candidate SHA: a dual pass recorded against
 any other subject fails closed inside the repository, not only in tooling.
 
-Note: this changelog has no entries for 1.3.8, 1.3.9 and 1.3.10, which were
-tagged without prose history. `.version.yaml` does not treat CHANGELOG.md as a
-version location, so the gap blocks nothing; it is recorded here rather than
-backfilled.
+## 1.3.10 — Council profiles revert the provider prefix
+
+Reconstructed from the immutable `v1.3.10` tag. A version-only release: the
+`faigate/` model-id prefix introduced in 1.3.9 was reverted, because the council
+provider talks to Faigate natively and must not carry the prefix. Runtime,
+bundle and all thirteen skill capabilities move to 1.3.10 in step.
+
+## 1.3.9 — Council profiles carry the Faigate prefix
+
+Reconstructed from the immutable `v1.3.9` tag. Council profile model ids were
+prefixed with `faigate/` (`faigate/gpt-4o`, `faigate/deepseek-v4-pro`, and the
+chairman ids likewise) across the four council tiers. Runtime, bundle and all
+thirteen skill capabilities move to 1.3.9 in step.
+
+## 1.3.8 — Lazy runtime imports and capability sync
+
+Reconstructed from the immutable `v1.3.8` tag. Top-level runtime imports in the
+routing and fanout layers were made lazy so the engine core imports without
+`runtime/` present: `ProcessResult`, `ArtifactReceipt`, `EvidenceType` and
+`ObserverRuntime` resolve on first use rather than at module import. Runtime,
+bundle and all thirteen skill capabilities move to 1.3.8 in step.
 
 ## 1.3.7 — Self-hosting comes home, and the gate holds it to its word
 
