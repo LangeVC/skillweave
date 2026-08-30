@@ -61,6 +61,8 @@ CORE_OWNED_SCHEMA_FILENAMES = (
     "dispatch-sequence.schema.json",
     "dispatch-trace.schema.json",
     "evidence.schema.json",
+    "dual-review-attestation.schema.json",
+    "gate-1312-manifest.schema.json",
     "harness-capability.schema.json",
     "prompt-sequence.schema.json",
     "run-state.schema.json",
