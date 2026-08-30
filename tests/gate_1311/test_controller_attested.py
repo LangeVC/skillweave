@@ -24,15 +24,13 @@ import re
 
 import pytest
 
+from skillweave.gates.attestation import AttestationError
+
 
 _FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 
 #: The explicit 1.4 / 1.5 deferrals the gate report must name (criterion 11).
 REQUIRED_DEFERRALS = ("1.4", "1.5")
-
-
-class AttestationError(ValueError):
-    """A controller-attested fact is missing, malformed or self-contradictory."""
 
 
 # ── Attestation validators (pure, fail-closed) ──────────────────────────────
@@ -97,56 +95,14 @@ def attest_dual_review(evidence: dict) -> dict:
     material contradiction, and every reviewer's subject must be exactly the
     candidate SHA the attestation is about. A dual pass bound to any other
     commit cannot attest the candidate.
+
+    This is the released controller-attested behavior, migrated onto the
+    shared SW1312 strict contract (:mod:`skillweave.gates.attestation`) rather
+    than a second local interpretation (SW1312-ATTESTATION-STRICT-001).
     """
-    reviewers = _require(evidence, "reviewers", evidence)
-    if not isinstance(reviewers, list) or len(reviewers) != 2:
-        raise AttestationError(
-            f"dual review requires exactly two reviewers, got {reviewers!r}"
-        )
-    candidate = _require(evidence, "candidate_sha", evidence)
-    if not _FULL_SHA.match(str(candidate)):
-        raise AttestationError(f"candidate_sha is not a full 40-hex SHA: {candidate!r}")
+    from skillweave.gates.attestation import canonicalize
 
-    tiers = []
-    subject_shas = []
-    for rv in reviewers:
-        if not isinstance(rv, dict):
-            raise AttestationError(f"reviewer entry is not a mapping: {rv!r}")
-        tier = _require(rv, "class", evidence)
-        if tier not in ("pro", "flash"):
-            raise AttestationError(f"reviewer class must be pro|flash: {tier!r}")
-        tiers.append(tier)
-        verdict = _require(rv, "verdict", evidence)
-        if verdict != "REVIEW_PASS":
-            raise AttestationError(
-                f"reviewer verdict must be exactly REVIEW_PASS, got {verdict!r}"
-            )
-        sha = _require(rv, "subject_sha", evidence)
-        if not _FULL_SHA.match(str(sha)):
-            raise AttestationError(f"reviewer subject_sha is not full: {sha!r}")
-        subject_shas.append(sha)
-        _require(rv, "reviewer_id", evidence)
-
-    # Two diverse reviewers: one pro, one flash.
-    if sorted(tiers) != ["flash", "pro"]:
-        raise AttestationError(
-            f"dual review must be one pro and one flash reviewer, got {tiers}"
-        )
-    # Identical immutable subjects.
-    if len(set(subject_shas)) != 1:
-        raise AttestationError(
-            f"reviewers must inspect identical immutable subjects, got {subject_shas}"
-        )
-    # The attested subject is the candidate under attestation.
-    if subject_shas[0] != candidate:
-        raise AttestationError(
-            f"reviewers attested subject {subject_shas[0]} but the candidate "
-            f"under attestation is {candidate}"
-        )
-    # No material contradiction.
-    if "contradiction" in evidence and evidence["contradiction"]:
-        raise AttestationError("dual review records a material contradiction")
-
+    canonicalize(evidence)
     return evidence
 
 
@@ -234,12 +190,17 @@ def test_criterion_12_dual_diverse_reviewers_both_return_pass():
                 "verdict": "REVIEW_PASS",
             },
         ],
+        "contradiction": False,
     }
     assert attest_dual_review(well_formed) is well_formed
 
     # Missing candidate SHA -> fail closed.
     with pytest.raises(AttestationError):
         attest_dual_review({k: v for k, v in well_formed.items() if k != "candidate_sha"})
+    # Missing explicit contradiction -> fail closed (stricter than 1.3.11:
+    # contradiction is now required, never defaulted to absent-and-ignored).
+    with pytest.raises(AttestationError):
+        attest_dual_review({k: v for k, v in well_formed.items() if k != "contradiction"})
     # Non-diverse (both pro) -> fail closed.
     with pytest.raises(AttestationError):
         rv = dict(well_formed)
