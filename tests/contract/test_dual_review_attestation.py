@@ -268,6 +268,6 @@ def test_non_mapping_evidence_fails_closed():
 def test_shared_validator_exposes_single_validate_entry_point():
     # The SW1312 gate receipt validates *this* contract; there is exactly one
     # canonical entry point, not a second local interpretation.
-    from skillweave.gates import validate as public_validate  # noqa: F401
+    from skillweave.gates.attestation import validate as contract_validate
 
-    assert public_validate is validate
+    assert contract_validate is validate
