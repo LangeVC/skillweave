@@ -304,6 +304,67 @@ def test_changing_source_after_dispatch_does_not_alter_pinned_snapshot():
     assert snap.digest == pinned_digest
 
 
+def test_first_writer_nested_mapping_is_independently_owned():
+    # The first writer contributes a nested mapping. The snapshot must own an
+    # independent deep copy, so mutating the source's nested leaf (scalar and
+    # list) after resolution leaves resolved, canonical bytes and digest
+    # byte-identical.
+    strong = _source(
+        _core_defaults(),
+        kind="organization_profile",
+        id="org-a",
+        version="1",
+        content={"engine": {"pipeline": {"batch_size": 10, "modes": ["sync", "async"]}}},
+    )
+    snap = resolve_effective_profile([strong, _core_defaults()], schema_set=_SCHEMA_SET)
+    pinned_resolved = copy.deepcopy(snap.resolved)
+    pinned_digest = snap.digest
+    pinned_bytes = snap.canonical_bytes
+
+    strong["content"]["engine"]["pipeline"]["batch_size"] = 999
+    strong["content"]["engine"]["pipeline"]["modes"].append("burst")
+
+    assert snap.resolved == pinned_resolved
+    assert snap.resolved["engine"]["pipeline"]["batch_size"] == 10
+    assert snap.resolved["engine"]["pipeline"]["modes"] == ["sync", "async"]
+    assert snap.digest == pinned_digest
+    assert snap.canonical_bytes == pinned_bytes
+
+
+def test_weaker_gap_fill_nested_mapping_is_independently_owned():
+    # A weaker source fills a gap inside a stronger source's nested mapping.
+    # That gap-fill must be stored as an independent deep copy, so mutating the
+    # weaker source's nested leaf after resolution leaves the snapshot
+    # byte-identical.
+    strong = _source(
+        _core_defaults(),
+        kind="organization_profile",
+        id="org-a",
+        version="1",
+        content={"control": {"risk": "low"}},
+    )
+    weak = _source(
+        _core_defaults(),
+        kind="domain_pack",
+        id="software-product-delivery",
+        version="v1-preview",
+        content={"control": {"nested_child": {"x": 1, "tags": ["a"]}}},
+    )
+    snap = resolve_effective_profile([strong, weak, _core_defaults()], schema_set=_SCHEMA_SET)
+    pinned_resolved = copy.deepcopy(snap.resolved)
+    pinned_digest = snap.digest
+    pinned_bytes = snap.canonical_bytes
+
+    weak["content"]["control"]["nested_child"]["x"] = 999
+    weak["content"]["control"]["nested_child"]["tags"].append("mutated")
+
+    assert snap.resolved == pinned_resolved
+    assert snap.resolved["control"]["nested_child"]["x"] == 1
+    assert snap.resolved["control"]["nested_child"]["tags"] == ["a"]
+    assert snap.digest == pinned_digest
+    assert snap.canonical_bytes == pinned_bytes
+
+
 # ── criterion 6: conflict handling ─────────────────────────────────────────
 
 def test_conflicting_non_mergeable_values_fail_with_exact_source_paths():

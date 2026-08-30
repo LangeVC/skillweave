@@ -46,6 +46,7 @@ live reference.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -373,7 +374,7 @@ def resolve_effective_profile(
     for source in parsed:
         for key, value in source.content.items():
             if key not in resolved:
-                resolved[key] = value
+                resolved[key] = copy.deepcopy(value)
                 _record_provenance(provenance, key, value, source)
                 continue
             # Key already set by a stronger (earlier) source. Overlay rules:
@@ -419,7 +420,7 @@ def _overlay(
         for sub_key, sub_value in value.items():
             sub_path = f"{path}.{sub_key}"
             if sub_key not in existing:
-                existing[sub_key] = sub_value
+                existing[sub_key] = copy.deepcopy(sub_value)
                 _record_provenance(provenance, sub_path, sub_value, source)
             else:
                 _overlay(
@@ -454,7 +455,7 @@ def _overlay(
                 "winner": winner.path(),
                 "winner_value": existing,
                 "overridden": source.path(),
-                "overridden_value": value,
+                "overridden_value": copy.deepcopy(value),
             }
         )
 
