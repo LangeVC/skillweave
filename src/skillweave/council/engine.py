@@ -13,13 +13,34 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+#: The revision of the council profile data this engine records against. It is
+#: read from the shared routing adapter (single source of truth) so the engine
+#: and the adapter can never drift apart on what "current" means. The value is a
+#: data revision, NOT a bundle version — the release that ships this revision is
+#: gate-tagged separately (see the release readiness gate, not edited here).
+try:
+    from skillweave.routing.faigate_adapter import COUNCIL_PROFILE_VERSION
+except Exception:  # pragma: no cover - defensive only; the adapter always ships it
+    COUNCIL_PROFILE_VERSION = "unknown"
+
+
 @dataclass
 class ModelResponse:
-    model_id: str
+    model_id: str                                 # requested seat (provider-native)
     response: str
     elapsed_ms: float
     error: str | None = None
-    answering_model: str | None = None   # the model that actually answered (from the envelope)
+    answering_model: str | None = None            # the model that actually answered (from the envelope, never inferred)
+    requested_model: str | None = None            # the id as handed to the provider
+    resolved_model: str | None = None             # the id the adapter resolved (exposed when it differs)
+    status: str = "answered"                      # answered | substituted | errored | unavailable | rate_limited
+    provider: str | None = None                   # transport that produced the answer
+    profile_version: str = COUNCIL_PROFILE_VERSION
+
+    @property
+    def attributed(self) -> bool:
+        """True when the answering model differs from the requested model."""
+        return bool(self.answering_model) and bool(self.requested_model) and self.answering_model != self.requested_model
 
 
 @dataclass
@@ -29,6 +50,9 @@ class Ranking:
     raw_text: str
     reviewer_answering_model: str | None = None  # the model that actually performed this review
     self_ranked: bool = False  # True when the reviewing model also authored a ranked response
+    status: str = "reviewed"
+    provider: str | None = None
+    profile_version: str = COUNCIL_PROFILE_VERSION
 
 
 @dataclass
@@ -38,6 +62,14 @@ class SynthesisResult:
     format: str             # "markdown" or "json"
     elapsed_ms: float
     chairman_answering_model: str | None = None  # the model that actually wrote the synthesis
+    status: str = "synthesized"
+    provider: str | None = None
+    profile_version: str = COUNCIL_PROFILE_VERSION
+
+    @property
+    def attributed(self) -> bool:
+        """True when the answering model differs from the chairman model."""
+        return bool(self.chairman_answering_model) and self.chairman_answering_model != self.chairman_model
 
 
 @dataclass 
@@ -53,6 +85,22 @@ class CouncilResult:
     degraded: bool = False                 # True when fewer distinct models answered than seats requested
     seats_requested: int = 0               # seats the config asked for
     models_distinct: int = 0               # distinct answering models that actually responded
+    consensus: bool = False                # True only when distinct answering models >= min_models_required
+    profile_version: str = COUNCIL_PROFILE_VERSION
+
+    def attribution_matrix(self) -> list[dict]:
+        """The complete requested→resolved→answering matrix for Stage 1 seats."""
+        return [
+            {
+                "requested": r.requested_model or r.model_id,
+                "resolved": r.resolved_model,
+                "answering": r.answering_model,
+                "status": r.status,
+                "provider": r.provider,
+                "profile_version": r.profile_version,
+            }
+            for r in self.stage1
+        ]
 
 
 @dataclass
@@ -128,8 +176,12 @@ class CouncilEngine:
             result.stage1 = await self._stage1_opinions(query, config, result.search_context)
             result.label_to_model = self._build_label_map(config.models)
             result.seats_requested = len(config.models)
-            result.models_distinct = len({r.answering_model or r.model_id for r in result.stage1})
+            answered = [r for r in result.stage1 if r.response and not r.error]
+            result.models_distinct = len({r.answering_model or r.model_id for r in answered})
             result.degraded = result.models_distinct < result.seats_requested
+            # Below the minimum distinct answering-model contract the run is
+            # DEGRADED — it is never reported as consensus.
+            result.consensus = result.models_distinct >= config.min_models_required
 
         # Stage 2: Peer Review (anonymized, structured JSON)
         if config.mode in ("standard", "full") and len(result.stage1) >= 2:
@@ -159,18 +211,31 @@ class CouncilEngine:
                     timeout=config.timeout_per_model
                 )
                 answering_model = getattr(response, "answering_model", None)
+                provider = getattr(response, "provider", None)
+                # requested_model is what was handed to the provider; resolved_model
+                # is what the adapter resolved (same unless the adapter exposed a
+                # distinct resolution). answering_model is read from the envelope
+                # only — never copied from the request (criterion 4).
+                requested = getattr(response, "requested_model", None) or model_id
+                status = "substituted" if answering_model and answering_model != requested else "answered"
                 return ModelResponse(
                     model_id=model_id,
                     response=response,
                     elapsed_ms=(time.monotonic() - t0) * 1000,
                     answering_model=answering_model,
+                    requested_model=requested,
+                    resolved_model=requested,
+                    status=status,
+                    provider=provider,
                 )
             except Exception as e:
                 return ModelResponse(
                     model_id=model_id,
                     response="",
                     elapsed_ms=(time.monotonic() - t0) * 1000,
-                    error=str(e)
+                    error=str(e),
+                    requested_model=model_id,
+                    status=_classify_error(e),
                 )
 
         tasks = [query_one(m) for m in config.models]
@@ -184,7 +249,11 @@ class CouncilEngine:
                 f"(minimum: {config.min_models_required}, seats requested: {len(config.models)}). "
                 f"Distinct: {sorted(m for m in distinct_models if m)}. Failed: {failed_models}"
             )
-        return successful
+        # Return every seat — answered and failed — so the run record keeps the
+        # complete requested→resolved→answering matrix, including the seats that
+        # errored/rate-limited/unavailable. Downstream stages filter on
+        # ``response and not error``; nothing is silently dropped from evidence.
+        return responses
 
     async def _stage2_review(self, query: str, responses: list[ModelResponse], config: CouncilConfig, search_ctx: str = "") -> list[Ranking]:
         """Each model reviews all responses (anonymized)."""
@@ -217,6 +286,7 @@ class CouncilEngine:
                 )
                 rankings = _parse_rankings(raw, labels_used)
                 reviewer_answering_model = getattr(raw, "answering_model", None) or model_id
+                provider = getattr(raw, "provider", None)
                 self_ranked = reviewer_answering_model in authored_by
                 return Ranking(
                     reviewer=model_id,
@@ -224,9 +294,11 @@ class CouncilEngine:
                     raw_text=raw,
                     reviewer_answering_model=reviewer_answering_model,
                     self_ranked=self_ranked,
+                    status="reviewed",
+                    provider=provider,
                 )
             except Exception as e:
-                return Ranking(reviewer=model_id, rankings={}, raw_text=f"ERROR: {e}")
+                return Ranking(reviewer=model_id, rankings={}, raw_text=f"ERROR: {e}", status=_classify_error(e))
 
         tasks = [review_one(m) for m in config.models]
         rankings = await asyncio.gather(*tasks)
@@ -256,19 +328,24 @@ class CouncilEngine:
                 timeout=config.timeout_per_model * 2
             )
             chairman_answering_model = getattr(content, "answering_model", None)
+            provider = getattr(content, "provider", None)
+            status = "substituted" if chairman_answering_model and chairman_answering_model != config.chairman else "synthesized"
             return SynthesisResult(
                 chairman_model=config.chairman,
                 content=content,
                 format=config.output_format,
                 elapsed_ms=(time.monotonic() - t0) * 1000,
                 chairman_answering_model=chairman_answering_model,
+                status=status,
+                provider=provider,
             )
         except Exception as e:
             return SynthesisResult(
                 chairman_model=config.chairman,
                 content=f"Synthesis failed: {e}",
                 format="markdown",
-                elapsed_ms=(time.monotonic() - t0) * 1000
+                elapsed_ms=(time.monotonic() - t0) * 1000,
+                status=_classify_error(e),
             )
 
     def _build_label_map(self, models: list[str]) -> dict[str, str]:
@@ -284,6 +361,30 @@ class CouncilEngine:
                 totals[label] = totals.get(label, 0) + rank
                 counts[label] = counts.get(label, 0) + 1
         return {label: totals[label] / counts[label] for label in totals}
+
+
+def _classify_error(exc: Exception) -> str:
+    """Map a raised exception to a truthful per-seat status (criterion 5).
+
+    These statuses are distinct so a run record can tell a rate limit from an
+    unavailable model from a generic failure. The classification looks only at
+    the typed exceptions raised at the adapter boundary; it never infers an
+    answer.
+    """
+    from skillweave.routing.faigate_adapter import (  # local import avoids a cycle
+        ModelNamespaceError,
+        RateLimitedError,
+        UnavailableModelError,
+    )
+    if isinstance(exc, RateLimitedError):
+        return "rate_limited"
+    if isinstance(exc, UnavailableModelError):
+        return "unavailable"
+    if isinstance(exc, ModelNamespaceError):
+        return "namespace_error"
+    if isinstance(exc, asyncio.TimeoutError):
+        return "timeout"
+    return "errored"
 
 
 def _stage1_prompt(query: str, label: str, search_ctx: str, num_models: int) -> str:

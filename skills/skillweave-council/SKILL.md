@@ -117,6 +117,31 @@ skillweave-council uses Faigate for model routing:
 
 No API key management needed — Faigate handles authentication internally.
 
+### Provider-native seats
+
+Council profile data (`references/council-profiles.md` and the shared
+`ROUTER_PROFILES` in `skillweave.routing.faigate_adapter`) names **provider-native
+Faidate roster ids** directly — real `/v1/models` ids measured to answer as
+themselves. Faigate's live roster self-answers only `deepseek-v4-pro` and
+`deepseek-v4-flash`; every other id it serves silently collapses onto
+`deepseek-v4-flash`. The presets therefore name those two ids with no symbolic
+seat alias and no hidden substitution, holding the `>=2` distinct answering-model
+gate. The `faigate/` gateway prefix never appears in Council profile data; it
+belongs to the dispatch layer's gateway qualification only, and is translated
+exactly once at the adapter boundary. A `faigate/` (or any other outer) prefix in
+a Council profile is refused **before** any provider call, with the offending id
+named.
+
+### Who answered
+
+Every seat records, independently: the **requested** model, the **resolved**
+model (when the adapter exposes one), the **answering** model (read from the
+response envelope, never inferred from the request), the provider, the
+attribution **status** (`answered` | `substituted` | `unavailable` |
+`rate_limited` | `errored`), and the profile revision. Fewer than
+`min_models_required` distinct answering models is a **degraded** run and is
+never reported as consensus.
+
 ### Faigate endpoint
 
 The council talks to Faigate at exactly one address, resolved in this order:

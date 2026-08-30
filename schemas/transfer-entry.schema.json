@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillweave.dev/schemas/transfer-entry/v1",
+  "title": "Transfer Catalog Entry",
+  "description": "Advisory, provenance-bearing learning observation for transfer between SkillWeave instances (SW1311-TRANSFER-001). An entry is a scoped observation with an explicit category, claim, resolvable provenance artifacts, observed task/profile/harness scope, confidence, contraindications, limitations and a review date or validity window. It is never a routing command and never a mutable policy decision. Model tiers (flash/pro) and harness capability surfaces are the provider-neutral vocabulary; concrete vendor, model or harness names are never required.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "entry_id",
+    "category",
+    "claim",
+    "provenance_artifacts",
+    "observed_scope",
+    "confidence",
+    "contraindications",
+    "limitations",
+    "status"
+  ],
+  "properties": {
+    "entry_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "enum": ["model", "harness", "process", "review", "topology"]
+    },
+    "claim": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provenance_artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/provenance_artifact" }
+    },
+    "observed_scope": { "$ref": "#/$defs/observed_scope" },
+    "confidence": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "contraindications": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Required entry-contract property. The key must be present; an explicitly present empty array is allowed (no minItems)."
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "review_date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Date the observation was reviewed (YYYY-MM-DD). Either review_date or validity_window is required."
+    },
+    "validity_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start"],
+      "properties": {
+        "start": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "end": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "superseded", "contradicted"],
+      "description": "active observations may be retrieved as advisory; superseded/contradicted observations stay queryable with their disposition and never overwrite history."
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "description": "entry_id this entry supersedes, when the newer observation narrows or replaces an older one."
+    },
+    "disposition": {
+      "type": "string",
+      "description": "Why a superseded/contradicted observation is no longer advisory, or how it was narrowed."
+    },
+    "related_entry_ids": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form entry metadata. Export redacts restricted fields (private prompts, secrets, hidden reasoning) inside metadata; it is never exported verbatim."
+    }
+  },
+  "anyOf": [
+    { "required": ["review_date"] },
+    { "required": ["validity_window"] }
+  ],
+  "$defs": {
+    "provenance_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_path", "sha256"],
+      "properties": {
+        "artifact_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path of the artifact. Resolvable when the file exists under the repository root or the sha256 content address can be verified."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Content address of the immutable artifact; makes provenance resolvable even when the file is not checked out. Must be verifiable against the referenced evidence item's embedded redacted content, not a bare assertion."
+        },
+        "source_name": {
+          "type": "string",
+          "description": "Explicit source name retained as-is (e.g. the 2026-08-28 report filename). Non-authoritative label only."
+        },
+        "sensitivity": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "Artifact sensitivity; export applies the artifact policy and redacts content above the allowed level."
+        },
+        "evidence_id": {
+          "type": "string",
+          "description": "Identifier of a redacted, content-addressed evidence item in the catalog evidence store. When present, provenance is verified by recomputing the evidence digest from its embedded content; a bare digest alone is not sufficient."
+        }
+      }
+    },
+    "observed_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task", "risk"],
+      "properties": {
+        "task": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque task label the observation applies to."
+        },
+        "risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "profile": {
+          "type": "string",
+          "description": "Opaque profile label (e.g. software-product-delivery). Optional; concrete names are never required."
+        },
+        "model_tiers": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["flash", "pro"] },
+          "description": "Provider-neutral capability tiers observed, never vendor product names."
+        },
+        "harness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["native-tool", "external-process", "in-place", "stdin", "status", "cancel", "state-namespace", "installed-skill-digest"]
+              },
+              "description": "Provider-neutral harness capability surfaces, aligned with harness-capability.schema.json."
+            },
+            "names": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Optional concrete harness names as opaque adapter data. Never required."
+            },
+            "control_surfaces": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "process": {
+          "type": "string",
+          "description": "Opaque process label (e.g. dispatch, release)."
+        },
+        "review": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["final_gauntlet", "cold_review", "correction", "adjudication"]
+            },
+            "reviewer_tiers": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["flash", "pro"] }
+            }
+          }
+        },
+        "topology": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["worktree", "in_place", "detached"]
+            },
+            "parallelism": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "sha256", "content"],
+      "description": "A redacted, content-addressed evidence snapshot. ``content`` never embeds private prompts, secrets or hidden reasoning; ``sha256`` must equal the canonical SHA-256 of ``content``.",
+      "properties": {
+        "evidence_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier referenced by provenance artifacts."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 of the canonical redacted content; recomputable for verification."
+        },
+        "content": {
+          "type": "string",
+          "description": "Deterministic, redacted representation of the referenced evidence. Never secrets, private prompts or hidden reasoning."
+        },
+        "source_name": {
+          "type": "string",
+          "description": "Explicit source name retained as a non-authoritative label."
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Repository-relative source path retained as a non-authoritative label."
+        },
+        "sensitivity": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "Sensitivity of the evidence snapshot; export redacts content above the allowed level."
+        }
+      }
+    }
+  }
+}

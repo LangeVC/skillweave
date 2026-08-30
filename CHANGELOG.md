@@ -1,5 +1,63 @@
 # Changelog
 
+## 1.3.11 — Dispatch operations, and a gate that can fail
+
+1.3.10 closed the Council namespace. This release closes the operational gap
+underneath it: structured jobs, strict review, harness adherence, model
+allocation, observation, and a transfer catalogue, proven by a gate that
+holds itself to the same standard it applies to the code.
+
+### Dispatch operations
+
+- **Append-only receipts and typed terminals.** Multi-round receipts preserve
+  prior bytes and keep process, task, evidence and gate outcomes separate. A
+  zero exit code no longer implies a passing gate.
+- **Collision-safe topology and integration eligibility.** Missing commits,
+  detached HEAD, dirty non-allowlisted state, a stale base, an omitted sibling
+  and a SHA changed after review each fail integration closed.
+- **Strict review loop.** A REVIEW_FAIL produces finding dispositions, a bounded
+  correction, controller verification and a fresh cold REVIEW_PASS before any
+  dependent work starts.
+- **Four-harness adherence profiles** with strict digest, bypass and
+  role-authority checks. Real proof status stays per harness and per machine;
+  no stable transport-parity claim is made before 1.4.
+- **Provider-neutral model policy** covering complexity, risk, cost and
+  escalation without a hardcoded dispatch-provider default.
+- **Semantic observation** with deterministic live and replay projections and
+  read-only observer authority.
+- **Transfer catalogue.** Dispatch learnings are stored with resolvable
+  provenance, observed scope and contradictions. Retrieval is advisory and
+  changes no policy, profile, topology, state or gate.
+
+### Routing
+
+- **Minimal adapter mapping for Faigate and OpenRouter.** Council profiles keep
+  provider-agnostic names; `translate_model_id` remains the single translation
+  point and the alias tables are its provider backend, applied exactly once
+  after the namespace is resolved. The dynamic registry that replaces this
+  mapping is planned for 1.3.13.
+
+### Release hygiene
+
+- `jsonschema` is declared in the `dev` extra, so a clean environment collects
+  the contract tests instead of failing on import.
+- The discovery tracking-log tests read tracked fixtures instead of relative
+  git-ignored paths, so the full suite is green in every worktree rather than
+  carrying two standing failures.
+
+### The gate
+
+`SW-GATE-1311` proves `DISPATCH_OPERATIONS_PASS` across thirteen criteria, with
+two independent reviewers of different model classes inspecting one immutable
+subject. Criteria that a test process cannot observe are controller-attested,
+and the attestation now binds the candidate SHA: a dual pass recorded against
+any other subject fails closed inside the repository, not only in tooling.
+
+Note: this changelog has no entries for 1.3.8, 1.3.9 and 1.3.10, which were
+tagged without prose history. `.version.yaml` does not treat CHANGELOG.md as a
+version location, so the gap blocks nothing; it is recorded here rather than
+backfilled.
+
 ## 1.3.7 — Self-hosting comes home, and the gate holds it to its word
 
 1.3.6 closed the dispatch seam and taught the council to verify who answered.

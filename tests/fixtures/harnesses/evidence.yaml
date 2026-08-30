@@ -1,0 +1,27 @@
+# Actual per-harness real-run evidence (SW1311-HARNESS-001, criterion 8).
+#
+# A preview may only report evidence that a real run produced, and it makes no
+# stable transport-parity claim before 1.4. Exactly one adapter (opencode) has a
+# recorded real run (docs/dispatch-2-report.json, dispatch 2 on one machine).
+# The other three carry NO run evidence — their absence is a fact, not a gap to
+# paper over with an invented parity claim.
+
+claude-code:
+  run_evidence: null
+
+codex:
+  run_evidence: null
+
+antigravity:
+  run_evidence: null
+
+opencode:
+  run_evidence:
+    dispatch: "2"
+    harness: "opencode"
+    proven: true
+    termination: "exited"
+    exit_code: 0
+    resolved_model: "faigate/deepseek-v4-pro"
+    subject_commit: "b486dc8799fa3406d76d4331e00c580f7d315a78"
+    note: "one run, one machine; not portable; no stable 1.4 parity claim"

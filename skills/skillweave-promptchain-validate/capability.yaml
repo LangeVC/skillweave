@@ -1,6 +1,6 @@
 kind: skill
 name: skillweave-promptchain-validate
-version: 1.3.10
+version: 1.3.11
 description: Validate and improve SkillWeave prompt sequences — detects sequence type and adapts output format
 author: SkillWeave Team
 license: Apache-2.0
