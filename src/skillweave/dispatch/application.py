@@ -31,7 +31,7 @@ import importlib
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 import yaml
 
@@ -45,12 +45,34 @@ from skillweave.dispatch.contracts import (
     validate_for_dispatch,
 )
 from skillweave.dispatch.events import DispatchEventStream
+from skillweave.dispatch.harness_contract import (
+    HarnessAdapterProfile,
+    StrictController,
+    StrictControllerError,
+)
 from skillweave.dispatch.profile_resolution import (
     ProfileResolutionError,
     ResolvedDispatch,
     resolve_dispatch_profile,
 )
 from skillweave.routing.harness import HarnessError
+from skillweave.trace.contracts import (
+    AppendOnlyReceiptLog,
+    EvidenceAvailability,
+    GateVerdict,
+    JobRecord,
+    JobStateNamespace,
+    JobResult,
+    NamespaceCollisionError,
+    RoundKind,
+    StateNamespaceRegistry,
+    TaskVerdict,
+    TerminalEnvelope,
+    TerminalState,
+    build_job_result_for_terminal,
+    classify_evidence,
+    new_append_only_round,
+)
 
 #: The legal execution-model vocabulary at the live consumer (contract
 #: carry-forward: ``cold``/``warm``/``resume``; ``hot`` is refused).
@@ -106,6 +128,318 @@ class WorkspaceMismatchError(OperatorDispatchError):
         )
 
 
+class TopologyGateError(OperatorDispatchError):
+    """The topology/integration gate refused a wave before any launch.
+
+    This is the live, authoritative counterpart to
+    :class:`~skillweave.dispatch.topology.ManifestError`: the operator dispatcher
+    refuses an incomplete/absent topology manifest, an unabsorbed collision, a
+    ``requires_integrator`` lane without an eligible integrator, a semantic
+    conflict that must route to the bounded Integrator, or an ineligible
+    (detached/uncommitted/wrong-branch/product-dirty) candidate — never launches
+    through the bad state, and never re-schedules or rewrites on its own.
+    """
+
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(f"topology gate refused: {detail}")
+
+
+def _lane_is_topology_governed(lane: Lane) -> bool:
+    """True when ``lane`` carries any topology manifest field.
+
+    Note: governed-ness here is *declaration-presence*, not the launch policy.
+    Every mutating lane must be governed (carry the complete manifest); a
+    non-mutating lane is never governed and keeps its pre-governance behavior.
+    The mutating-lane completeness obligation is enforced in
+    :func:`derive_topology_manifests`, not here.
+    """
+    return bool(
+        lane.write_scope is not None
+        or lane.worktree
+        or lane.branch
+        or lane.harness_state_namespace
+        or (lane.integration_policy is not None)
+        or (lane.depends_on is not None)
+    )
+
+
+@dataclass
+class TopologyGateInput:
+    """Observed topology/integration facts the operator dispatcher consumes.
+
+    Each field is an *observed* fact supplied by the operator (explicit
+    integration lanes, a semantic-conflict subject and its bounded scope/contract,
+    and per-lane worktree eligibility). The gate fails closed on incomplete facts
+    and never performs a product edit itself.
+    """
+
+    #: Lane ids explicitly declared as integration lanes that may absorb a
+    #: collision or satisfy a ``requires_integrator`` lane.
+    integration_lanes: Optional[Sequence[str]] = None
+    #: The lane id in a semantic conflict (routed to the bounded Integrator).
+    semantic_conflict: Optional[str] = None
+    #: Bounded write scope for the semantic-conflict Integrator assignment.
+    conflict_write_scope: Optional[Sequence[str]] = None
+    #: Test contract for the semantic-conflict Integrator assignment.
+    conflict_test_contract: Optional[Sequence[str]] = None
+    #: Per-lane worktree state (``dispatch.topology.WorktreeState``) assessed for
+    #: integration eligibility before launch.
+    eligibility: Optional[Mapping[str, Any]] = None
+    #: Optional cache allowlist overriding the module default for eligibility.
+    cache_allowlist: Optional[Sequence[str]] = None
+
+
+@dataclass
+class TopologyEnforcement:
+    """The authoritative topology/integration verdict.
+
+    ``groups`` are the collision-safe serialization batches (lane ids) in
+    dispatch order; ``governed`` lists every governed mutating lane id in
+    declaration order; ``removed_lane_ids`` names lanes removed from normal
+    fan-out (a semantic conflict) so they are routed to the Integrator, not
+    launched by the controller; ``integrator_assignment`` is the bounded
+    Integrator hand-off (never a controller product edit).
+    """
+
+    groups: list[list[str]] = field(default_factory=list)
+    governed: list[str] = field(default_factory=list)
+    removed_lane_ids: list[str] = field(default_factory=list)
+    integrator_assignment: Optional[Any] = None
+
+
+def derive_topology_manifests(declaration: SequenceDeclaration) -> list[Any]:
+    """Build :class:`~skillweave.dispatch.topology.LaneTopology` manifests.
+
+    Every *mutating* lane must carry the complete topology manifest: a lane with
+    zero (or partial) topology fields raises :class:`TopologyGateError` before
+    any workspace is provisioned or worker launched (F6). Only a **non-mutating**
+    lane bypasses governance — there is no legacy path that lets a mutating lane
+    skip its manifest. The contract lane's ``id`` maps to the manifest's
+    ``lane_id`` so the two seams agree. The import is deferred so this module's
+    own import closure stays free of any optional subpackage.
+    """
+    from skillweave.dispatch.topology import LaneTopology
+
+    manifests: list[Any] = []
+    for lane in declaration.mutating_lanes():
+        if not _lane_is_topology_governed(lane):
+            raise TopologyGateError(
+                f"mutating lane {lane.id!r} declares no topology manifest; every "
+                "mutating lane must declare a complete topology manifest "
+                "(depends_on, write_scope, worktree, branch, integration_policy)"
+            )
+        manifests.append(
+            LaneTopology(
+                lane_id=lane.id,
+                base=lane.base or "",
+                depends_on=list(lane.depends_on or []),
+                write_scope=list(lane.write_scope or []),
+                worktree=lane.worktree,
+                branch=lane.branch,
+                integration_policy=lane.integration_policy or "independent",
+                harness_state_namespace=lane.harness_state_namespace,
+            )
+        )
+    return manifests
+
+
+def enforce_topology(
+    declaration: SequenceDeclaration,
+    *,
+    gate_input: Optional[TopologyGateInput] = None,
+) -> TopologyEnforcement:
+    """The authoritative topology/integration gate consumed *before* launch.
+
+    Reuses :mod:`skillweave.dispatch.topology` and
+    :mod:`skillweave.dispatch.integration` decisions verbatim — it only orders and
+    enforces them at the operator dispatcher's live seam:
+
+    * every governed mutating lane's manifest is complete (F6): a partial or
+      absent field raises :class:`TopologyGateError` before any worker starts;
+    * overlapping write scope / incompatible base / shared harness state namespace
+      serialize into separate batches (acceptance criterion 2);
+    * a ``requires_integrator`` lane without an explicit eligible integrator fails
+      closed (F3);
+    * a semantic conflict removes the conflicted lane from normal fan-out and
+      returns a bounded Integrator assignment (F2);
+    * a dirty/detached/wrong-branch/uncommitted candidate is refused before
+      integration (F5).
+
+    The returned :class:`TopologyEnforcement` drives the actual fan-out grouping;
+    nothing here edits product paths.
+    """
+    from skillweave.dispatch.topology import (
+        CycleError,
+        ManifestError,
+        assess_eligibility,
+        build_serialization_plan,
+    )
+    from skillweave.dispatch.integration import (
+        SemanticConflictError,
+        assign_semantic_conflict,
+    )
+
+    gate_input = gate_input or TopologyGateInput()
+    manifests = derive_topology_manifests(declaration)
+    by_id = {m.lane_id: m for m in manifests}
+
+    for manifest in manifests:
+        try:
+            manifest.validate()
+        except ManifestError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    integration_ids = list(gate_input.integration_lanes or [])
+    eligibility = dict(gate_input.eligibility or {})
+    eligibility_supplied = gate_input.eligibility is not None
+
+    # F3: every declared integration lane must be a real, declared governed
+    # lane — an arbitrary id in ``integration_lanes`` does not release
+    # ``requires_integrator``.
+    for iid in integration_ids:
+        if iid not in by_id:
+            raise TopologyGateError(
+                f"integration lane {iid!r} is not a declared lane in the wave"
+            )
+
+    requires = [
+        manifest
+        for manifest in manifests
+        if manifest.integration_policy == "requires_integrator"
+    ]
+
+    for manifest in requires:
+        lid = manifest.lane_id
+        # A lane declaring ``requires_integrator`` must be folded by a *distinct,
+        # declared, ordered-after* integration lane: an integrator declares the
+        # requiring lane in its own ``depends_on`` (matching dependency/policy
+        # semantics). Self, unknown, concurrent, dependency-mismatched, or a
+        # missing/ failing eligibility observation all fail closed.
+        candidates = [
+            iid
+            for iid in integration_ids
+            if iid != lid and lid in (by_id[iid].depends_on or [])
+        ]
+        if not candidates:
+            raise TopologyGateError(
+                f"lane {lid!r} declares requires_integrator but no distinct "
+                "declared integration lane is ordered after it (a matching "
+                "depends_on) to fold it"
+            )
+        for iid in candidates:
+            if by_id[iid].integration_policy != "independent":
+                raise TopologyGateError(
+                    f"integration lane {iid!r} must declare integration_policy "
+                    f"'independent' to fold lane {lid!r}, got "
+                    f"{by_id[iid].integration_policy!r}"
+                )
+
+    # CTRL-C4-INTEGRATION-GRAPH: an explicit integration lane must integrate at
+    # least one in-wave dependency, and every dependency it names for integration
+    # must exist in the declared wave. A mere ``integration_lanes`` label without
+    # the dependency relation grants no fail-open exception.
+    for iid in integration_ids:
+        deps = list(by_id[iid].depends_on or [])
+        in_wave = [d for d in deps if d in by_id]
+        if not in_wave:
+            raise TopologyGateError(
+                f"integration lane {iid!r} declares no in-wave dependency to "
+                "integrate; a mere integration-lane label does not grant an "
+                "exception"
+            )
+        missing = [d for d in deps if d not in by_id]
+        if missing:
+            raise TopologyGateError(
+                f"integration lane {iid!r} depends on undeclared lane(s) "
+                f"{sorted(missing)}; dependencies used for integration must "
+                "exist in the wave"
+            )
+
+    # F5: eligibility is fail-closed at the pre-integration boundary. An
+    # observed (non-``None``) eligibility map must cover *every* governed lane —
+    # a governed lane whose state is absent is refused, not skipped. A
+    # ``requires_integrator`` lane (and its integrator) must always carry a
+    # present, passing observation, even when no map was supplied at all.
+    def _require_eligible(lane_id: str) -> None:
+        manifest = by_id[lane_id]
+        state = eligibility.get(lane_id)
+        if state is None:
+            raise TopologyGateError(
+                f"lane {lane_id!r} has no observed worktree state before integration"
+            )
+        reasons = assess_eligibility(
+            manifest, state, cache_allowlist=gate_input.cache_allowlist
+        )
+        if reasons:
+            raise TopologyGateError(
+                f"lane {lane_id!r} is not eligible to integrate: " + "; ".join(reasons)
+            )
+
+    if eligibility_supplied:
+        for manifest in manifests:
+            _require_eligible(manifest.lane_id)
+    else:
+        # Even when no eligibility map was supplied, a pre-integration boundary
+        # cannot release: every explicit integration lane and every in-wave lane
+        # it integrates must carry a present, passing observation. Merely naming
+        # ``integration_lanes`` never grants a fail-open exception, whether or
+        # not any lane declares ``requires_integrator``.
+        observed: list[str] = []
+        seen: set[str] = set()
+        for iid in integration_ids:
+            if iid not in seen:
+                seen.add(iid)
+                observed.append(iid)
+            for dep in by_id[iid].depends_on or []:
+                if dep in by_id and dep not in seen:
+                    seen.add(dep)
+                    observed.append(dep)
+        for lid in observed:
+            _require_eligible(lid)
+
+    # F2: a semantic conflict is routed out of normal fan-out to the bounded
+    # Integrator. The controller launches no worker for the conflicted lane and
+    # performs no product edit — it only produces the assignment.
+    removed: list[str] = []
+    integrator_assignment = None
+    if gate_input.semantic_conflict is not None:
+        conflict_id = gate_input.semantic_conflict
+        lane = by_id.get(conflict_id)
+        if lane is None:
+            raise TopologyGateError(
+                f"semantic conflict names lane {conflict_id!r} with no topology manifest"
+            )
+        try:
+            integrator_assignment = assign_semantic_conflict(
+                lane,
+                conflict=f"semantic conflict in lane {conflict_id}",
+                write_scope=list(gate_input.conflict_write_scope or []),
+                test_contract=list(gate_input.conflict_test_contract or []),
+            )
+        except SemanticConflictError as exc:
+            raise TopologyGateError(str(exc)) from exc
+        removed.append(conflict_id)
+
+    remaining = [m for m in manifests if m.lane_id not in removed]
+    groups: list[list[str]] = []
+    if remaining:
+        try:
+            plan = build_serialization_plan(remaining, integration_lanes=integration_ids)
+        except ManifestError as exc:
+            raise TopologyGateError(str(exc)) from exc
+        except CycleError as exc:
+            raise TopologyGateError(str(exc)) from exc
+        groups = [list(group) for group in plan.groups]
+
+    return TopologyEnforcement(
+        groups=groups,
+        governed=[m.lane_id for m in manifests],
+        removed_lane_ids=removed,
+        integrator_assignment=integrator_assignment,
+    )
+
+
 class ProfileLocationError(OperatorDispatchError):
     """The declared profile path could not be loaded (a precise product error).
 
@@ -118,6 +452,22 @@ class ProfileLocationError(OperatorDispatchError):
     def __init__(self, path: str, detail: str):
         self.path = path
         super().__init__(f"profile location '{path}' could not be loaded: {detail}")
+
+
+class BlockedInputError(OperatorDispatchError):
+    """A noninteractive lane requested stdin and must never launch or wait.
+
+    A typed technical failure: it never consumes a task correction round and
+    never becomes ``REVIEW_FAIL``.
+    """
+
+    def __init__(self, lane_id: str, command: Sequence[str]):
+        self.lane_id = lane_id
+        self.command = list(command)
+        super().__init__(
+            f"lane '{lane_id}' requires interactive stdin but this is a "
+            "noninteractive dispatch; refusing to launch"
+        )
 
 
 def generate_run_id() -> str:
@@ -281,6 +631,106 @@ def _pare_lanes(lanes: Sequence[Lane], max_parallel: int) -> list[list[Lane]]:
     return groups
 
 
+def _group_for_launch(
+    mutating: Sequence[Lane],
+    max_parallel: int,
+    enforcement: TopologyEnforcement,
+) -> list[list[Lane]]:
+    """Choose the launch batches for the mutating lanes.
+
+    When the wave is topology-governed (:attr:`enforcement.governed` non-empty),
+    the collision-safe serialization groups drive fan-out: every governed lane is
+    placed in its serialization batch so two colliding lanes never share a
+    fan-out call, and serialized (colliding) lanes each get their own single-lane
+    batch. Non-governed lanes keep the legacy repo-exclusivity grouping. When
+    nothing is governed, the legacy :func:`_pare_lanes` path is preserved
+    unchanged (v1.3.10 compatibility).
+    """
+    if not enforcement.governed:
+        return _pare_lanes(list(mutating), max_parallel)
+
+    by_id = {lane.id: lane for lane in mutating}
+    governed_ids = set(enforcement.governed)
+    groups: list[list[Lane]] = []
+    for group_ids in enforcement.groups:
+        lane_group = [by_id[lid] for lid in group_ids if lid in by_id]
+        if lane_group:
+            groups.append(lane_group)
+
+    non_governed = [lane for lane in mutating if lane.id not in governed_ids]
+    if non_governed:
+        groups.extend(_pare_lanes(non_governed, max_parallel))
+    return groups
+
+
+def _default_inline_seam(
+    command: Sequence[str],
+    *,
+    run_id: str,
+    subject_repo: str,
+    subject_commit: str,
+    tool: str,
+    model: str,
+    cwd: Optional[str] = None,
+    timeout: Optional[float] = None,
+    artifact_store: Optional[Any] = None,
+) -> Any:
+    """Run a single lane through the single-process seam, never the fan-out path.
+
+    This is the default transport for serialized/INLINE lanes: it launches
+    exactly one process via ``runtime.runner_adapter.run_command`` (one blocking
+    child, no start-before-reap overlap) and wraps the resulting
+    :class:`ProcessResult` into the same :class:`FanOutChild` shape the multi-child
+    fan-out path produces, so callers record child outcomes and receipt
+    references uniformly without the fan-out wiring. The single process is
+    launched synchronously — it is a distinct seam from ``fan_out_dispatch`` and
+    must never be reached for a lane that belongs to a parallel group.
+    """
+    from skillweave.routing.modelspec import from_value
+    from skillweave.routing.faigate_adapter import resolve_model_spec
+    from skillweave.fanout.dispatch import (
+        FanOutChild,
+        FanOutResult,
+        _make_receipt_reference,
+        _resolve_outcome,
+        _store_child_bytes,
+    )
+
+    runner_adapter = importlib.import_module("skillweave.runtime.runner_adapter")
+
+    child_run_id = f"{run_id}-0"
+    resolved_model = resolve_model_spec(from_value(model))
+    result = runner_adapter.run_command(
+        list(command),
+        run_id=child_run_id,
+        subject_repo=subject_repo,
+        subject_commit=subject_commit,
+        tool=tool,
+        model=resolved_model,
+        timeout=timeout,
+        cwd=cwd,
+    )
+    outcome = _resolve_outcome(result)
+    child = FanOutChild(
+        child_run_id=child_run_id,
+        command=list(command),
+        result=result,
+        model=resolved_model,
+        subject_repo=subject_repo,
+        subject_commit=subject_commit,
+        tool=tool,
+        cwd=cwd,
+        raw_bytes=result.stdout or b"",
+        stderr_bytes=result.stderr or b"",
+        outcome=outcome,
+        stdout_ref=_make_receipt_reference(result.stdout_receipt, stream="stdout"),
+        stderr_ref=_make_receipt_reference(result.stderr_receipt, stream="stderr"),
+    )
+    if artifact_store is not None:
+        _store_child_bytes(artifact_store, child)
+    return FanOutResult(children=[child], overlapped=False)
+
+
 # ── The application ─────────────────────────────────────────────────────────
 
 
@@ -309,6 +759,23 @@ class DispatchRun:
     failures: list[dict[str, Any]] = field(default_factory=list)
     failure_policy: Optional[str] = None
     artifact_store: Optional[Any] = None
+    receipt_log: Optional[Any] = None
+    integrator_assignment: Optional[Any] = None
+
+    @property
+    def job_records(self) -> list[dict[str, Any]]:
+        """The append-only job records versioned during this run.
+
+        Every dispatch, correction, review and integration attempt is versioned
+        as an immutable ``JobRecord`` in the run's ``receipt_log``. Each record
+        carries a :class:`~skillweave.trace.contracts.JobResult` (process status,
+        task verdict, evidence availability and gate verdict as four separate
+        fields) and a :class:`~skillweave.trace.contracts.TerminalEnvelope`
+        binding the subject SHA, exact command and single machine outcome.
+        """
+        if self.receipt_log is None:
+            return []
+        return [r.to_dict() for r in self.receipt_log.records()]
 
     @property
     def resolver(self) -> Optional[Callable[[str], bytes]]:
@@ -322,6 +789,97 @@ class DispatchRun:
         dry-run).
         """
         return self.artifact_store.resolve if self.artifact_store is not None else None
+
+    def append_attempt(
+        self,
+        *,
+        kind: RoundKind,
+        subject_sha: str,
+        command: Sequence[str],
+        job_id: Optional[str] = None,
+        result: Optional[JobResult] = None,
+        envelope: Optional[TerminalEnvelope] = None,
+        payload: Any = None,
+        round_: Optional[int] = None,
+    ) -> JobRecord:
+        """Append one review or integration attempt onto this run's receipt log.
+
+        This is the reachable public seam for criteria-1 rounds beyond dispatch
+        and correction: a caller (a review lane, an integrator) appends a
+        :class:`~skillweave.trace.contracts.JobRecord` to the *same* append-only
+        log the dispatcher versioned, threading the parent lineage from the
+        current tail. The exact subject identity, command, result dimensions and
+        terminal envelope are recorded verbatim — nothing is hand-built from
+        enum strings, the record is content-addressed and prior digests stay
+        immutable.
+
+        ``round_`` defaults to the next round after the current tail; a caller
+        that track its own round count may pass an explicit value.
+        """
+        if self.receipt_log is None:
+            self.receipt_log = AppendOnlyReceiptLog()
+        parent = self.receipt_log.latest()
+        next_round = (parent.round + 1) if parent is not None else 0
+        if result is None:
+            result = JobResult()
+        if envelope is None:
+            envelope = TerminalEnvelope(
+                subject_sha=subject_sha,
+                command=list(command),
+                terminal_state=TerminalState.COMPLETED,
+            )
+        return new_append_only_round(
+            self.receipt_log,
+            parent_id=parent.record_id if parent is not None else None,
+            round_=next_round if round_ is None else round_,
+            kind=kind,
+            job_id=job_id,
+            result=result,
+            envelope=envelope,
+            payload=payload,
+        )
+
+    def append_review(
+        self,
+        *,
+        subject_sha: str,
+        command: Sequence[str],
+        job_id: Optional[str] = None,
+        result: Optional[JobResult] = None,
+        envelope: Optional[TerminalEnvelope] = None,
+        payload: Any = None,
+    ) -> JobRecord:
+        """Append a REVIEW attempt (see :meth:`append_attempt`)."""
+        return self.append_attempt(
+            kind=RoundKind.REVIEW,
+            subject_sha=subject_sha,
+            command=command,
+            job_id=job_id,
+            result=result,
+            envelope=envelope,
+            payload=payload,
+        )
+
+    def append_integration(
+        self,
+        *,
+        subject_sha: str,
+        command: Sequence[str],
+        job_id: Optional[str] = None,
+        result: Optional[JobResult] = None,
+        envelope: Optional[TerminalEnvelope] = None,
+        payload: Any = None,
+    ) -> JobRecord:
+        """Append an INTEGRATION attempt (see :meth:`append_attempt`)."""
+        return self.append_attempt(
+            kind=RoundKind.INTEGRATION,
+            subject_sha=subject_sha,
+            command=command,
+            job_id=job_id,
+            result=result,
+            envelope=envelope,
+            payload=payload,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -338,6 +896,17 @@ class DispatchRun:
             # The configured wave failure policy (profile ``on_model_failure``)
             # is applied to the surface so unlike failures never collapse.
             "failure_policy": self.failure_policy,
+            # Versioned append-only job records (dispatch/correction/review/
+            # integration attempts), each with separated outcome dimensions and
+            # a binding terminal envelope.
+            "job_records": self.job_records,
+            # A semantic conflict routed to the bounded Integrator is surfaced as
+            # a hand-off, never a controller product edit.
+            "integrator_assignment": (
+                self.integrator_assignment.to_dict()
+                if self.integrator_assignment is not None
+                else None
+            ),
             # Result metadata is explicit about the experimental, wave-scoped
             # nature of this command and makes no stable-transport claim.
             "experimental": True,
@@ -367,18 +936,29 @@ class OperatorDispatchApplication:
         *,
         workspace_seam: Optional[WorkspaceSeam] = None,
         fanout_seam: Optional[Callable[..., Any]] = None,
+        inline_seam: Optional[Callable[..., Any]] = None,
         repo_root: Optional[str] = None,
         cwd: Optional[str] = None,
         artifact_store: Optional[Any] = None,
+        namespace_registry: Optional[StateNamespaceRegistry] = None,
+        strict_controller: Optional[StrictController] = None,
     ):
         self._workspace_seam = workspace_seam
         self._fanout_seam = fanout_seam
+        self._inline_seam = inline_seam
         self._repo_root = repo_root
         self._cwd = cwd
         self._artifact_store = artifact_store
+        self._strict_controller = strict_controller
         self._active_store: Optional[Any] = None
         self._last_success: dict[str, bool] = {}
         self._typed_failure: dict[str, bool] = {}
+        self._namespace_registry: Optional[StateNamespaceRegistry] = namespace_registry
+        self._claimed_namespaces: dict[str, JobStateNamespace] = {}
+
+    def _generate_run_id(self) -> str:
+        """Generate the run identifier (overridable in tests)."""
+        return generate_run_id()
 
     def _fanout(self) -> Callable[..., Any]:
         if self._fanout_seam is not None:
@@ -386,6 +966,19 @@ class OperatorDispatchApplication:
         from skillweave.fanout.dispatch import fan_out_dispatch
 
         return fan_out_dispatch
+
+    def _inline(self) -> Callable[..., Any]:
+        """The single-lane execution seam (never the multi-child fan-out path).
+
+        A serialized/INLINE lane runs exactly once through this distinct seam;
+        only a parallel, subagent-safe group enters :func:`_fanout`. The default
+        launches a single process through the single-process runner primitive
+        (``run_command``), wrapping it into the same child shape the fan-out
+        path yields, so a recording seam can tell ``inline`` from ``fanout``.
+        """
+        if self._inline_seam is not None:
+            return self._inline_seam
+        return _default_inline_seam
 
     def _workspace(self) -> WorkspaceSeam:
         if self._workspace_seam is not None:
@@ -428,6 +1021,14 @@ class OperatorDispatchApplication:
                 lane.required_evidence = (
                     [] if "required_evidence" in raw_lane else None
                 )
+            # Noninteractive stdin demand rides on the lane the same way: a
+            # lane that declares ``interactive: true`` (or ``requires_stdin``)
+            # must be refused before launch, not left to wait on a tty.
+            lane.requires_stdin = bool(
+                raw_lane.get("interactive")
+                or raw_lane.get("requires_stdin")
+                or raw_lane.get("stdin") == "required"
+            )
 
         try:
             resolved = resolve_dispatch_profile(
@@ -460,6 +1061,64 @@ class OperatorDispatchApplication:
         )
         return DispatchRun(run_id=generate_run_id(), wave=wave, report=report)
 
+    # -- experimental strict-controller pre-launch seam ----------------------
+
+    def _apply_strict_adherence(
+        self,
+        *,
+        declaration: SequenceDeclaration,
+        resolved: ResolvedDispatch,
+        task_brief: bytes,
+        adapter: Optional[HarnessAdapterProfile] = None,
+        adapter_skill_digests: Optional[Mapping[str, str]] = None,
+    ) -> None:
+        """Fail-closed strict gate between validation and the first launch.
+
+        This is the single pre-launch strict-adherence seam (SW1311-HARNESS-001,
+        criterion 3). It runs *before* any workspace is provisioned or any worker
+        starts. When a strict controller is configured, the seam refuses the
+        dispatch unless the validated sequence, the resolved profile, the exact
+        task brief and the installed skill digests are all bound; it reconciles
+        the adapter's expected digests against the observed values (naming a
+        missing/stale asset), reconciles a single distinct authority, and fails
+        closed on a native-delegation / direct-shell bypass. It mutates no
+        dispatch state — it reads the already-loaded declaration and resolution
+        and records into the controller's attempt log only.
+        """
+        controller = self._strict_controller
+        if controller is None:
+            return
+
+        observed = dict(adapter_skill_digests or {})
+        # The strict binding itself is the gate: it raises (StrictControllerError)
+        # by name when any of the four required facts is unbound.
+        controller.bind(
+            sequence=declaration,
+            profile=resolved,
+            task_brief=task_brief,
+            skill_digests=observed or (adapter.skill_digests if adapter else {}),
+            adapter=adapter,
+            bound_at=f"{getattr(declaration, 'execution_model', '?')}:"
+            f"{getattr(resolved, 'profile_name', '?')}",
+        )
+        if adapter is not None:
+            controller.reconcile_authority(adapter)
+            controller.observe_actual_digests(adapter, observed)
+            # Every active bypass the adapter declares is consumed here, before
+            # any provisioning: ``record_attempt`` raises (BypassNotRecordedError)
+            # when strict mode requires SkillWeave dispatch, so a foreign
+            # hand-off never reaches a workspace provision or worker launch.
+            for bypass in adapter.bypass_flags():
+                controller.record_attempt(
+                    kind=bypass,
+                    detail=f"{bypass} dispatch attempt by adapter '{adapter.name}'",
+                    adapter=adapter,
+                )
+        # A SkillWeave dispatch attempt is always recorded after the declared
+        # bypasses were consumed; a refused bypass raises above before this
+        # line, so no provisioning follows a foreign hand-off.
+        controller.record_attempt(kind="skillweave", detail="wave dispatch", adapter=adapter)
+
     def dispatch(
         self,
         sequence_path: str,
@@ -469,21 +1128,50 @@ class OperatorDispatchApplication:
         required_criteria: Optional[Sequence[int]] = None,
         sink: Optional[Any] = None,
         work: bytes = b"",
+        gate_input: Optional[TopologyGateInput] = None,
+        strict_adapter: Optional[HarnessAdapterProfile] = None,
+        strict_skill_digests: Optional[Mapping[str, str]] = None,
     ) -> DispatchRun:
         """Execute one wave and return a machine-readable run identifier.
 
         ``sink`` is the JSONL text stream the event stream appends to (defaults
         to ``sys.stdout``). Returns a :class:`DispatchRun` whose ``run_id`` is
         the machine-readable identifier.
+
+        ``gate_input`` (optional) carries the observed topology/integration facts
+        (explicit integration lanes, a semantic conflict, per-lane eligibility).
+        When supplied, :func:`enforce_topology` runs *before* any workspace is
+        provisioned or worker launched; a governed mutating lane with an
+        incomplete manifest, an unabsorbed collision, a missing eligible
+        integrator, a semantic conflict, or an ineligible worktree refuses the
+        wave fail-closed.
         """
         import sys
 
         declaration, resolved, report = self.load(
             sequence_path, profile_path, required_criteria=required_criteria
         )
-        run_id = generate_run_id()
+        enforcement = enforce_topology(declaration, gate_input=gate_input)
+        removed = set(enforcement.removed_lane_ids)
+
+        # Experimental strict-controller seam, before any workspace is
+        # provisioned or any worker launched: bind the validated sequence,
+        # resolved profile, exact task brief and installed skill digests, and
+        # refuse fail-closed on the first gap (SW1311-HARNESS-001).
+        self._apply_strict_adherence(
+            declaration=declaration,
+            resolved=resolved,
+            task_brief=work,
+            adapter=strict_adapter,
+            adapter_skill_digests=strict_skill_digests,
+        )
+
+        run_id = self._generate_run_id()
         self._last_success = {}
         self._typed_failure = {}
+        if self._namespace_registry is None:
+            self._namespace_registry = StateNamespaceRegistry()
+        self._claimed_namespaces = {}
         self._active_store = (
             self._artifact_store
             if self._artifact_store is not None
@@ -491,11 +1179,14 @@ class OperatorDispatchApplication:
         )
         self._results: list[dict[str, Any]] = []
         self._failures: list[dict[str, Any]] = []
+        self._receipt_log = AppendOnlyReceiptLog()
         stream = DispatchEventStream(run_id, sink if sink is not None else sys.stdout)
         stream.wave_started(wave=wave)
 
         ws = self._workspace()
-        mutating = declaration.mutating_lanes()
+        mutating = [
+            lane for lane in declaration.mutating_lanes() if lane.id not in removed
+        ]
 
         # Provision + attest every mutating lane; a base mismatch blocks before
         # any child starts (criterion 4). The materialised path is retained
@@ -507,7 +1198,7 @@ class OperatorDispatchApplication:
             if (lane.base or "") != pw.base_sha:
                 raise WorkspaceMismatchError(lane.id, lane.base or "", pw.base_sha)
 
-        groups = _pare_lanes(mutating, declaration.max_parallel)
+        groups = _group_for_launch(mutating, declaration.max_parallel, enforcement)
         halted = False
         halt_reason: Optional[str] = None
         rounds = 0
@@ -623,6 +1314,8 @@ class OperatorDispatchApplication:
             failures=self._failures,
             failure_policy=_failure_policy_of(resolved),
             artifact_store=self._active_store,
+            receipt_log=self._receipt_log,
+            integrator_assignment=enforcement.integrator_assignment,
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -740,6 +1433,114 @@ class OperatorDispatchApplication:
             }
         )
 
+    def _record_job_attempt(
+        self,
+        lane: Lane,
+        children: list[Any],
+        *,
+        round_: int,
+    ) -> None:
+        """Version each child attempt into the run's append-only receipt log.
+
+        Every dispatch (round 0) and correction (round > 0) attempt is appended
+        as one immutable :class:`~skillweave.trace.contracts.JobRecord` whose
+        :class:`~skillweave.trace.contracts.JobResult` separates the four outcome
+        dimensions and whose terminal envelope binds subject SHA, command and the
+        single machine outcome. Prior digests remain unchanged (append-only).
+
+        Evidence integrity is verified *here, before* a ``done``/``pass`` is
+        recorded: the run's real artifact resolver is bound to the completion,
+        so a missing or unresolvable required artifact downgrades the gate and
+        task verdict — exit zero or non-empty stdout alone never records a
+        passing completion (criteria 1, 7).
+        """
+        resolver = (
+            self._active_store.resolve if self._active_store is not None else None
+        )
+        required = _required_evidence_of(lane)
+        for child in children:
+            job_id = getattr(child, "child_run_id", None)
+            outcome = _child_outcome(child)
+            process_result = getattr(child, "result", None)
+            exit_code = getattr(process_result, "exit_code", None)
+            signal = getattr(process_result, "signal", None)
+            termination = getattr(process_result, "termination", "exited")
+            stdout_bytes = getattr(child, "raw_bytes", None) or b""
+            command = getattr(child, "command", None) or []
+            ref_objects = _receipt_refs_of([child])
+            refs = [r.artifact_id for r in ref_objects]
+            # Content-addressed digests the run's store can resolve directly; the
+            # envelope's completion check binds these to the real resolver.
+            ref_digests = [r.sha256 for r in ref_objects]
+
+            # ── Evidence classification with the real resolver ─────────────
+            # Refers to the actual ReceiptReference objects so digest/length/
+            # encoding mismatches surface as UNRESOLVABLE, never as recorded.
+            evidence_available, evidence_reason = classify_evidence(
+                required=required,
+                refs=ref_objects,
+                resolver=resolver,
+            )
+
+            terminal_state = _terminal_state_for(child)
+            job_result = build_job_result_for_terminal(
+                terminal_state=terminal_state,
+                exit_code=exit_code,
+                signal=signal,
+                termination=termination,
+                stdout=stdout_bytes,
+                required_evidence=required,
+                artifact_refs=refs,
+            )
+
+            envelope = TerminalEnvelope(
+                subject_sha=lane.base or "",
+                command=list(command),
+                terminal_state=terminal_state,
+                exit_code=exit_code,
+                signal=signal,
+                timed_out=terminal_state is TerminalState.TIMED_OUT,
+                artifact_refs=list(ref_digests),
+                declared_inputs=list(required) if required else [],
+            )
+
+            # ── Fail-closed completion (criteria 2, 7) ─────────────────────
+            # The envelope's own fail-closed completion check is the authority:
+            # subject identity omitted, required evidence missing, or a
+            # referenced artifact that cannot resolve through the run's real
+            # store all block the completion. Any blocker downgrades the
+            # recorded outcome from done/pass to a non-passing terminal, never
+            # a PASS on the strength of process output alone.
+            completion_blocked = envelope.completion_error(
+                required_evidence=required or (), resolver=resolver
+            )
+            if completion_blocked is None:
+                # No envelope-level blocker; the technical terminal state and
+                # evidence classification are the remaining fail-closed checks.
+                completion_blocked = _completion_blocking_reason(
+                    envelope=envelope,
+                    required=required,
+                    evidence_available=evidence_available,
+                    evidence_reason=evidence_reason,
+                    terminal_state=terminal_state,
+                )
+            job_result.evidence_available = evidence_available
+            if completion_blocked is not None:
+                if job_result.task_verdict is TaskVerdict.DONE:
+                    job_result.task_verdict = TaskVerdict.INCONCLUSIVE
+                if job_result.gate_verdict is GateVerdict.PASS:
+                    job_result.gate_verdict = GateVerdict.FAIL
+
+            parent = self._receipt_log.latest()
+            new_append_only_round(
+                self._receipt_log,
+                parent_id=parent.record_id if parent is not None else None,
+                round_=round_,
+                kind=(RoundKind.CORRECTION if round_ else RoundKind.DISPATCH),
+                job_id=job_id,
+                result=job_result,
+                envelope=envelope,
+            )
     def _gate_required_evidence(
         self,
         lane: Lane,
@@ -776,6 +1577,91 @@ class OperatorDispatchApplication:
             return pw.path
         return self._cwd
 
+    def _claim_namespace(
+        self,
+        lane: Lane,
+        run_id: str,
+        provisioned: dict[str, ProvisionedWorkspace],
+    ) -> JobStateNamespace:
+        """Claim a unique run id / working directory / state namespace per lane.
+
+        Wired into the live preflight (criterion 6): before any child for the
+        lane launches, the lane receives a distinct run id and state namespace
+        and it is *claimed* in the run's registry. A duplicate/shared run id or
+        namespace is refused here as a typed technical failure
+        (:class:`~skillweave.trace.contracts.NamespaceCollisionError`), never a
+        ``REVIEW_FAIL`` nor a consumed correction round.
+        """
+        if self._namespace_registry is None:
+            self._namespace_registry = StateNamespaceRegistry()
+        # Idempotent across the correction budget: the *same* lane re-dispatched
+        # in a later correction round reuses its already-claimed namespace. The
+        # per-lane memo keeps that separate from a genuine cross-lane collision,
+        # which still fails preflight through the shared registry (criterion 6).
+        existing = self._claimed_namespaces.get(lane.id)
+        if existing is not None:
+            return existing
+        cwd = self._lane_cwd(lane, provisioned) or ""
+        namespace = JobStateNamespace(
+            run_id=f"{run_id}-{lane.id}",
+            working_directory=cwd,
+            state_namespace=f"sw-state/{run_id}/{lane.id}",
+        )
+        self._namespace_registry.claim(namespace)
+        self._claimed_namespaces[lane.id] = namespace
+        return namespace
+
+    def _record_preflight_terminal(
+        self,
+        lane: Lane,
+        *,
+        round_: int,
+        terminal_state: TerminalState,
+        command: Sequence[str],
+        detail: str,
+        run_id: str,
+        wave: str,
+        stream: DispatchEventStream,
+    ) -> None:
+        """Record a pre-launch terminal (blocked input / preflight failure).
+
+        Such a lane never reaches the fan-out: it produces a deterministic typed
+        terminal state in the receipt log and a distinct failure, so a
+        noninteractive stdin demand or a namespace collision fails *before* any
+        child launches or waits (criteria 4, 6).
+        """
+        job_result = build_job_result_for_terminal(
+            terminal_state=terminal_state,
+            exit_code=None,
+            signal=None,
+            termination=None,
+            stdout=b"",
+            required_evidence=_required_evidence_of(lane),
+            artifact_refs=[],
+        )
+        envelope = TerminalEnvelope(
+            subject_sha=lane.base or "",
+            command=list(command),
+            terminal_state=terminal_state,
+        )
+        parent = self._receipt_log.latest()
+        new_append_only_round(
+            self._receipt_log,
+            parent_id=parent.record_id if parent is not None else None,
+            round_=round_,
+            kind=(RoundKind.CORRECTION if round_ else RoundKind.DISPATCH),
+            job_id=f"{run_id}-{lane.id}",
+            result=job_result,
+            envelope=envelope,
+        )
+        self._record_failure(lane, outcome=terminal_state.value, detail=detail, round_=round_)
+        self._last_success[lane.id] = False
+        self._typed_failure[lane.id] = True
+        self._emit_status(
+            stream, run_id, wave, lane, False, round_,
+            outcome=terminal_state.value,
+        )
+
     def _run_lane(
         self,
         run_id: str,
@@ -798,11 +1684,43 @@ class OperatorDispatchApplication:
             )
             return True
 
-        role = resolved.role(lane.role)
-        fanout = self._fanout()
         provisioned = provisioned or {}
-        result = fanout(
-            [command],
+
+        # Noninteractive stdin demand fails before launch/wait (criterion 4).
+        if getattr(lane, "requires_stdin", False):
+            self._record_preflight_terminal(
+                lane,
+                round_=round_,
+                terminal_state=TerminalState.BLOCKED_INPUT,
+                command=command,
+                detail="lane requires interactive stdin in a noninteractive dispatch",
+                run_id=run_id,
+                wave=wave,
+                stream=stream,
+            )
+            return False
+
+        # Unique state namespace claimed before any child launches (criterion 6).
+        try:
+            self._claim_namespace(lane, run_id, provisioned)
+        except NamespaceCollisionError as exc:
+            self._record_preflight_terminal(
+                lane,
+                round_=round_,
+                terminal_state=TerminalState.PREFLIGHT_FAILED,
+                command=command,
+                detail=str(exc),
+                run_id=run_id,
+                wave=wave,
+                stream=stream,
+            )
+            return False
+
+        role = resolved.role(lane.role)
+        inline = self._inline()
+        provisioned = provisioned or {}
+        result = inline(
+            command,
             run_id=run_id,
             subject_repo=lane.repo or "",
             subject_commit=lane.base or "",
@@ -814,6 +1732,7 @@ class OperatorDispatchApplication:
         )
         children = _fanout_children(result)
         self._record_child_results(lane, children, round_=round_)
+        self._record_job_attempt(lane, children, round_=round_)
         received_refs = _receipt_refs_of(children)
 
         succeeded = _result_succeeded(result)
@@ -863,10 +1782,52 @@ class OperatorDispatchApplication:
         for lane in group:
             stream.lane_started(wave=wave, lane_id=lane.id)
 
+        provisioned = provisioned or {}
+
+        # Preflight each lane before any child in the group launches: a
+        # noninteractive stdin demand and a namespace collision both fail as a
+        # deterministic terminal *before* the fan-out hands off to the runner
+        # (criteria 4, 6). Only lanes that pass preflight are launched.
+        launchable: list[tuple[Lane, list[str]]] = []
+        for lane, command in zip(group, commands):
+            if command is None:
+                continue
+            if getattr(lane, "requires_stdin", False):
+                self._record_preflight_terminal(
+                    lane,
+                    round_=round_,
+                    terminal_state=TerminalState.BLOCKED_INPUT,
+                    command=command,
+                    detail="lane requires interactive stdin in a noninteractive dispatch",
+                    run_id=run_id,
+                    wave=wave,
+                    stream=stream,
+                )
+                continue
+            try:
+                self._claim_namespace(lane, run_id, provisioned)
+            except NamespaceCollisionError as exc:
+                self._record_preflight_terminal(
+                    lane,
+                    round_=round_,
+                    terminal_state=TerminalState.PREFLIGHT_FAILED,
+                    command=command,
+                    detail=str(exc),
+                    run_id=run_id,
+                    wave=wave,
+                    stream=stream,
+                )
+                continue
+            launchable.append((lane, command))
+
         from skillweave.fanout.dispatch import FanOutLaunchContext
         from skillweave.routing.modelspec import from_value
 
-        provisioned = provisioned or {}
+        group = [ln for ln, _ in launchable]
+        commands = [cmd for _, cmd in launchable]
+        if not group:
+            return
+
         models = [from_value(self._model_for(lane, resolved)) for lane in group]
         # Each lane carries its own repo/base/tool/cwd; never broadcast the
         # group leader's identity onto its siblings (criterion-4 blocker).
@@ -896,6 +1857,7 @@ class OperatorDispatchApplication:
         for lane, child in zip(group, children):
             child_list = [child]
             self._record_child_results(lane, child_list, round_=round_)
+            self._record_job_attempt(lane, child_list, round_=round_)
             refs = _receipt_refs_of(child_list)
             succeeded = _child_succeeded(child)
             evidence_failed = False
@@ -1012,6 +1974,8 @@ def _child_outcome(child: Any) -> Optional[str]:
         return "timed_out"
     if termination == "launch_failed":
         return "launch_failed"
+    if termination == "heartbeat_expired":
+        return "heartbeat_expired"
     if getattr(result, "signal", None) is not None:
         return "signal"
     return "exit_code"
@@ -1020,6 +1984,28 @@ def _child_outcome(child: Any) -> Optional[str]:
 def _first_outcome(children: list[Any]) -> Optional[str]:
     """The single machine outcome of the first child, or ``None`` when empty."""
     return _child_outcome(children[0]) if children else None
+
+
+def _terminal_state_for(child: Any) -> TerminalState:
+    """Map a child's machine outcome to its deterministic terminal state.
+
+    Heartbeat expiry, timeout, cancel and launch failure each map to a distinct
+    :class:`~skillweave.trace.contracts.TerminalState`; a clean exit maps to
+    ``completed``. This is the dispatcher's typed replacement for inferring the
+    child's fate from a raw exit code or log line.
+    """
+    outcome = _child_outcome(child)
+    if outcome == "timed_out":
+        return TerminalState.TIMED_OUT
+    if outcome == "signal":
+        return TerminalState.CANCELLED
+    if outcome == "launch_failed":
+        return TerminalState.LAUNCH_FAILED
+    if outcome == "heartbeat_expired":
+        return TerminalState.HEARTBEAT_EXPIRED
+    if outcome == "blocked_input":
+        return TerminalState.BLOCKED_INPUT
+    return TerminalState.COMPLETED
 
 
 def _first_failure_message(children: list[Any]) -> str:
@@ -1153,6 +2139,46 @@ def resolve_required_evidence(
             ) from exc
         resolved.append({"stream": stream, "artifact_id": ref.artifact_id, "byte_length": length})
     return resolved
+
+
+def _completion_blocking_reason(
+    *,
+    envelope: TerminalEnvelope,
+    required: Optional[Sequence[str]],
+    evidence_available: EvidenceAvailability,
+    evidence_reason: Optional[str],
+    terminal_state: TerminalState,
+) -> Optional[str]:
+    """Return why a completion is blocked, or ``None`` when unblocked.
+
+    Fail-closed in three directions, mirroring the trace envelope contract:
+
+    * subject identity omitted (empty subject SHA);
+    * required evidence declared but missing/unresolvable;
+    * a technical terminal state (blocked input, preflight failure, launch
+      failure, timeout, cancel, heartbeat expiry) — which is never a
+      ``done``/``pass`` regardless of process output.
+
+    This is the dispatcher's active binding of ``TerminalEnvelope`` semantics:
+    it is consulted before a ``done``/``pass`` result is recorded.
+    """
+    if terminal_state in (
+        TerminalState.BLOCKED_INPUT,
+        TerminalState.PREFLIGHT_FAILED,
+        TerminalState.LAUNCH_FAILED,
+        TerminalState.TIMED_OUT,
+        TerminalState.CANCELLED,
+        TerminalState.HEARTBEAT_EXPIRED,
+    ):
+        return terminal_state.value
+    if not envelope.subject_sha:
+        return "subject identity omitted"
+    if required is not None:
+        if evidence_available is EvidenceAvailability.MISSING:
+            return evidence_reason or "required evidence missing"
+        if evidence_available is EvidenceAvailability.UNRESOLVABLE:
+            return evidence_reason or "unresolvable artifact"
+    return None
 
 
 def _build_report(

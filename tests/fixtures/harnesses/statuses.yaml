@@ -1,0 +1,42 @@
+# Separated run-status facts per adapter (SW1311-HARNESS-001, criterion 2).
+#
+# The four statuses are four independent axes, never one slider: documented,
+# installed, dispatch-proven and production. A claim may only cite its own
+# anchor. This file mirrors the host support matrix (`docs/support/support-matrix.md`):
+#
+#   * documented     -> docs/dispatching-from-your-harness.md names the adapter
+#                         and how its operator sets SKILLWEAVE_HARNESS.
+#   * installed      -> src/skillweave/installer.py has a target + copies skills
+#                         there (a write destination, not a run record).
+#   * dispatch-proven-> a real run originated from that adapter and terminated
+#                         cleanly, recorded by the dispatch seam (docs/dispatch-2-report.json,
+#                         exactly ONE proven adapter: opencode).
+#   * production     -> a deployment profile an operator actually runs.
+#                         NONE shipped; ship nothing that claims it.
+#
+# Keeping these separate and honest means one adapter's proven run is never
+# projected onto the other three, and "documented" is never read as "proven".
+
+claude-code:
+  documented: true
+  installed: true
+  dispatch-proven: false
+  production: false
+
+codex:
+  documented: true
+  installed: true
+  dispatch-proven: false
+  production: false
+
+antigravity:
+  documented: true
+  installed: true
+  dispatch-proven: false
+  production: false
+
+opencode:
+  documented: true
+  installed: true
+  dispatch-proven: true
+  production: false

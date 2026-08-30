@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillweave.dev/schemas/dispatch-trace/v1",
+  "title": "DispatchTrace",
+  "description": "Append-only multi-round dispatch receipts, the typed child-job terminal contract and the binding terminal envelope (SW1311-RECEIPT-001). Separates process status, task verdict, evidence availability and gate verdict as four distinct fields, and binds each terminal record to a single machine outcome. Names no concrete provider, model or harness.",
+  "type": "object",
+  "required": [
+    "record_id",
+    "round",
+    "kind",
+    "parent_id",
+    "digest"
+  ],
+  "properties": {
+    "record_id": { "type": "string", "minLength": 1 },
+    "round": { "type": "integer", "minimum": 0 },
+    "kind": {
+      "type": "string",
+      "enum": ["dispatch", "correction", "review", "integration"]
+    },
+    "parent_id": { "type": ["string", "null"] },
+    "digest": { "type": "string", "minLength": 1 },
+    "job_id": { "type": ["string", "null"] },
+    "result": { "$ref": "#/$defs/jobResult" },
+    "envelope": { "$ref": "#/$defs/terminalEnvelope" },
+    "payload": {}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": [
+        "id",
+        "severity",
+        "evidence_ref",
+        "reviewer_id",
+        "subject_sha"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "severity": {
+          "type": "string",
+          "enum": ["blocker", "major", "minor"]
+        },
+        "evidence_ref": { "type": "string", "minLength": 1 },
+        "reviewer_id": { "type": "string", "minLength": 1 },
+        "subject_sha": { "type": "string", "minLength": 40 },
+        "criterion": { "type": ["string", "null"] },
+        "code_location": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "disposition": {
+      "type": "object",
+      "required": ["finding_id", "decision", "rationale", "actor_id"],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "decision": { "type": "string", "enum": ["accepted", "rejected"] },
+        "rationale": { "type": "string", "minLength": 1 },
+        "actor_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "adjudication": {
+      "type": "object",
+      "required": [
+        "finding_id",
+        "decision",
+        "actor_id",
+        "verified_location",
+        "verified_reachable",
+        "verified_causal",
+        "verified_impact"
+      ],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "decision": { "type": "string", "enum": ["uphold", "narrow", "reject"] },
+        "actor_id": { "type": "string", "minLength": 1 },
+        "verified_location": { "type": "boolean" },
+        "verified_reachable": { "type": "boolean" },
+        "verified_causal": { "type": "boolean" },
+        "verified_impact": { "type": "boolean" },
+        "narrowed_severity": {
+          "type": ["string", "null"],
+          "enum": ["blocker", "major", "minor", null]
+        },
+        "rationale": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "reviewRecord": {
+      "type": "object",
+      "required": ["reviewer_id", "subject_sha", "verdict"],
+      "properties": {
+        "reviewer_id": { "type": "string", "minLength": 1 },
+        "subject_sha": { "type": "string", "minLength": 40 },
+        "verdict": {
+          "type": "string",
+          "enum": ["REVIEW_PASS", "REVIEW_FAIL"]
+        },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "criticalGateResult": {
+      "type": "object",
+      "required": ["passed"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "reviews": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reviewRecord" }
+        },
+        "evidence_adjudication": {
+          "type": ["object", "null"],
+          "properties": {
+            "subject_sha": { "type": "string", "minLength": 40 },
+            "disputed_finding_ids": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "reason": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "failed_reason": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "jobResult": {
+      "type": "object",
+      "required": [
+        "job_status",
+        "task_verdict",
+        "evidence_available",
+        "gate_verdict"
+      ],
+      "properties": {
+        "job_status": {
+          "type": "string",
+          "enum": [
+            "not_started",
+            "running",
+            "exited",
+            "signaled",
+            "timed_out",
+            "launch_failed",
+            "blocked_input",
+            "cancelled",
+            "heartbeat_expired"
+          ]
+        },
+        "task_verdict": {
+          "type": "string",
+          "enum": ["queued", "in_progress", "done", "failed", "inconclusive", "blocked"]
+        },
+        "evidence_available": {
+          "type": "string",
+          "enum": ["undeclared", "recorded", "missing", "unresolvable"]
+        },
+        "gate_verdict": {
+          "type": "string",
+          "enum": ["unset", "pass", "fail", "inconclusive"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "terminalEnvelope": {
+      "type": "object",
+      "required": [
+        "subject_sha",
+        "command",
+        "terminal_state"
+      ],
+      "properties": {
+        "subject_sha": { "type": "string", "minLength": 1 },
+        "command": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "terminal_state": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "heartbeat_expired",
+            "timed_out",
+            "cancelled",
+            "launch_failed",
+            "blocked_input",
+            "preflight_failed"
+          ]
+        },
+        "exit_code": { "type": ["integer", "null"] },
+        "signal": { "type": ["integer", "null"] },
+        "timed_out": { "type": "boolean" },
+        "outcome": { "type": "string" },
+        "artifact_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "declared_inputs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "completion_contract": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

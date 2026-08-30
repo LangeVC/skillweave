@@ -432,6 +432,9 @@ def test_dispatch_run_exposes_resolver_for_returned_refs(tmp_path):
         "lanes": [{
             "id": "lane-a", "role": "ops", "repo": "skillweave/repo-a",
             "base": base, "execution_model": "cold", "mutating": True,
+            "depends_on": [], "write_scope": ["skillweave/repo-a/**"],
+            "worktree": "/tmp/lane-a", "branch": "branch-lane-a",
+            "integration_policy": "independent",
             "criterion_groups": [{"criteria": [1]}],
         }],
     }))
@@ -542,6 +545,39 @@ def _policy_fanout(fail_indices=()):
     return _PolicyFanout()
 
 
+def _policy_inline(fail_indices=()):
+    class _PolicyInline:
+        def __init__(self):
+            self.fail = set(fail_indices)
+            self.calls = 0
+
+        def __call__(self, command, **kwargs):
+            self.calls += 1
+            repo = kwargs.get("subject_repo") or ""
+            tail = repo.rsplit("-", 1)[-1]
+            idx = int(tail) if tail.isdigit() else -1
+            failed = idx in self.fail
+            pr = ProcessResult(
+                command=["x"],
+                exit_code=3 if failed else 0,
+                signal=None,
+                termination="exited",
+                pid=1,
+                tool="t",
+                model="m",
+                stdout_receipt=None,
+                stderr_receipt=None,
+                message="boom" if failed else "",
+            )
+            child = FanOutChild(
+                child_run_id="c", command=["x"], result=pr, model="m",
+                outcome="exit_code",
+            )
+            return FanOutResult(children=[child], overlapped=False)
+
+    return _PolicyInline()
+
+
 def _policy_scenario(tmp_path, policy, max_retries, fail_indices, max_rounds=2, n_lanes=3):
     import yaml
 
@@ -553,6 +589,9 @@ def _policy_scenario(tmp_path, policy, max_retries, fail_indices, max_rounds=2, 
         lanes.append({
             "id": f"lane-{i}", "role": "ops", "repo": f"skillweave/repo-{i}",
             "base": base, "execution_model": "cold", "mutating": True,
+            "depends_on": [], "write_scope": [f"skillweave/repo-{i}/**"],
+            "worktree": f"/tmp/lane-{i}", "branch": f"branch-lane-{i}",
+            "integration_policy": "independent",
             "criterion_groups": [{"criteria": [1]}],
         })
     prof = tmp_path / f"policy-{policy}-profile.yaml"
@@ -580,9 +619,12 @@ def _policy_scenario(tmp_path, policy, max_retries, fail_indices, max_rounds=2, 
     }))
 
     fanout = _policy_fanout(fail_indices)
-    app = OperatorDispatchApplication(workspace_seam=_noop_workspace(), fanout_seam=fanout)
+    inline = _policy_inline(fail_indices)
+    app = OperatorDispatchApplication(
+        workspace_seam=_noop_workspace(), fanout_seam=fanout, inline_seam=inline
+    )
     run = app.dispatch(str(seq), str(prof), wave="0", sink=io.StringIO())
-    return run, fanout
+    return run, fanout, inline
 
 
 def _noop_workspace():
@@ -598,10 +640,11 @@ def _noop_workspace():
 
 
 def test_skip_policy_records_failure_no_correction_no_halt(tmp_path):
-    run, fanout = _policy_scenario(tmp_path, "skip", 1, fail_indices=(0,))
+    run, fanout, inline = _policy_scenario(tmp_path, "skip", 1, fail_indices=(0,))
     assert run.halted is False
     assert run.correction_rounds == 0
     assert fanout.calls == 1  # no correction child
+    assert inline.calls == 0
     failed = {f["lane_id"] for f in run.failures if f["outcome"] == "exit_code"}
     assert "lane-0" in failed
     lane0 = [r for r in run.results if r["lane_id"] == "lane-0"]
@@ -609,26 +652,29 @@ def test_skip_policy_records_failure_no_correction_no_halt(tmp_path):
 
 
 def test_retry_policy_retries_bounded_and_halts(tmp_path):
-    run, fanout = _policy_scenario(tmp_path, "retry", 1, fail_indices=(0,), max_rounds=5)
+    run, fanout, inline = _policy_scenario(tmp_path, "retry", 1, fail_indices=(0,), max_rounds=5)
     assert run.correction_rounds == 1  # bounded by max_retries=1
     assert run.halted is True
     assert run.halt_reason == HALT_REQUIRES_OPERATOR
-    assert fanout.calls == 2  # round-0 + one correction round
+    assert fanout.calls == 1  # round-0 fan-out only
+    assert inline.calls == 1  # one correction round retries the failed lane inline
 
 
 def test_retry_policy_bounded_by_correction_rounds(tmp_path):
-    run, fanout = _policy_scenario(tmp_path, "retry", 10, fail_indices=(0,), max_rounds=2)
+    run, fanout, inline = _policy_scenario(tmp_path, "retry", 10, fail_indices=(0,), max_rounds=2)
     assert run.correction_rounds == 2  # bounded by max_correction_rounds_per_wave=2
     assert run.halted is True
-    assert fanout.calls == 3  # round-0 + two correction rounds
+    assert fanout.calls == 1  # round-0 fan-out only
+    assert inline.calls == 2  # two correction rounds retried inline
 
 
 def test_abort_policy_halts_immediately_zero_correction(tmp_path):
-    run, fanout = _policy_scenario(tmp_path, "abort", 1, fail_indices=(0,))
+    run, fanout, inline = _policy_scenario(tmp_path, "abort", 1, fail_indices=(0,))
     assert run.halted is True
     assert run.halt_reason == HALT_REQUIRES_OPERATOR
     assert run.correction_rounds == 0
     assert fanout.calls == 1  # zero correction children
+    assert inline.calls == 0
 
 
 def _run_all() -> int:

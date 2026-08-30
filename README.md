@@ -137,9 +137,14 @@ Discovery → Blueprint → Design → Build → Release → Launch → Post-Rel
 Convene multiple AI models for research, code review, or architecture decisions:
 
 - **3 stages**: Independent opinions → anonymous peer review → chairman synthesis
-- **Profiles**: quick (2 models), default (4), deep (6), expert (4 top-tier)
+- **Profiles**: quick (1 model), default (2), deep (2), expert (2) — provider-native Faidata roster ids
 - **Web search**: DuckDuckGo (free), Serper, Tavily, Brave, SerpApi, Perplexity
 - **Output**: Markdown or structured JSON with consensus score
+- **Truthful attribution**: provider-native model ids; each seat records
+  requested/resolved/answering model, status, provider and profile revision. The
+  answering model is read from the response envelope, never inferred from the
+  request, and fewer than the minimum distinct answering models is a *degraded*
+  run — never reported as consensus.
 
 ### Testing
 

@@ -60,6 +60,76 @@ class MissingSessionBoundaryError(Exception):
         self.detail = detail
 
 
+class TopologyGateError(Exception):
+    """Raised when a sequence's topology declarations are invalid or colliding.
+
+    The topology/integration contract (SW1311-TOPOLOGY-001) is fail-closed at
+    the execution seam: an incomplete manifest or a collision between two
+    mutating lanes that is not absorbed by an explicit integration lane stops
+    the seam before any worker (fan-out) or integration action. This is the
+    live counterpart to :class:`ManifestError` — the seam refuses rather than
+    launch, and never re-schedules or rewrites on its own.
+    """
+
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(f"topology gate refused: {detail}")
+
+
+@dataclass
+class IntegrationGateInput:
+    """Typed integration facts the execution seam consumes before fan-out.
+
+    Each field is an *observed* fact supplied by the controller (SHAs, worktree
+    states, review binding, receipt, dependency pass-set, semantic conflict).
+    The gate fails closed on incomplete facts — a missing or non-full SHA, a
+    verification that was not rerun, or a receipt that omits a reviewed parent
+    all refuse rather than proceed. No field names a model, provider, gateway
+    or harness default, and nothing here performs a product edit.
+    """
+
+    #: The lane being integrated/rebased (matches a topology ``lane_id``).
+    lane_id: Optional[str] = None
+    #: The candidate's current head SHA (full 40-hex).
+    candidate_sha: Optional[str] = None
+    #: The current full integration-tip SHA the lane must rebase onto.
+    integration_tip_sha: Optional[str] = None
+    #: Whether the controller re-ran its verification after the rebase.
+    reran_verification: bool = False
+    #: Whether that post-rebase controller verification passed.
+    verification_passed: bool = False
+    #: The review bound to a specific candidate SHA (``dispatch.integration.Review``).
+    review: Optional[Any] = None
+    #: The multi-parent integration receipt (``dispatch.integration.IntegrationReceipt``).
+    receipt: Optional[Any] = None
+    #: The parent lane ids every reviewed outcome must be present for.
+    expected_parents: Optional[Sequence[str]] = None
+    #: The lane ids already independently passed and integrated (dependency gate).
+    passed_lane_ids: Optional[Sequence[str]] = None
+    #: A semantic conflict subject; when set, routes to the Integrator.
+    semantic_conflict: Optional[str] = None
+    #: The bounded write scope for a semantic-conflict Integrator assignment.
+    conflict_write_scope: Optional[Sequence[str]] = None
+    #: The test contract for a semantic-conflict Integrator assignment.
+    conflict_test_contract: Optional[Sequence[str]] = None
+
+
+@dataclass
+class IntegrationGateResult:
+    """The verdict of the integration gate (criterion 4-7, 9).
+
+    A refusal is signalled by :class:`TopologyGateError`; a result that
+    ``execute_sequence`` is handed continues. ``integrator_assignment`` carries
+    the bounded Integrator hand-off for a semantic conflict — the only output
+    the controller produces, never a product edit.
+    """
+
+    rebase: Optional[Any] = None
+    review: Optional[Any] = None
+    pending_lane_ids: List[str] = field(default_factory=list)
+    integrator_assignment: Optional[Any] = None
+
+
 @dataclass
 class Lane:
     """One lane as declared in a phase's ``parallel_lanes`` or
@@ -68,6 +138,11 @@ class Lane:
     id: str
     #: ``"parallel"`` or ``"serialized"``, from which block the lane came.
     kind: str
+    #: The raw lane declaration, retained so the topology gate can derive a
+    #: :class:`~skillweave.dispatch.topology.LaneTopology` manifest from the
+    #: same file the seam already consumes (write scope, base, dependency set,
+    #: worktree, branch, integration policy, harness namespace).
+    manifest: Optional[Mapping[str, Any]] = None
 
 
 @dataclass
@@ -125,9 +200,9 @@ def load_sequence(declaration: Mapping[str, Any]) -> SequenceDeclaration:
     serialized: List[Lane] = []
     for phase in declaration.get("phases", []) or []:
         for lane in phase.get("parallel_lanes", []) or []:
-            parallel.append(Lane(id=lane.get("id"), kind="parallel"))
+            parallel.append(Lane(id=lane.get("id"), kind="parallel", manifest=lane))
         for lane in phase.get("serialized_lanes", []) or []:
-            serialized.append(Lane(id=lane.get("id"), kind="serialized"))
+            serialized.append(Lane(id=lane.get("id"), kind="serialized", manifest=lane))
 
     return SequenceDeclaration(
         session_boundary=session_boundary,
@@ -157,10 +232,226 @@ def build_dispatch_plan(
     return DispatchPlan(entries=entries)
 
 
+#: The topology fields a lane may declare that mark it as topology-governed.
+_TOPOLOGY_KEYS = (
+    "base",
+    "depends_on",
+    "write_scope",
+    "worktree",
+    "branch",
+    "integration_policy",
+    "harness_state_namespace",
+)
+
+
+def _is_topology_governed(lane: Lane) -> bool:
+    manifest = lane.manifest or {}
+    return any(key in manifest for key in _TOPOLOGY_KEYS)
+
+
+def derive_topologies(declaration: SequenceDeclaration) -> List[Any]:
+    """Build :class:`~skillweave.dispatch.topology.LaneTopology` manifests from
+    the lanes whose declarations carry topology fields.
+
+    Only lanes that declare any topology key are governed; a lane with no
+    topology declaration is left to the session-boundary-only path unchanged.
+    The import is deferred so this module's eager import closure stays free of
+    the dispatch application surface (GLE-020).
+    """
+    from skillweave.dispatch.topology import LaneTopology
+
+    result: List[Any] = []
+    for lane in declaration.all_lanes():
+        if not _is_topology_governed(lane):
+            continue
+        manifest = dict(lane.manifest or {})
+        # The promptchain lane declaration names the lane ``id``; the topology
+        # manifest names it ``lane_id``. Map the field so the two seams agree on
+        # which governed lane is which.
+        if "lane_id" not in manifest and lane.id:
+            manifest["lane_id"] = lane.id
+        result.append(LaneTopology.from_dict(manifest))
+    return result
+
+
+def gate_topology(
+    declaration: SequenceDeclaration,
+    *,
+    topologies: Optional[Sequence[Any]] = None,
+    integration_lanes: Optional[Sequence[str]] = None,
+) -> List[List[str]]:
+    """Fail-closed topology gate applied *before* any worker launch.
+
+    Derives (or accepts) the lane topology manifests, validates every governed
+    manifest, and returns the serialization plan's groups as parallel-batch
+    boundaries. A manifest that is incomplete or malformed, or a collision
+    between two governed lanes that is not absorbed by an explicit integration
+    lane, raises :class:`TopologyGateError` — the seam refuses rather than
+    launch. The returned groups mean colliding lanes never share a fan-out
+    batch; separate groups are fanned out sequentially.
+    """
+    from skillweave.dispatch.topology import (
+        ManifestError,
+        build_serialization_plan,
+    )
+
+    resolved = list(topologies) if topologies is not None else derive_topologies(declaration)
+    if not resolved:
+        return []
+
+    try:
+        return [
+            list(group)
+            for group in build_serialization_plan(
+                resolved, integration_lanes=integration_lanes
+            ).groups
+        ]
+    except ManifestError as exc:
+        raise TopologyGateError(str(exc)) from exc
+
+
+def _resolve_integrating_lane(
+    integration_input: IntegrationGateInput,
+    by_id: Mapping[str, Any],
+) -> Any:
+    """Resolve the :class:`~skillweave.dispatch.topology.LaneTopology` the gate
+    acts upon, fail-closed when it cannot be identified."""
+    lane_id = integration_input.lane_id
+    if lane_id and lane_id in by_id:
+        return by_id[lane_id]
+    if lane_id:
+        # A rebase/integration is always about a mutating lane; if its manifest
+        # was not derived then the integration facts are incomplete.
+        raise TopologyGateError(
+            f"integrating lane {lane_id!r} has no topology manifest"
+        )
+    # No lane id: the gate needs a concrete lane to rebase/route. Refuse rather
+    # than invent one.
+    raise TopologyGateError(
+        "integration facts name no integrating lane; refusing incomplete facts"
+    )
+
+
+def gate_integration(
+    declaration: SequenceDeclaration,
+    integration_input: Optional[IntegrationGateInput] = None,
+    *,
+    topologies: Optional[Sequence[Any]] = None,
+) -> IntegrationGateResult:
+    """Fail-closed integration gate consumed *before* any fan-out/integration.
+
+    Reuses :mod:`skillweave.dispatch.integration` decisions verbatim (rebase,
+    review invalidation, multi-parent receipt, dependency DAG, Integrator
+    assignment) — the gate only orders and *enforces* them at the live seam. On
+    any incomplete or failing fact it raises :class:`TopologyGateError` before a
+    worker starts; on success it returns an :class:`IntegrationGateResult` whose
+    ``integrator_assignment`` carries a bounded Integrator hand-off (never a
+    controller product edit).
+    """
+    from skillweave.dispatch.integration import (
+        IntegrationTip,
+        ReceiptError,
+        ReviewInvalidatedError,
+        SemanticConflictError,
+        assign_semantic_conflict,
+        build_dependency_graph,
+        plan_rebase,
+        require_fresh_review,
+    )
+
+    result = IntegrationGateResult()
+    if integration_input is None:
+        return result
+
+    resolved = list(topologies) if topologies is not None else derive_topologies(declaration)
+    by_id = {t.lane_id: t for t in resolved}
+
+    # Criterion 4: rebase onto the current full integration tip and a successful
+    # post-rebase controller verification. ``plan_rebase`` fails closed on a
+    # missing/non-full SHA; the gate additionally refuses a verification that was
+    # not rerun or did not pass.
+    rebase = None
+    has_rebase_facts = integration_input.candidate_sha is not None or (
+        integration_input.integration_tip_sha is not None
+    )
+    if has_rebase_facts:
+        lane = _resolve_integrating_lane(integration_input, by_id)
+        rebase = plan_rebase(
+            lane,
+            integration_input.candidate_sha,
+            IntegrationTip(tip_sha=integration_input.integration_tip_sha),
+        )
+        if not (integration_input.reran_verification and integration_input.verification_passed):
+            raise TopologyGateError(
+                "controller must rerun verification against the post-rebase SHA "
+                "and it must pass before integration"
+            )
+        result.rebase = rebase
+
+    # Criterion 5: a review bound to a pre-rebase SHA is stale once the candidate
+    # moved. ``require_fresh_review`` refuses unless the review SHA matches the
+    # current (post-rebase) candidate SHA.
+    if integration_input.review is not None or has_rebase_facts:
+        current_sha = (
+            rebase.post_rebase_sha
+            if rebase is not None
+            else integration_input.candidate_sha
+        )
+        try:
+            result.review = require_fresh_review(integration_input.review, current_sha)
+        except ReviewInvalidatedError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    # Criterion 6: a multi-parent receipt must contain every expected reviewed
+    # parent with its outcome present. ``validate`` refuses on sibling omission
+    # or an absent outcome even when the included parents passed.
+    if integration_input.receipt is not None:
+        try:
+            integration_input.receipt.validate(
+                list(integration_input.expected_parents or [])
+            )
+        except ReceiptError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    # Criterion 9: dependency readiness — a dependent stays pending until every
+    # required parent is independently passed and integrated. Refuse when any
+    # governed dependent is still pending.
+    if integration_input.passed_lane_ids is not None:
+        if resolved:
+            graph = build_dependency_graph(resolved)
+            pending = graph.dependents_pending(list(integration_input.passed_lane_ids))
+            result.pending_lane_ids = pending
+            if pending:
+                raise TopologyGateError(
+                    f"dependents pending until their required parents are passed: "
+                    f"{pending}"
+                )
+
+    # Criterion 7: a semantic conflict is routed to the explicit Integrator with
+    # a bounded write scope and test contract. The controller produces only the
+    # assignment — never a product edit.
+    if integration_input.semantic_conflict is not None:
+        lane = _resolve_integrating_lane(integration_input, by_id)
+        try:
+            result.integrator_assignment = assign_semantic_conflict(
+                lane,
+                conflict=integration_input.semantic_conflict,
+                write_scope=list(integration_input.conflict_write_scope or []),
+                test_contract=list(integration_input.conflict_test_contract or []),
+            )
+        except SemanticConflictError as exc:
+            raise TopologyGateError(str(exc)) from exc
+
+    return result
+
+
 def execute_sequence(
     declaration: SequenceDeclaration,
     *,
     fanout: Optional[Any] = None,
+    topologies: Optional[Sequence[Any]] = None,
+    integration_lanes: Optional[Sequence[str]] = None,
+    integration_input: Optional[IntegrationGateInput] = None,
 ) -> DispatchPlan:
     """Validate, build the plan, and hand parallel lanes to the fan-out seam.
 
@@ -168,7 +459,28 @@ def execute_sequence(
     ``skillweave.fanout.dispatch.fan_out_dispatch`` is used for the parallel
     lanes; serialized lanes stay inline. The plan is returned regardless, so a
     caller (or a test) can inspect every decision.
+
+    When the sequence's lanes are topology-governed (they declare a write
+    scope, base, dependency set, worktree, branch, integration policy or
+    harness namespace), the collision-safe serialization plan is applied first:
+    a gate that fails closed on any incomplete manifest or unabsorbed
+    collision, and which frees parallel lanes in collision-free groups so two
+    lanes that overlap in write scope, share an incompatible base, or claim the
+    same harness namespace never launch in the same batch.
+
+    When ``integration_input`` is supplied, the integration gate
+    (:func:`gate_integration`) is consumed *before* any fan-out action: an
+    unverified or failed post-rebase verification, a stale review, an
+    incomplete multi-parent receipt, or a still-pending dependency refuses the
+    seam before a single worker starts. A semantic conflict is routed to a
+    bounded Integrator assignment (returned by the gate), never a controller
+    product edit.
     """
+    if integration_input is not None:
+        gate_integration(
+            declaration, integration_input, topologies=topologies
+        )
+
     plan = build_dispatch_plan(declaration)
 
     parallel_lanes = [e.lane_id for e in plan.entries if e.mode == SUBAGENT]
@@ -178,11 +490,23 @@ def execute_sequence(
             from skillweave.fanout.dispatch import fan_out_dispatch
 
             dispatcher = fan_out_dispatch
-        # Hand the parallel lane ids to the fan-out seam. The seam is the
-        # subagent execution unit; the concrete commands/tool/model a caller
-        # resolves stay the caller's concern, but the decision that parallel
-        # lanes move through fan-out — and never inline — is owned here.
-        dispatcher(list(parallel_lanes))
+
+        # Topology gate: colliding or incomplete governed lanes stop here,
+        # before any fan-out call. When guaranteed safe, the gate returns
+        # collision-free groups that each become one fan-out batch, so
+        # colliding parallel lanes are serialized rather than launched together.
+        groups = gate_topology(
+            declaration, topologies=topologies, integration_lanes=integration_lanes
+        )
+        if groups:
+            for group in groups:
+                dispatcher(list(group))
+        else:
+            # Hand the parallel lane ids to the fan-out seam. The seam is the
+            # subagent execution unit; the concrete commands/tool/model a caller
+            # resolves stay the caller's concern, but the decision that parallel
+            # lanes move through fan-out — and never inline — is owned here.
+            dispatcher(list(parallel_lanes))
 
     return plan
 
@@ -289,6 +613,28 @@ class SessionState:
                 for c in self.commands
             ],
         }
+
+
+def resume_batch_command(
+    state: SessionState,
+    *,
+    lane_id: str,
+) -> Optional[BatchCommand]:
+    """Return the batch command for ``lane_id`` in a cold session state.
+
+    This is the handoff seam for a controller recomputing which command a lane
+    should run from the state file alone (SW1311-HANDOFF-001, controller-resume):
+    a controller that derived the next batch index from a checkpoint reads the
+    state file once and resolves the lane's command here, rather than from any
+    transcript. ``None`` means the lane is not part of this state's single batch
+    (or the resolved command is absent), so a resume cannot invent work.
+    """
+    if not state.session_boundary:
+        raise MissingSessionBoundaryError()
+    for command in state.commands:
+        if command.lane_id == lane_id:
+            return command
+    return None
 
 
 def load_state_file(path: str) -> SessionState:

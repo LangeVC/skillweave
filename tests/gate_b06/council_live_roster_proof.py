@@ -1,21 +1,22 @@
-"""Council live/review residual — roster vs answering, measured against live Faigate.
+"""Council live roster gate — distinct seats + chairman, full matrix (SW1311-COUNCIL-001).
 
-SW-COUNCIL-001 residual (criterion: ``ROUTER_PROFILES`` is corrected to ids
-Faidate actually serves, verified by the ``model`` field rather than the listing).
+A live gate (NOT part of the hermetic suite) that measures, against a running
+Faidate, whether the council's declared seats — the provider-native ids in
+``ROUTER_PROFILES`` — answer as themselves, using the response envelope's
+``model`` field as the single source of truth. There is no substitution layer:
+the exact declared seats are queried verbatim, and the gate proves the resolved
+set holds the ``>=2`` distinct answering-model gate live.
 
-The attribution work (SW-CN-001/SW-CN-002) is delivered: ``query()`` reads the
-response envelope's ``model`` field and carries it per seat via
-``AttributedResponse``. What remained open was the LIVE proof: measure, against
-a running Faigate, whether the roster ids ``ROUTER_PROFILES`` casts actually
-answer as themselves, using the ``model`` field as the single source of truth.
+Contracts enforced here (criterion 6):
 
-This script is a live gate, NOT part of the hermetic unit suite. It talks to
-Faidate at ``FAIGATE_BASE_URL`` (default ``http://127.0.0.1:8090/v1``). When
-Faidate is unreachable it exits non-zero with a clear message — a live gate that
-"passes" without a live model is not a pass.
+* requests the exact declared seats of the default preset (models plus the
+  chairman when the preset runs full mode), with no seat rewriting;
+* records the complete requested→resolved→answering matrix per seat;
+* fails (non-zero) when Faidate is unreachable, or when the minimum distinct
+  answering-model count is not met, or when every seat is substituted.
 
-Reproducible: python3 tests/gate_b06/council_live_roster_proof.py
-Repo root is derived from this file's own position; no fixed path.
+Reproducible:  python3 tests/gate_b06/council_live_roster_proof.py
+The Faidate address is ``FAIGATE_BASE_URL`` (default ``http://127.0.0.1:8090/v1``).
 """
 
 import asyncio
@@ -25,82 +26,103 @@ import sys
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(REPO_ROOT, "src"))
 
-from skillweave.routing.faigate_adapter import (
+from skillweave.routing.faigate_adapter import (  # noqa: E402
     ROUTER_PROFILES,
     FaigateProvider,
 )
 
+MIN_DISTINCT_SEATS = 2
 
-def _roster_ids() -> list[str]:
-    """Union of every id ``ROUTER_PROFILES`` casts (models + chairman)."""
-    ids: list[str] = []
-    seen: set[str] = set()
-    for preset in ROUTER_PROFILES.values():
-        for mid in list(preset["models"]) + [preset["chairman"]]:
-            if mid not in seen:
-                seen.add(mid)
-                ids.append(mid)
-    return ids
+
+def _seats_for_preset(preset: dict) -> list[str]:
+    """The seats a preset casts: its models plus its chairman (if full mode)."""
+    seats = list(preset["models"])
+    if preset.get("mode") == "full" and preset.get("chairman"):
+        seats.append(preset["chairman"])
+    return seats
 
 
 def main() -> int:
     base_url = os.environ.get("FAIGATE_BASE_URL", "http://127.0.0.1:8090/v1")
     provider = FaigateProvider(base_url=base_url)
 
-    roster = _roster_ids()
+    # The default preset's seats are already provider-native Faigate ids. They
+    # are queried verbatim — no seat rewriting, no alias resolution. Each
+    # declared seat IS the id Faigate is asked to serve.
+    preset = ROUTER_PROFILES["default"]
+    seats = []
+    seen = set()
+    for mid in _seats_for_preset(preset):
+        if mid not in seen:
+            seen.add(mid)
+            seats.append(mid)
+
+    # The gate must request at least two distinct declared seats.
+    distinct_seats = len(set(seats))
     print(f"Faidate: {base_url}")
-    print(f"ROUTER_PROFILES roster ids ({len(roster)}): {', '.join(roster)}")
-
-    async def probe_one(mid: str):
-        messages = [{"role": "user", "content": "Reply with exactly one word."}]
-        response = await provider.query(mid, messages, temperature=0.0, timeout=15.0)
-        answering = getattr(response, "answering_model", None)
-        return mid, answering
-
-    async def run_all():
-        results = {}
-        for mid in roster:
-            try:
-                results[mid] = await probe_one(mid)
-            except Exception as e:  # noqa: BLE001 — a live gate reports every seat
-                results[mid] = (mid, f"ERROR: {e}")
-        return results
-
-    results = asyncio.run(run_all())
-
-    print("\nrider id             -> answering model")
-    diverged = 0
-    errored = 0
-    for requested in roster:
-        _, answering = results[requested]
-        flag = ""
-        if answering.startswith("ERROR:"):
-            errored += 1
-        elif answering != requested:
-            diverged += 1
-            flag = "  <-- diverged"
-        print(f"  {requested:<20} -> {answering}{flag}")
-
-    print(f"\nroster ids: {len(roster)}")
-    print(f"diverged:   {diverged}")
-    print(f"errored:    {errored}")
-    print(f"answered as requested: {len(roster) - diverged - errored}")
-
-    # The residual claim being proven: the roster names ids that do NOT answer as
-    # themselves. If every id answered as itself there would be no substitution
-    # to surface — but the whole premise is that Faigate silently substitutes.
-    # This gate proves the divergence is real and measurable via the model field.
-    if errored == len(roster):
-        print("\nFAIL: no roster id answered at all; Faigate may be unreachable.")
+    print(f"declared seats ({distinct_seats} distinct): {', '.join(seats)}")
+    if distinct_seats < MIN_DISTINCT_SEATS:
+        print(f"FAIL: fewer than {MIN_DISTINCT_SEATS} distinct seats requested.")
         return 1
 
-    if diverged + errored == 0:
-        print("\nNOTE: no divergence measured. The premise that triggered SW-COUNCIL-001")
-        print("is not reproduced today; the roster may have been corrected upstream.")
-        print("This is a pass (the model field is the source of truth either way).")
-        return 0
+    async def probe_one(native: str):
+        messages = [{"role": "user", "content": "Reply with exactly one word."}]
+        try:
+            response = await provider.query(native, messages, temperature=0.0, timeout=15.0)
+            answering = getattr(response, "answering_model", None)
+            requested = getattr(response, "requested_model", None) or native
+            return {
+                "requested": requested,
+                "resolved": native,
+                "answering": answering,
+                "status": "substituted" if answering and answering != requested else "answered",
+            }
+        except Exception as e:  # noqa: BLE001 — a live gate reports every seat
+            return {
+                "requested": native,
+                "resolved": native,
+                "answering": None,
+                "status": f"error: {type(e).__name__}",
+            }
 
-    print("\nPASS: divergence is real and the model field records it per id.")
+    async def run_all():
+        return [await probe_one(s) for s in seats]
+
+    try:
+        rows = asyncio.run(run_all())
+    except Exception as e:  # noqa: BLE001
+        print(f"\nFAIL: unreachable or unhandled: {e}")
+        return 1
+
+    # If every seat errored, Faidate is unreachable — a live gate that "passes"
+    # without a live model is not a pass.
+    if all(r["status"].startswith("error:") for r in rows):
+        print("\nFAIL: no seat answered; Faigate may be unreachable.")
+        for r in rows:
+            print(f"  {r['requested']:<22} -> {r['status']}")
+        return 1
+
+    print("\nrequested -> resolved -> answering -> status")
+    for r in rows:
+        print(
+            f"  {r['requested']:<22} -> {r['resolved']:<22} -> "
+            f"{str(r['answering']):<22} -> {r['status']}"
+        )
+
+    answered = [r for r in rows if r["status"] == "answered"]
+    distinct_answering = {r["answering"] for r in answered}
+    print(f"\nseats: {len(rows)}, answered: {len(answered)}, "
+          f"distinct answering: {len(distinct_answering)}")
+
+    if len(distinct_answering) < MIN_DISTINCT_SEATS:
+        print(f"FAIL: minimum distinct answering-model contract "
+              f"({MIN_DISTINCT_SEATS}) unmet.")
+        return 1
+
+    substitutions = [r for r in rows if r["status"] == "substituted"]
+    if substitutions:
+        print(f"NOTE: {len(substitutions)} substituted seat(s) recorded via the model field.")
+    print("PASS: >=2 distinct seats answered; full requested->answering matrix recorded.")
     return 0
 
 

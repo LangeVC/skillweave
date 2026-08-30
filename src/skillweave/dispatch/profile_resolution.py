@@ -78,20 +78,30 @@ class ProfileResolutionError(ValueError):
 
 @dataclass
 class ResolvedModel:
-    """The model a role resolves to, keeping request and product beside it.
+    """The model a role resolves to, keeping request, resolution and answer apart.
 
     ``requested`` is the model the profile's role declared. ``resolved`` is the
-    concrete id the role actually runs. For a concrete declared model the two
-    coincide; they are kept as separate fields so a receipt never lets a later
-    reader mistake "what was asked for" for "what ran" (the same split
-    ``faigate_adapter.ModelResolution`` keeps for fan-out specs).
+    concrete id the gateway (router/adapter) selected. ``answering`` is the model
+    that actually answered, read from the response envelope — it is ``None`` (and,
+    in the receipt, the ``unknown`` sentinel) until a run reports it.
+
+    The three are kept as separate fields so a receipt never lets a later reader
+    mistake "what was asked for" for "what the gateway chose" for "what answered"
+    (the same split the routing layer keeps for fan-out specs).
     """
 
     requested: str
     resolved: str
+    answering: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"requested": self.requested, "resolved": self.resolved}
+        out: dict[str, Any] = {
+            "requested": self.requested,
+            "resolved": self.resolved,
+        }
+        if self.answering is not None:
+            out["answering"] = self.answering
+        return out
 
 
 # ── Resolved role ─────────────────────────────────────────────────────────
@@ -214,11 +224,15 @@ class ResolvedDispatch:
     ``profile_name`` names the resolved profile; ``roles`` maps each requested
     role key to its :class:`ResolvedRole`. ``limits`` is the single resolved
     :class:`Limits` every role shares (the same one chain produced it).
+    ``model_policy`` is the resolved model-policy declaration (capability/min
+    tier, risk, cost ceiling, fallback) read from the profile's metadata, or
+    ``None`` when the profile declares none.
     """
 
     profile_name: str
     roles: dict[str, ResolvedRole] = field(default_factory=dict)
     limits: Optional[Limits] = None
+    model_policy: Optional[Any] = None
 
     def role(self, key: str) -> Optional[ResolvedRole]:
         return self.roles.get(key)
@@ -341,7 +355,25 @@ def resolve_dispatch_profile(
         profile_name=profile.name,
         roles=resolved,
         limits=resolve_limits(profile.limits, limits_override),
+        model_policy=resolve_model_policy(profile),
     )
+
+
+def resolve_model_policy(profile: RoutingProfile) -> Optional[Any]:
+    """Resolve a profile's model-policy declaration (criterion 1).
+
+    The declaration lives in the profile's ``metadata`` under ``model_policy``
+    and is provider-neutral: capability/minimum tier, architectural risk, cost
+    ceiling and fallback, without a vendor/gateway prefix. A profile that
+    declares none resolves to ``None`` (the dispatch then has no explicit floor,
+    so allocation starts flash-shaped unless a forcing signal says otherwise).
+    """
+    from .model_policy import ModelPolicyDeclaration
+
+    data = profile.metadata.get("model_policy") if profile.metadata else None
+    if data is None:
+        return None
+    return ModelPolicyDeclaration.from_dict(data)
 
 
 def _resolve_single(path: str, profiles: Mapping[str, Any]) -> RoutingProfile:
@@ -366,4 +398,5 @@ __all__ = [
     "ResolvedDispatch",
     "resolve_limits",
     "resolve_dispatch_profile",
+    "resolve_model_policy",
 ]

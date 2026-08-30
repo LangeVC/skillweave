@@ -110,6 +110,14 @@ class Lane:
     lane must carry ``repo``, ``base`` (a full SHA, not a branch name), and
     ``execution_model``. ``criterion_groups`` holds the criterion coverage for
     lanes that discharge acceptance criteria.
+
+    The topology fields (``depends_on``, ``write_scope``, ``worktree``,
+    ``branch``, ``integration_policy``, ``harness_state_namespace``) are the
+    ``dispatch-sequence.schema.json`` lane properties consumed here so a
+    governed mutating lane's manifest is parsed, not merely validated (and then
+    dropped). ``depends_on``/``write_scope`` are ``None`` when *absent* (never
+    defaulted to ``[]``) so the operator dispatcher can tell "declared empty"
+    from "not declared".
     """
 
     id: str
@@ -119,6 +127,12 @@ class Lane:
     execution_model: Optional[str] = None
     mutating: bool = False
     criterion_groups: List[CriterionGroup] = field(default_factory=list)
+    depends_on: Optional[List[str]] = None
+    write_scope: Optional[List[str]] = None
+    worktree: Optional[str] = None
+    branch: Optional[str] = None
+    integration_policy: Optional[str] = None
+    harness_state_namespace: Optional[str] = None
 
     def criteria_covered(self) -> List[int]:
         """Flatten every criterion group into one list, preserving order."""
@@ -143,6 +157,12 @@ class Lane:
             "execution_model": self.execution_model,
             "mutating": self.mutating,
             "criterion_groups": [g.to_dict() for g in self.criterion_groups],
+            "depends_on": list(self.depends_on) if self.depends_on is not None else None,
+            "write_scope": list(self.write_scope) if self.write_scope is not None else None,
+            "worktree": self.worktree,
+            "branch": self.branch,
+            "integration_policy": self.integration_policy,
+            "harness_state_namespace": self.harness_state_namespace,
         }
 
 
@@ -209,6 +229,8 @@ def _parse_lane(data: Any, index: int) -> Lane:
             )
         criteria = [int(c) for c in g.get("criteria") or []]
         groups.append(CriterionGroup(criteria=criteria))
+    depends_on = data.get("depends_on")
+    write_scope = data.get("write_scope")
     return Lane(
         id=lane_id,
         role=role,
@@ -217,6 +239,12 @@ def _parse_lane(data: Any, index: int) -> Lane:
         execution_model=data.get("execution_model"),
         mutating=bool(data.get("mutating", False)),
         criterion_groups=groups,
+        depends_on=list(depends_on) if isinstance(depends_on, list) else None,
+        write_scope=list(write_scope) if isinstance(write_scope, list) else None,
+        worktree=data.get("worktree"),
+        branch=data.get("branch"),
+        integration_policy=data.get("integration_policy"),
+        harness_state_namespace=data.get("harness_state_namespace"),
     )
 
 

@@ -101,12 +101,18 @@ def test_prompt_has_io_specs():
 
 
 def test_prompt_inventory_registered():
-    path = Path('.skillweave/tracking-log/prompt-inventory.yaml')
+    repo_root = Path(__file__).resolve().parent.parent
+    library = sorted((repo_root / '.skillweave' / 'prompts' / 'discovery').glob('*.md'))
+    assert len(library) >= 10
+    path = Path(__file__).resolve().parent / 'fixtures' / 'tracking-log' / 'prompt-inventory.yaml'
     assert path.exists()
     with open(path) as f:
         data = yaml.safe_load(f)
     assert data['total_prompts'] >= 10
     assert len(data['inventory']) >= 10
+    assert data['total_prompts'] == len(data['inventory'])
+    registered = {(repo_root / entry['file']).resolve() for entry in data['inventory']}
+    assert registered.issubset({p.resolve() for p in library})
 
 
 # ===== Artifact Template Tests =====
@@ -247,11 +253,16 @@ def test_assumption_categorization():
 # ===== Iteration Framework Tests =====
 
 def test_iteration_log_exists():
-    path = Path('.skillweave/tracking-log/iterations.yaml')
+    path = Path(__file__).resolve().parent / 'fixtures' / 'tracking-log' / 'iterations.yaml'
     assert path.exists()
     with open(path) as f:
         data = yaml.safe_load(f)
     assert 'iterations' in data
+    assert isinstance(data['iterations'], list)
+    assert len(data['iterations']) >= 1
+    for entry in data['iterations']:
+        for field in ('id', 'artifact', 'changes', 'evidence'):
+            assert field in entry
 
 
 def test_feedback_synthesis_template_exists():

@@ -1,0 +1,89 @@
+# Hermetic adapter capability profiles (SW1311-HARNESS-001).
+#
+# This is DATA, not code. Each top-level key is a concrete harness name; its
+# value declares which of the eight dispatch capabilities it supports, which
+# single authority it holds, and how it may delegate work. Core dispatch
+# (skillweave.dispatch.harness_contract) reads this as opaque data and never
+# branches on a concrete name.
+#
+# The four adapters covered here are the Claude desktop harness (canonically
+# `claude-code`, which runs inside the Claude desktop agent), Codex, Antigravity
+# and OpenCode. Names are exact and case-sensitive, matching the documented
+# SKILLWEAVE_HARNESS values.
+#
+# Statuses, installed-skill digests and evidence live in the sibling
+# `statuses.yaml` / `digests.yaml` / `evidence.yaml` files so an adapter's
+# *declared capability surface* stays separate from its *observed status facts*
+# — a documented name is never, by itself, a proven run.
+
+claude-code:
+  capabilities:
+    native-tool: true
+    external-process: true
+    in-place: false
+    stdin: true
+    status: true
+    cancel: true
+    state-namespace: true
+    installed-skill-digest: true
+  authority:
+    role: controller
+    skillweave-dispatch-required: true
+  delegation:
+    skillweave-dispatch: true
+    native-delegation: false
+    direct-shell: false
+
+codex:
+  capabilities:
+    native-tool: true
+    external-process: true
+    in-place: false
+    stdin: true
+    status: true
+    cancel: true
+    state-namespace: true
+    installed-skill-digest: true
+  authority:
+    role: ops
+    skillweave-dispatch-required: true
+  delegation:
+    skillweave-dispatch: true
+    native-delegation: false
+    direct-shell: false
+
+antigravity:
+  capabilities:
+    native-tool: true
+    external-process: false
+    in-place: true
+    stdin: false
+    status: true
+    cancel: true
+    state-namespace: true
+    installed-skill-digest: false
+  authority:
+    role: reviewer
+    skillweave-dispatch-required: true
+  delegation:
+    skillweave-dispatch: true
+    native-delegation: true
+    direct-shell: false
+
+opencode:
+  capabilities:
+    native-tool: true
+    external-process: true
+    in-place: false
+    stdin: true
+    status: true
+    cancel: true
+    state-namespace: true
+    installed-skill-digest: true
+  authority:
+    role: integrator
+    skillweave-dispatch-required: true
+  delegation:
+    skillweave-dispatch: true
+    native-delegation: false
+    direct-shell: false
