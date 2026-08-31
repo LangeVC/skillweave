@@ -35,6 +35,7 @@ class ModelResponse:
     resolved_model: str | None = None             # the id the adapter resolved (exposed when it differs)
     status: str = "answered"                      # answered | substituted | errored | unavailable | rate_limited
     provider: str | None = None                   # transport that produced the answer
+    served_by: str | None = None                  # the underlying model that served the request
     profile_version: str = COUNCIL_PROFILE_VERSION
 
     @property
@@ -123,14 +124,16 @@ class CouncilDegradedError(Exception):
 class CouncilEngine:
     """Orchestrates the 3-stage LLM Council deliberation."""
 
-    def __init__(self, provider, searcher=None):
+    def __init__(self, provider, searcher=None, routing_engine=None):
         """
         Args:
             provider: ModelProvider implementation (e.g. FaigateProvider)
             searcher: Optional WebSearch instance for Stage 0
+            routing_engine: Optional RoutingPolicyEngine for fallback model replacements
         """
         self.provider = provider
         self.searcher = searcher
+        self.routing_engine = routing_engine
 
     async def deliberate(self, query: str, config: CouncilConfig) -> CouncilResult:
         """Run full council deliberation. Mode controls which stages execute.
@@ -177,7 +180,7 @@ class CouncilEngine:
             result.label_to_model = self._build_label_map(config.models)
             result.seats_requested = len(config.models)
             answered = [r for r in result.stage1 if r.response and not r.error]
-            result.models_distinct = len({r.answering_model or r.model_id for r in answered})
+            result.models_distinct = len({r.served_by or r.answering_model or r.model_id for r in answered})
             result.degraded = result.models_distinct < result.seats_requested
             # Below the minimum distinct answering-model contract the run is
             # DEGRADED — it is never reported as consensus.
@@ -211,6 +214,7 @@ class CouncilEngine:
                     timeout=config.timeout_per_model
                 )
                 answering_model = getattr(response, "answering_model", None)
+                served_by = getattr(response, "served_by", None)
                 provider = getattr(response, "provider", None)
                 # requested_model is what was handed to the provider; resolved_model
                 # is what the adapter resolved (same unless the adapter exposed a
@@ -227,6 +231,7 @@ class CouncilEngine:
                     resolved_model=requested,
                     status=status,
                     provider=provider,
+                    served_by=served_by,
                 )
             except Exception as e:
                 return ModelResponse(
@@ -241,7 +246,19 @@ class CouncilEngine:
         tasks = [query_one(m) for m in config.models]
         responses = await asyncio.gather(*tasks, return_exceptions=False)
         successful = [r for r in responses if r.response and not r.error]
-        distinct_models = {r.answering_model or r.model_id for r in successful}
+        
+        seen_identities = set()
+        for r in successful:
+            identity = r.served_by or r.answering_model or r.model_id
+            if identity not in seen_identities:
+                seen_identities.add(identity)
+            else:
+                r.status = "duplicate"
+                r.error = f"Duplicate voice detected: {identity}"
+                r.response = ""
+
+        successful = [r for r in responses if r.response and not r.error]
+        distinct_models = {r.served_by or r.answering_model or r.model_id for r in successful}
         if len(distinct_models) < config.min_models_required:
             failed_models = [r.model_id for r in responses if r.error]
             raise CouncilDegradedError(
