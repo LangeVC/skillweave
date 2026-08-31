@@ -320,3 +320,8 @@ SkillWeave core runtime and execution components are structured under `src/skill
 - **Lifecycle**: Execution / Runtime
 - **Role**: Context check-pointing, block-level provenance, and token threshold limits (`no_new_task`, `checkpoint`, `stop`).
 - **Key Artifacts**: `checkpoint.py`, `config.py`, `limits.py`, `manager.py`.
+### 6.6 `src/skillweave/core/recovery/`
+- **Owner**: Core Runtime / Recovery Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Reconstructs execution state (DAG, Claims, Gate) from the ReadOnlyObserver after crashes (Orphan, Worker, Coordinator).
+- **Key Artifacts**: `manager.py`, `__init__.py`.
