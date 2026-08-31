@@ -330,3 +330,14 @@ SkillWeave core runtime and execution components are structured under `src/skill
 - **Lifecycle**: Execution / Runtime
 - **Role**: Maintains persistent policy for execution retries, backoff schedules, budget tracking, and idempotent compensation.
 - **Key Artifacts**: `policy.py`, `__init__.py`.
+### 6.8 `src/skillweave/core/workspace/remote/`
+- **Owner**: Core Runtime / Workspace Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Provides Sandbox/Remote Workspace environments honoring the core Workspace contract, without introducing external orchestration truth.
+- **Key Artifacts**: `provider.py`, `__init__.py`.
+
+### 6.9 `src/skillweave/core/operator/`
+- **Owner**: Core Runtime / Operator Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Delegated autonomous operator agent capable of running reversible, in-scope decisions while strictly escalating irreversible actions.
+- **Key Artifacts**: `operator_agent.py`, `__init__.py`.
