@@ -34,6 +34,13 @@ class RecoveryManager:
         # Reconstruct next action using handoff logic without transcripts
         self.next_action = reconstruct_next_action(checkpoint, handoffs)
         
+        # Restore execution policy state if present in the checkpoint
+        if hasattr(checkpoint, "policy_state") and checkpoint.policy_state:
+            from skillweave.core.policy import ExecutionPolicy
+            self.policy = ExecutionPolicy()
+            self.policy.load_state(checkpoint.policy_state)
+            logging.info("Policy state restored to prevent double-counting of attempts/budget.")
+        
     def recover_orphan(self, process_id: int):
         """Complete Orphan Crash Recovery"""
         logging.info(f"Recovering orphan process {process_id}")
