@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-observe
 description: Execution Reports, Timing, Events, Memory, Summary, Health — Read-Only Observability
 argument-hint: command="[report|timing|events|memory|summary|health]" session="[id]" level="[level]"

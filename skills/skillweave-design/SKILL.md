@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-design
 description: "Analyze design briefs, derive UX principles and design tokens, and evaluate implementation quality."
 argument-hint: command="[brief|lens|tokens|evaluate]" input="[design-brief-or-path]"

@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-lifecycle
 description: "Navigate SkillWeave lifecycles, profiles, planning state, testing gates, and next-action recommendations."
 argument-hint: command="[status|recommend|switch|phases|plan|test]" bundle="[id]"

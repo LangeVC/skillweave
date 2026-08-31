@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-post-release
 description: "Run retrospectives, synthesize feedback and monitoring evidence, and plan the next iteration."
 argument-hint: command="[retrospective|feedback|monitor|plan|health]" version="[version]"

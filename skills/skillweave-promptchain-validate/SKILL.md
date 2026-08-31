@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-promptchain-validate
 description: Validate and improve SkillWeave prompt sequences. Detects sequence type (plan/build/mixed) and adapts output format. Accepts sequence as parameter or .md/.txt attachment.
 argument-hint: sequence="[prompt sequence]" risk_mode="[conservative/medium/unicorn]" (or attach .md/.txt file)

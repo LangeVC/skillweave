@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-releasechain
 description: "Validate, version, package, sign, and publish immutable release artifacts through binary release gates."
 argument-hint: inputs="[JSON with prd/tasks]" target="[humanize/machinize/mixed]" mode="[simple/manual/attended/overnight]" risk_mode="[conservative/medium/unicorn]"

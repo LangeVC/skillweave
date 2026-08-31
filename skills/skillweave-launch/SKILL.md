@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-launch
 description: "Coordinate pre-launch checks, environment deployment, communication, verification, and launch metrics."
 argument-hint: 'release_summary="[JSON]" command="[deploy|announce|verify|metrics]" environment="[production|staging]" mode="[guided|assisted]"'

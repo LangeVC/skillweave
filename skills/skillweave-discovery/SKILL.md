@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-discovery
 description: "Define and validate problems through stakeholder research, empathy mapping, evidence, and opportunity assessment."
 argument-hint: topic="[topic]" domain="[domain]" mode="[quick|deep]"

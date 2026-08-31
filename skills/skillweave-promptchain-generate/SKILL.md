@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-promptchain-generate
 description: Generate standardized SkillWeave prompt sequences from PRD (complexity-aware) or topic/domain. Creates execution plans optimized for REX (simple) or Ralph Loop (standard/complex) workflows.
 argument-hint: inputs="[JSON with prd/topic]" mode="[auto/simple/standard/complex]" target="[humanize/machinize/mixed]" risk_mode="[conservative/medium/unicorn]"

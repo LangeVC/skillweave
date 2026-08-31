@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-promptchain-execute
 type: orchestration
 description: Execute SkillWeave sequences with dependency-aware batches, controlled parallelism, retries, evidence, and binary gates.

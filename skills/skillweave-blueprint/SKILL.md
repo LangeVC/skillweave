@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-blueprint
 description: Create structured PRD (Product Requirements Document) through guided interview. Adapts Ralph Loop concepts for multi-agent AI development. Creates blueprint for promptchain and releasechain workflows.
 argument-hint: idea="[your project idea]" domain="[domain]" risk_mode="[conservative/medium/unicorn]" (optional parameters)

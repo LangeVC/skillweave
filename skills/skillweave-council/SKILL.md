@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-council
 description: "Multi-Model LLM Council — Deliberation, Peer Review, and Chairman Synthesis with Web Search and Faigate Routing"
 argument-hint: topic="[topic]" time_range="[30d|quarter|6mo|1yr|any]" mode="[quick|standard|full]" profile="[default|quick|deep|expert]" output="[markdown|json]" phase="[discovery|design|code_review|post_release]"
