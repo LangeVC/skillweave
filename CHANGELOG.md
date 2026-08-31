@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.13 — Dynamic Routing and Anti-Masking
+
+- **Dynamic Routing Policy Engine:** Added support for capability-based routing and scoring (DR-002, DR-004).
+- **Anti-Masking:** Faigate adapter now parses `served_by` headers to detect and flag silent fallbacks (DR-003).
+- **Council Deduplication:** The council engine drops duplicated models and triggers the Routing Policy Engine for dynamic replacement (DR-005, DR-006).
+
 ## 1.3.12 — Forgejo-first release provenance
 
 1.3.11 shipped with an ambiguity at the release seam: the visible GitHub release
