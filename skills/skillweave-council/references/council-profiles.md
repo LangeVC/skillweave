@@ -1,42 +1,33 @@
 # Council Profiles
 
-Pre-configured model sets for different use cases.
+Pre-configured capability profiles for different use cases.
 
-Each id below is a **provider-native Faigate roster id** — a real id from the
-live ``GET /v1/models`` roster measured to answer *as itself* (its response
-envelope ``model`` field echoes the requested id). Faigate's roster self-answers
-only ``deepseek-v4-pro`` and ``deepseek-v4-flash``; every other id it serves
-silently collapses onto ``deepseek-v4-flash``. The presets therefore name those
-two ids directly, with no symbolic seat alias and no hidden substitution: what
-the profile names is exactly what runs, and the ``>=2`` distinct answering-model
-gate holds on the two self-answering seats. The run record attributes the model
-that actually answered (read from the response envelope, never inferred from the
-request).
+Council profiles define required model capabilities instead of hardcoded model IDs. The dynamic routing engine matches these capability requirements against active models in the provider registry (e.g. reasoning, coding, vision, general deliberation).
 
 ## default
-- Models: deepseek-v4-pro, deepseek-v4-flash
-- Chairman: deepseek-v4-pro
+- Capabilities: reasoning, general
+- Chairman: reasoning
 - Mode: standard
 - Temperature: 0.5
 - Use: General-purpose deliberation
 
 ## quick
-- Models: deepseek-v4-flash
-- Chairman: deepseek-v4-flash
+- Capabilities: fast, general
+- Chairman: fast
 - Mode: quick
 - Temperature: 0.3
 - Use: Fast comparison, budget-friendly
 
 ## deep
-- Models: deepseek-v4-pro, deepseek-v4-flash
-- Chairman: deepseek-v4-pro
+- Capabilities: reasoning, analysis, diversity
+- Chairman: reasoning
 - Mode: full
 - Temperature: 0.5
 - Use: Comprehensive analysis, diverse perspectives
 
 ## expert
-- Models: deepseek-v4-pro, deepseek-v4-flash
-- Chairman: deepseek-v4-pro
+- Capabilities: reasoning, expert, analysis
+- Chairman: reasoning
 - Mode: full
 - Temperature: 0.4
 - Use: High-stakes decisions, research-grade output
