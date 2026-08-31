@@ -325,3 +325,8 @@ SkillWeave core runtime and execution components are structured under `src/skill
 - **Lifecycle**: Execution / Runtime
 - **Role**: Reconstructs execution state (DAG, Claims, Gate) from the ReadOnlyObserver after crashes (Orphan, Worker, Coordinator).
 - **Key Artifacts**: `manager.py`, `__init__.py`.
+### 6.7 `src/skillweave/core/policy/`
+- **Owner**: Core Runtime / Policy Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Maintains persistent policy for execution retries, backoff schedules, budget tracking, and idempotent compensation.
+- **Key Artifacts**: `policy.py`, `__init__.py`.
