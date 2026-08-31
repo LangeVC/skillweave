@@ -16,17 +16,17 @@ except ImportError:
             return decorator
 
 from skillweave.dispatch.application import generate_run_id
-from skillweave.runtime.store import SQLiteRunStore
-from skillweave.runtime.journal import EventJournal
-from skillweave.runtime.registry import RawArtifactStore
-from skillweave.runsvc.service import RunApplicationService
 
 mcp = FastMCP("SkillWeave")
 
 def _get_store(db_path=".skillweave/store.db"):
+    from skillweave.runtime.store import SQLiteRunStore
     return SQLiteRunStore(db_path)
 
 def _get_run_svc(db_path=".skillweave/store.db", artifacts_path=".skillweave/artifacts"):
+    from skillweave.runtime.journal import EventJournal
+    from skillweave.runtime.registry import RawArtifactStore
+    from skillweave.runsvc.service import RunApplicationService
     store = _get_store(db_path)
     journal = EventJournal(db_path)
     raw_artifacts = RawArtifactStore(artifacts_path)
@@ -108,6 +108,7 @@ def resume_run(run_id: str, db_path: str = ".skillweave/store.db") -> str:
 @mcp.tool()
 def get_evidence(run_id: str, db_path: str = ".skillweave/store.db") -> str:
     """Get evidence/journal for a run."""
+    from skillweave.runtime.journal import EventJournal
     journal = EventJournal(db_path)
     events = journal.get_events(run_id)
     # Ensure events are dicts if they are dataclasses
