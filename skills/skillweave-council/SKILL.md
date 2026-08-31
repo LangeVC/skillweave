@@ -20,16 +20,20 @@ Optional Stage 0: Web Search (DuckDuckGo, Serper, Tavily, Brave) grounds respons
 
 ## Usage
 
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
-/skillweave-council topic="Wettbewerbsanalyse Q2 2026" time_range="quarter" mode="full"
+skillweave-council topic="Wettbewerbsanalyse Q2 2026" time_range="quarter" mode="full"
 
-/skillweave-council topic="Evaluate this architecture decision..." mode="full" output="json" phase="code_review"
+skillweave-council topic="Evaluate this architecture decision..." mode="full" output="json" phase="code_review"
 
-/skillweave-council command="search" topic="latest AI trends" time_range="30d"
+skillweave-council command="search" topic="latest AI trends" time_range="30d"
 
-/skillweave-council command="profiles"
+skillweave-council command="profiles"
 
-/skillweave-council command="compare" topic="..." profile="quick"
+skillweave-council command="compare" topic="..." profile="quick"
 ```
 
 ## Commands

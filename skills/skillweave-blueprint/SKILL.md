@@ -40,13 +40,18 @@ modular_templates: true
 
 Proceed with core skill logic only AFTER these four criteria are met.
 
-**Usage:**
+## Usage
+
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
-/skillweave-blueprint idea="[your project idea]" domain="[domain]"
+skillweave-blueprint idea="[your project idea]" domain="[domain]"
 ```
 **Or start interactive interview:**
 ```
-/skillweave-blueprint
+skillweave-blueprint
 ```
 
 **Parameters:**
@@ -58,7 +63,7 @@ Proceed with core skill logic only AFTER these four criteria are met.
 
 **Example:**
 ```
-/skillweave-blueprint idea="AI-powered task management tool" domain="saas"
+skillweave-blueprint idea="AI-powered task management tool" domain="saas"
 ```
 
 ## Mode Configuration
@@ -573,17 +578,17 @@ The blueprint analyzes your PRD and includes an `execution_recommendation` in th
 
 ### Example 1: Complete SaaS Application
 ```
-/skillweave-blueprint idea="AI-powered content planning platform for marketers" domain="saas"
+skillweave-blueprint idea="AI-powered content planning platform for marketers" domain="saas"
 ```
 
 ### Example 2: Internal Tool
 ```
-/skillweave-blueprint idea="Employee onboarding automation system" domain="enterprise"
+skillweave-blueprint idea="Employee onboarding automation system" domain="enterprise"
 ```
 
 ### Example 3: Mobile App
 ```
-/skillweave-blueprint idea="Fitness tracking app with social features" domain="mobile"
+skillweave-blueprint idea="Fitness tracking app with social features" domain="mobile"
 ```
 
 ## Next Steps

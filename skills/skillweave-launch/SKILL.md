@@ -78,8 +78,12 @@ Der Rollback wird NIE automatisch ausgeführt — nur als dokumentierter Plan.
 
 ## Usage
 
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
-/skillweave-launch release_summary='{"version":"0.6.0","artifact_locations":["dist/"],"changelog":"..."}'
+skillweave-launch release_summary='{"version":"0.6.0","artifact_locations":["dist/"],"changelog":"..."}'
 ```
 
 ## Parameters
