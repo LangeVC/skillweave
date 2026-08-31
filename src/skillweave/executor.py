@@ -251,7 +251,7 @@ def simulate_subagent_execution(step: StepSpec, subagent_type: str = "general") 
             "status": "completed",
             "output": f"Subagent ({subagent_type}) executed: {step.name}",
             "execution_time": execution_time,
-            "artifacts": [f"output_{step.id}.md"],
+            "artifacts": [], # No Markdown-only execution path
             "logs": [f"Started execution", f"Completed in {execution_time:.2f}s"],
         }
     else:
