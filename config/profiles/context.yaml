@@ -1,0 +1,52 @@
+# SkillWeave Context Token Limit Profiles (SW-CONTEXT-001)
+# Configurable token thresholds for context check-pointing and safe execution limits.
+
+profiles:
+  default:
+    name: default
+    description: "Default SkillWeave context limits: 120k no-new-task, 150k checkpoint, 170k stop"
+    no_new_task_limit: 120000
+    checkpoint_limit: 150000
+    stop_limit: 170000
+    max_context_limit: 200000
+    compact_limit: 140000
+
+  standard:
+    name: standard
+    description: "Standard balanced profile for everyday workflows"
+    no_new_task_limit: 120000
+    checkpoint_limit: 150000
+    stop_limit: 170000
+    max_context_limit: 200000
+
+  conservative:
+    name: conservative
+    description: "Conservative profile for smaller context windows or strict budget constraints"
+    no_new_task_limit: 60000
+    checkpoint_limit: 80000
+    stop_limit: 95000
+    max_context_limit: 100000
+
+  extended:
+    name: extended
+    description: "Extended profile for large-context models (1M token windows)"
+    no_new_task_limit: 400000
+    checkpoint_limit: 600000
+    stop_limit: 750000
+    max_context_limit: 1000000
+
+  strict:
+    name: strict
+    description: "Strict compact profile for low-latency / budget-constrained runs"
+    no_new_task_limit: 30000
+    checkpoint_limit: 45000
+    stop_limit: 55000
+    max_context_limit: 64000
+
+  fast:
+    name: fast
+    description: "Fast testing profile with small token boundaries"
+    no_new_task_limit: 8000
+    checkpoint_limit: 12000
+    stop_limit: 15000
+    max_context_limit: 16000

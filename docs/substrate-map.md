@@ -309,3 +309,35 @@ SkillWeave core runtime and execution components are structured under `src/skill
 - **Role**: Low-level process execution management, async subprocess runners, isolation boundaries, and streaming process output capture.
 - **Key Artifacts**: `core/proc/runner.py`, `core/proc/__init__.py`.
 
+### 6.4 `src/skillweave/core/observer/`
+- **Owner**: Core Runtime / Observer Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Read-only tracking of execution events, maintaining persistent lease and journal offset, preventing unauthorized state mutation.
+- **Key Artifacts**: `observer.py`, `__init__.py`.
+
+### 6.5 `src/skillweave/core/context/`
+- **Owner**: Core Runtime / Context Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Context check-pointing, block-level provenance, and token threshold limits (`no_new_task`, `checkpoint`, `stop`).
+- **Key Artifacts**: `checkpoint.py`, `config.py`, `limits.py`, `manager.py`.
+### 6.6 `src/skillweave/core/recovery/`
+- **Owner**: Core Runtime / Recovery Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Reconstructs execution state (DAG, Claims, Gate) from the ReadOnlyObserver after crashes (Orphan, Worker, Coordinator).
+- **Key Artifacts**: `manager.py`, `__init__.py`.
+### 6.7 `src/skillweave/core/policy/`
+- **Owner**: Core Runtime / Policy Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Maintains persistent policy for execution retries, backoff schedules, budget tracking, and idempotent compensation.
+- **Key Artifacts**: `policy.py`, `__init__.py`.
+### 6.8 `src/skillweave/core/workspace/remote/`
+- **Owner**: Core Runtime / Workspace Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Provides Sandbox/Remote Workspace environments honoring the core Workspace contract, without introducing external orchestration truth.
+- **Key Artifacts**: `provider.py`, `__init__.py`.
+
+### 6.9 `src/skillweave/core/operator/`
+- **Owner**: Core Runtime / Operator Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Delegated autonomous operator agent capable of running reversible, in-scope decisions while strictly escalating irreversible actions.
+- **Key Artifacts**: `operator_agent.py`, `__init__.py`.
