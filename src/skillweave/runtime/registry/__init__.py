@@ -152,7 +152,7 @@ class RawArtifactStore:
     path rather than returning wrong data.
     """
 
-    def __init__(self):
+    def __init__(self, storage_dir=None):
         self._blobs: dict[str, bytes] = {}
 
     def put(self, data: bytes) -> str:
@@ -199,7 +199,7 @@ def _compute_merkle_root(segments: list[MerkleSegment]) -> str:
 
 
 class EvidenceRegistry:
-    def __init__(self):
+    def __init__(self, storage_dir=None):
         self._artifacts: dict[str, ArtifactReceipt] = {}
         self._findings: list[EvidenceFinding] = []
 

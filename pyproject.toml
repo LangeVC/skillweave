@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skillweave"
-version = "1.3.13"
+version = "1.3.11"
 description = "Multi-agent AI skill orchestration with Next Level features"
 readme = "README.md"
 authors = [
@@ -49,7 +49,7 @@ Issues = "https://github.com/LangeVC/skillweave/issues"
 skillweave-install = "skillweave.installer:main"
 skillweave-risk-mode = "skillweave.scripts.resolve_risk_mode:main"
 skillweave-interactive-mode = "skillweave.scripts.interactive_mode:main"
-skillweave = "skillweave.dispatch.cli:main"
+skillweave = "skillweave.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

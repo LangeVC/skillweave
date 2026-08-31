@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-design
 description: "Analyze design briefs, derive UX principles and design tokens, and evaluate implementation quality."
 argument-hint: command="[brief|lens|tokens|evaluate]" input="[design-brief-or-path]"
@@ -47,10 +49,14 @@ Dieser Skill ist die Analyse-Ebene für `frontend-design`. Empfohlenes Sequenz-M
 
 ## Usage
 
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
-/skillweave-design command="brief" input="[text-or-path]"
-/skillweave-design command="tokens" input="[spec-or-path]"
-/skillweave-design command="evaluate" input="[design-or-path]"
+skillweave-design command="brief" input="[text-or-path]"
+skillweave-design command="tokens" input="[spec-or-path]"
+skillweave-design command="evaluate" input="[design-or-path]"
 ```
 
 `input` akzeptiert Inline-Text oder Pfad zu `.md`/`.txt`/`.yaml`.

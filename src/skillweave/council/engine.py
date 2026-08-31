@@ -24,6 +24,22 @@ except Exception:  # pragma: no cover - defensive only; the adapter always ships
     COUNCIL_PROFILE_VERSION = "unknown"
 
 
+def seat_label(index: int) -> str:
+    """Generate dynamic seat label for a 0-based seat index.
+
+    0 -> 'A', 8 -> 'I', 25 -> 'Z', 26 -> 'AA', 27 -> 'AB', etc.
+    Negative indices return '?'.
+    """
+    if index < 0:
+        return "?"
+    label = ""
+    index += 1
+    while index > 0:
+        index, remainder = divmod(index - 1, 26)
+        label = chr(65 + remainder) + label
+    return label
+
+
 @dataclass
 class ModelResponse:
     model_id: str                                 # requested seat (provider-native)
@@ -201,12 +217,11 @@ class CouncilEngine:
 
     async def _stage1_opinions(self, query: str, config: CouncilConfig, search_ctx: str = "") -> list[ModelResponse]:
         """Run all models in parallel via asyncio.gather. Failed models gracefully skipped."""
-        LABELS = "ABCDEFGH"
-        
         async def query_one(model_id: str) -> ModelResponse:
             t0 = time.monotonic()
             try:
-                label = LABELS[config.models.index(model_id)] if model_id in config.models else "?"
+                seat_idx = config.models.index(model_id) if model_id in config.models else -1
+                label = seat_label(seat_idx)
                 prompt = _stage1_prompt(query, label, search_ctx, len(config.models))
                 messages = [{"role": "user", "content": prompt}]
                 response = await asyncio.wait_for(
@@ -274,14 +289,13 @@ class CouncilEngine:
 
     async def _stage2_review(self, query: str, responses: list[ModelResponse], config: CouncilConfig, search_ctx: str = "") -> list[Ranking]:
         """Each model reviews all responses (anonymized)."""
-        LABELS = "ABCDEFGH"
         anonymized = {}
         label_map = {}
         answering_map = {}
         labels_used = []
         for i, r in enumerate(responses):
             if r.response and not r.error:
-                label = LABELS[i]
+                label = seat_label(i)
                 anonymized[label] = r.response
                 label_map[label] = r.model_id
                 answering_map[label] = r.answering_model or r.model_id
@@ -327,10 +341,10 @@ class CouncilEngine:
         
         # Build context: all responses + rankings + search
         responses_text = ""
-        LABELS = "ABCDEFGH"
         for i, r in enumerate(stage1):
             if r.response and not r.error:
-                responses_text += f"\n### Response {LABELS[i]} (from model {LABELS[i]})\n{r.response}\n"
+                lbl = seat_label(i)
+                responses_text += f"\n### Response {lbl} (from model {lbl})\n{r.response}\n"
 
         rankings_text = ""
         for rank in stage2:
@@ -366,8 +380,7 @@ class CouncilEngine:
             )
 
     def _build_label_map(self, models: list[str]) -> dict[str, str]:
-        LABELS = "ABCDEFGH"
-        return {LABELS[i]: m for i, m in enumerate(models) if i < len(LABELS)}
+        return {seat_label(i): m for i, m in enumerate(models)}
 
     def _compute_aggregate_rankings(self, rankings: list[Ranking]) -> dict[str, float]:
         """Average rank across all peer evaluations. Lower = better."""
@@ -485,6 +498,7 @@ Be balanced, fair, and cite which models made which points.{format_instr}"""
 def _parse_rankings(raw_text: str, labels: list[str]) -> dict[str, int]:
     """Parse rankings from JSON (preferred) or FINAL RANKING fallback format."""
     rankings = {}
+    labels_upper = {lbl.upper(): lbl for lbl in labels}
 
     # Try JSON first (structured format)
     try:
@@ -493,19 +507,24 @@ def _parse_rankings(raw_text: str, labels: list[str]) -> dict[str, int]:
             data = json.loads(text)
             if "rankings" in data:
                 for entry in data["rankings"]:
-                    label = entry.get("label", "")
+                    raw_label = str(entry.get("label", ""))
                     rank = entry.get("rank", 0)
-                    if label in labels and isinstance(rank, int):
-                        rankings[label] = rank
+                    matched = labels_upper.get(raw_label.upper())
+                    if matched and isinstance(rank, int):
+                        rankings[matched] = rank
                 if rankings:
                     return rankings
     except (json.JSONDecodeError, KeyError, TypeError):
         pass
 
     # Fallback: parse FINAL RANKING text format
-    pattern = r'(\d+)\.\s*Response\s*([A-H])'
+    pattern = r'(\d+)\.\s*Response\s*([A-Za-z0-9]+)'
     matches = re.findall(pattern, raw_text, re.IGNORECASE)
-    for rank_str, label in matches:
-        if label in labels:
-            rankings[label] = int(rank_str)
+    for rank_str, raw_label in matches:
+        matched = labels_upper.get(raw_label.upper())
+        if matched:
+            try:
+                rankings[matched] = int(rank_str)
+            except ValueError:
+                pass
     return rankings

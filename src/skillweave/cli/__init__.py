@@ -5,7 +5,7 @@ Command-line interface utilities for SkillWeave.
 
 import argparse
 from typing import Optional
-from .risk_mode_resolver import RiskModeResolver, RiskMode, get_effective_risk_mode
+from skillweave.risk_mode_resolver import RiskModeResolver, RiskMode, get_effective_risk_mode
 
 
 def add_risk_mode_argument(parser: argparse.ArgumentParser) -> None:

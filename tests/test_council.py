@@ -205,14 +205,16 @@ class TestCouncilEngine:
         label_map = engine._build_label_map(["x", "y", "z"])
         assert label_map == {"A": "x", "B": "y", "C": "z"}
 
-    def test_build_label_map_overflow(self):
-        from skillweave.council.engine import CouncilEngine, CouncilConfig
+    def test_build_label_map_dynamic(self):
+        from skillweave.council.engine import CouncilEngine
         provider = MockProvider()
         engine = CouncilEngine(provider)
         long_models = [f"m{i}" for i in range(20)]
         label_map = engine._build_label_map(long_models)
-        assert len(label_map) == 8  # only A-H labels
-        assert "I" not in label_map
+        assert len(label_map) == 20
+        assert label_map["A"] == "m0"
+        assert label_map["I"] == "m8"
+        assert label_map["T"] == "m19"
 
     def test_deliberate_with_searcher(self):
         from skillweave.council.engine import CouncilEngine, CouncilConfig

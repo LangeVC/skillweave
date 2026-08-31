@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-releasechain
 description: "Validate, version, package, sign, and publish immutable release artifacts through binary release gates."
 argument-hint: inputs="[JSON with prd/tasks]" target="[humanize/machinize/mixed]" mode="[simple/manual/attended/overnight]" risk_mode="[conservative/medium/unicorn]"
@@ -8,9 +10,9 @@ argument-hint: inputs="[JSON with prd/tasks]" target="[humanize/machinize/mixed]
 
 **Validate, version, package, sign, and publish immutable release artifacts.**
 
-ReleaseChain receives completed build outputs from `/skillweave-promptchain-execute` and produces publishable, verifiable release artifacts. It validates readiness, bumps versions, generates changelogs, packages distributions, signs artifacts, and gates each step on binary pass/fail checks.
+ReleaseChain receives completed build outputs from `skillweave-promptchain-execute` and produces publishable, verifiable release artifacts. It validates readiness, bumps versions, generates changelogs, packages distributions, signs artifacts, and gates each step on binary pass/fail checks.
 
-Execution (Ralph Loop, lane scheduling, batch planning) belongs to `/skillweave-promptchain-execute`. Deployment and go-live belong to `/skillweave-launch`.
+Execution (Ralph Loop, lane scheduling, batch planning) belongs to `skillweave-promptchain-execute`. Deployment and go-live belong to `skillweave-launch`.
 
 ## Mandatory Pre-Flight: SkillWeave Sandboxing
 
@@ -43,9 +45,14 @@ modular_templates: true
 
 Proceed with core skill logic only AFTER these four criteria are met.
 
-**Usage:**
+## Usage
+
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
-/skillweave-releasechain inputs="[JSON with prd/tasks]" target="[humanize/machinize/mixed]" mode="[manual/attended/overnight]"
+skillweave-releasechain inputs="[JSON with prd/tasks]" target="[humanize/machinize/mixed]" mode="[manual/attended/overnight]"
 ```
 
 **Parameters:**
@@ -58,7 +65,7 @@ Proceed with core skill logic only AFTER these four criteria are met.
 - `completion_promise` (optional): Completion promise format (default: SkillWeave standard)
 - `auto_confirm` (optional): Automatically confirm safe operations (default: false)
 
-**Skill Boundaries:** This skill handles the Release lifecycle phase (order 5). It receives completed build outputs from `/skillweave-promptchain-execute` and produces immutable release artifacts. It does NOT execute build tasks, manage Ralph Loops, or deploy to environments. See `.skillweave/release/skill-boundaries.yaml`.
+**Skill Boundaries:** This skill handles the Release lifecycle phase (order 5). It receives completed build outputs from `skillweave-promptchain-execute` and produces immutable release artifacts. It does NOT execute build tasks, manage Ralph Loops, or deploy to environments. See `.skillweave/release/skill-boundaries.yaml`.
 
 ## Next Level Features
 
@@ -321,13 +328,13 @@ Release titles must be exactly `SkillWeave vX.Y.Z` — no additional text. Regex
 
 ## Workflow with Execute and Launch
 
-ReleaseChain receives completed build outputs from `/skillweave-promptchain-execute` and produces immutable release artifacts.
+ReleaseChain receives completed build outputs from `skillweave-promptchain-execute` and produces immutable release artifacts.
 
 | Phase | Skill | Responsibility |
 |-------|-------|---------------|
-| Build / Execute | `/skillweave-promptchain-execute` | Lane scheduling, Ralph Loop, batch execution |
-| Release | `/skillweave-releasechain` | Validate, version, package, sign, publish |
-| Launch | `/skillweave-launch` | Deploy artifact, communicate, observe go-live |
+| Build / Execute | `skillweave-promptchain-execute` | Lane scheduling, Ralph Loop, batch execution |
+| Release | `skillweave-releasechain` | Validate, version, package, sign, publish |
+| Launch | `skillweave-launch` | Deploy artifact, communicate, observe go-live |
 
 ## Safety Features
 

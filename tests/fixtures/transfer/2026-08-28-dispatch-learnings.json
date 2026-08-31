@@ -7,14 +7,14 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "learning-traceability.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
         },
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
           "source_name": "2026-08-28 final-gate execution-state.json",
           "sensitivity": "restricted",
           "evidence_id": "ev-execution-state"
@@ -48,14 +48,14 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "learning-traceability.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
         },
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
           "source_name": "2026-08-28 final-gate execution-state.json",
           "sensitivity": "restricted",
           "evidence_id": "ev-execution-state"
@@ -88,7 +88,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "learning-traceability.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -119,7 +119,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "2026-08-28-antigravity-vs-skillweave-harness.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -155,7 +155,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "2026-08-28-skillweave-138-fixes.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -188,7 +188,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "2026-08-28-model-diversity-granularity.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -230,7 +230,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "2026-08-28-dispatch-workflow.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -258,7 +258,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "2026-08-28-skillweave-dispatch-workflow.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -292,14 +292,14 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
           "source_name": "final-controller-gate.md",
           "sensitivity": "restricted",
           "evidence_id": "ev-final-controller-gate"
         },
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
           "source_name": "2026-08-28 final-gate execution-state.json",
           "sensitivity": "restricted",
           "evidence_id": "ev-execution-state"
@@ -330,7 +330,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
           "source_name": "final-controller-gate.md",
           "sensitivity": "restricted",
           "evidence_id": "ev-final-controller-gate"
@@ -365,7 +365,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "2026-08-28-methodology-gauntlet-ralph-loop.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -397,7 +397,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/prds/skillweave-1.3.11-1.3.12-dispatch-lifecycle-acceleration/learning-traceability.md",
-          "sha256": "fb68bac7879acf68438cfaae90b2509d3cfcebcd95467c4bd1db52fca9bc7124",
+          "sha256": "0af2e8ab7bff29c5d045cd66fc4215f1e7d70ede43deae564b71df48d7a1a22f",
           "source_name": "learning-traceability.md",
           "sensitivity": "internal",
           "evidence_id": "ev-learning-traceability"
@@ -425,14 +425,14 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
           "source_name": "final-controller-gate.md",
           "sensitivity": "restricted",
           "evidence_id": "ev-final-controller-gate"
         },
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
           "source_name": "2026-08-28 final-gate execution-state.json",
           "sensitivity": "restricted",
           "evidence_id": "ev-execution-state"
@@ -467,7 +467,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
           "source_name": "2026-08-28 final-gate execution-state.json",
           "sensitivity": "restricted",
           "evidence_id": "ev-execution-state"
@@ -504,7 +504,7 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
           "source_name": "final-controller-gate.md",
           "sensitivity": "restricted",
           "evidence_id": "ev-final-controller-gate"
@@ -540,14 +540,14 @@
       "provenance_artifacts": [
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/execution-state.json",
-          "sha256": "8fc13dcd61b9e59c7daf7a6781d108686f200c2c77be06180c130fd0d537861a",
+          "sha256": "3506dbef16c41a57d0be0c33cc720188dc3f4ae41ea908e6ef90da5bd59f375b",
           "source_name": "2026-08-28 final-gate execution-state.json",
           "sensitivity": "restricted",
           "evidence_id": "ev-execution-state"
         },
         {
           "artifact_path": ".skillweave/tracking-log/sw138-gate-remediation/final-controller-gate.md",
-          "sha256": "a9c9d87f5afe769e9e8795edfcef391d96aac8974345835599cf495a607ffc30",
+          "sha256": "bbea9189aa9c9a058fc69aae398b01a0afb5b2a9fff11709ba09bcfe50d33a25",
           "source_name": "final-controller-gate.md",
           "sensitivity": "restricted",
           "evidence_id": "ev-final-controller-gate"
