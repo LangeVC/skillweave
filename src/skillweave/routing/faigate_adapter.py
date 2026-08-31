@@ -393,35 +393,116 @@ def parse_model_info(entry: dict | str | ModelInfo, provider: str = "faigate") -
     )
 
 
+def is_substitution(
+    requested_model: str,
+    served_by: Optional[str] = None,
+    answering_model: Optional[str] = None,
+    provider: str = "faigate",
+) -> bool:
+    """Compare requested model ID with serving/answering model ID to flag substitutions.
+
+    Implements Anti-Masking fallback detection: when a gateway transparently or
+    silently falls back to another model (e.g. routing Claude to DeepSeek or Gemini
+    to GPT), this checks whether the requested model matches the actual model that
+    served the response.
+
+    Returns:
+        bool: True if a substitution occurred, False otherwise.
+    """
+    actual = served_by or answering_model
+    if not actual or not requested_model:
+        return False
+
+    # Direct match
+    if actual == requested_model:
+        return False
+
+    # Check translated provider-native forms (e.g. stripping gateway namespace or mapping aliases)
+    try:
+        clean_requested = translate_model_id(requested_model, provider)
+    except Exception:
+        clean_requested = requested_model
+
+    try:
+        clean_actual = translate_model_id(actual, provider)
+    except Exception:
+        clean_actual = actual
+
+    if actual == clean_requested or clean_actual == requested_model or clean_actual == clean_requested:
+        return False
+
+    return True
+
+
+detect_substitution = is_substitution
+
+
 class AttributedResponse(str):
-    """A ``str`` that also carries which model actually answered.
+    """A ``str`` that also carries which model actually answered and served.
 
     The council engine reads ``query()`` as a plain string, so this stays a
     real ``str`` subclass — f-strings, truthiness and slicing all behave like
-    ``str``. It adds ``requested_model``, ``answering_model`` and ``provider``
-    so the run record can see, per seat: which model was requested, which one
-    actually answered, and through which provider.
+    ``str``. It adds ``requested_model``, ``answering_model``, ``served_by``,
+    ``substituted`` / ``is_substituted`` and ``provider`` so the run record can see,
+    per seat: which model was requested, which one actually answered, which one
+    served it, whether identity enforcement flagged a substitution (Anti-Masking
+    fallback detection), and through which provider.
 
-    The provider decides nothing about whether the two differ. That judgement
-    belongs to the council; the transport just returns what came back.
+    Attributes:
+        requested_model: The model identifier requested by the caller.
+        answering_model: The model reported in the response envelope's ``model`` field.
+        served_by: The underlying model that actually served the completion.
+        substituted: Boolean flag indicating if substitution / fallback occurred.
+        is_substituted: Alias for ``substituted``.
+        provider: The provider / transport name.
     """
 
-    def __new__(cls, content: str, *, requested_model: str, answering_model: str, provider: str = "unknown") -> "AttributedResponse":
+    def __new__(
+        cls,
+        content: str,
+        *,
+        requested_model: str,
+        answering_model: str,
+        provider: str = "unknown",
+        served_by: Optional[str] = None,
+        is_substituted: Optional[bool] = None,
+        substituted: Optional[bool] = None,
+    ) -> "AttributedResponse":
         obj = super().__new__(cls, content)
         obj.requested_model = requested_model
         obj.answering_model = answering_model
         obj.provider = provider
+        actual_served_by = served_by if served_by is not None else answering_model
+        obj.served_by = actual_served_by
+
+        if is_substituted is not None:
+            flag = bool(is_substituted)
+        elif substituted is not None:
+            flag = bool(substituted)
+        else:
+            flag = is_substitution(
+                requested_model=requested_model,
+                served_by=actual_served_by,
+                answering_model=answering_model,
+                provider=provider,
+            )
+        obj.is_substituted = flag
+        obj.substituted = flag
         return obj
 
 
 def _extract_answer(envelope: dict, requested_model: str, provider: str = "unknown") -> AttributedResponse:
-    """Read the answer content and the actual answering model from a response.
+    """Read the answer content, actual answering model, and served_by from a response.
 
     ``answering_model`` is read from the envelope's ``model`` field, never
     inferred from the request. When a router omits the field, we fall back to
     the requested model and keep the record cheap — but we never fabricate a
-    model that did not answer. ``provider`` names the transport that produced
-    the envelope, and is carried verbatim (not guessed from the request).
+    model that did not answer.
+
+    ``served_by`` is parsed from the Faigate response envelope (or metadata/headers)
+    to detect gateway-level fallback and silent model masking (Anti-Masking fallback detection).
+
+    ``provider`` names the transport that produced the envelope, and is carried verbatim.
     """
     content = envelope["choices"][0]["message"]["content"]
     if not content:
@@ -430,11 +511,28 @@ def _extract_answer(envelope: dict, requested_model: str, provider: str = "unkno
         # than one per provider, because four copies is how one of them drifts.
         raise RuntimeError("model returned an empty completion")
     answering_model = envelope.get("model") or requested_model
+    headers = envelope.get("headers") if isinstance(envelope.get("headers"), dict) else {}
+    served_by = (
+        envelope.get("served_by")
+        or envelope.get("x_faigate_served_by")
+        or headers.get("x-faigate-served-by")
+        or headers.get("x-served-by")
+        or answering_model
+    )
+    sub = is_substitution(
+        requested_model=requested_model,
+        served_by=served_by,
+        answering_model=answering_model,
+        provider=provider,
+    )
     return AttributedResponse(
         content,
         requested_model=requested_model,
         answering_model=answering_model,
         provider=provider,
+        served_by=served_by,
+        is_substituted=sub,
+        substituted=sub,
     )
 
 
@@ -705,7 +803,12 @@ class FaigateProvider(CouncilProvider):
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read())
+                result = json.loads(resp.read())
+                if isinstance(result, dict) and "served_by" not in result:
+                    served_by_header = resp.headers.get("X-Faigate-Served-By") or resp.headers.get("X-Served-By")
+                    if served_by_header:
+                        result["served_by"] = served_by_header
+                return result
         except urllib.error.HTTPError as e:
             error_body = ""
             try:
