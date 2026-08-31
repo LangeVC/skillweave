@@ -16,7 +16,7 @@ This skill handles what comes after a release goes live. It:
 - **Owns feedback synthesis** — categorizing and prioritizing community and system feedback
 - **Owns iteration planning** — producing prioritized backlogs from retro + feedback
 
-This skill does NOT implement a second health or monitoring subsystem. All observability data comes from `/skillweave-observe`.
+This skill does NOT implement a second health or monitoring subsystem. All observability data comes from `skillweave-observe`.
 
 ## Retro-Vorlage
 
@@ -43,9 +43,9 @@ Action Items use P1 (blocker), P2 (next iteration), P3 (backlog) priority.
 ## Observe Integration
 
 - `command="retrospective"` kann einen observe-report einbetten:
-  `/skillweave-observe command="report" session="<id>"` liefert Rohdaten
+  `skillweave-observe command="report" session="<id>"` liefert Rohdaten
   für die Retro-Diskussion (Timings, Fehler, Bottlenecks).
-- Feedback wird mit Memory-Daten angereichert: `/skillweave-observe command="memory" session="<id>"`
+- Feedback wird mit Memory-Daten angereichert: `skillweave-observe command="memory" session="<id>"`
   liefert decisions/gotchas aus dem Release-Session-Kontext.
 
 ## Commands

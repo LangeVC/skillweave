@@ -39,9 +39,14 @@ modular_templates: true
 
 Proceed with core skill logic only AFTER these four criteria are met.
 
-**Usage:**
+## Usage
+
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
-/skillweave-promptchain-validate sequence="[prompt sequence text]"
+skillweave-promptchain-validate sequence="[prompt sequence text]"
 ```
 **Or attach a .md or .txt file** containing the prompt sequence.
 
@@ -56,13 +61,13 @@ Proceed with core skill logic only AFTER these four criteria are met.
 
 **With inline sequence:**
 ```
-/skillweave-promptchain-validate sequence="[paste sequence here]"
+skillweave-promptchain-validate sequence="[paste sequence here]"
 ```
 
 **With attached file:**
 Attach `sequence.md` or `sequence.txt` and use:
 ```
-/skillweave-promptchain-validate
+skillweave-promptchain-validate
 ```
 
 **Example Validation Interaction:**
