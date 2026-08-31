@@ -7,12 +7,7 @@ direct bypass.
 
 from typing import Any, Optional, Sequence
 
-# We import the internal run application service, but we don't expose its dependencies.
-from skillweave.runsvc import RunApplicationService, RunExecution
-from skillweave.runtime.store import SQLiteRunStore
-from skillweave.runtime.journal import EventJournal
-from skillweave.runtime.registry import RawArtifactStore
-
+# We import the internal run application service inside the function to avoid top-level optional dependency.
 
 def execute_run(
     command: Sequence[str],
@@ -24,12 +19,17 @@ def execute_run(
     subject_commit: str,
     created_at: Optional[str] = None,
     check_output: Optional[Any] = None,
-) -> RunExecution:
+) -> "RunExecution":
     """Execute a run through the authoritative six-stage integration path.
     
     This stable API entry point encapsulates the underlying SQLiteRunStore, EventJournal,
     and RawArtifactStore so that callers cannot bypass the RunApplicationService.
     """
+    from skillweave.runsvc import RunApplicationService
+    from skillweave.runtime.store import SQLiteRunStore
+    from skillweave.runtime.journal import EventJournal
+    from skillweave.runtime.registry import RawArtifactStore
+    
     store = SQLiteRunStore()
     journal = EventJournal()
     raw_artifacts = RawArtifactStore()

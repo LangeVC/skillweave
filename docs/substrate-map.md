@@ -236,3 +236,76 @@ Phase 7: Post-Rel   ──► .skillweave/cleanup/, archive/, reports/
 ### Cross-Cutting Substrates (Active in All Phases):
 - **Configuration & Phasing**: `.skillweave/config.yaml`, `phases.yaml`, `bundles.yaml`, `onboarding-state.yaml`
 - **Knowledge & Memory**: `.skillweave/memory/`, `manifesto/`, `handover/`, `hooks/`, `lib/`
+
+---
+
+## 5. Supplementary & Workspace Substrate Areas
+
+The following areas under `.skillweave/` represent supplementary runtime artifacts, project-local extensions, and caching structures:
+
+### 5.1 `bundles/`
+- **Owner**: `skillweave-lifecycle`
+- **Lifecycle**: Global / Setup
+- **Role**: Directory containing unpacked or project-specific lifecycle bundle definition overrides and custom bundle manifests.
+- **Key Artifacts**: Custom bundle configuration files and descriptors.
+
+### 5.2 `docs/`
+- **Owner**: `skillweave-lifecycle` / Documentation Subsystem
+- **Lifecycle**: Global / Setup
+- **Role**: Project-level substrate documentation, onboarding guidelines, and reference materials.
+- **Key Artifacts**: `getting-started.md`, architecture summaries.
+
+### 5.3 `observation/`
+- **Owner**: `skillweave-observe`
+- **Lifecycle**: Build (Phase 4) / Observability
+- **Role**: Active telemetry collection, structured event streaming logs, and execution metric traces.
+- **Key Artifacts**: `events/*.jsonl`, streaming traces.
+
+### 5.4 `phases/`
+- **Owner**: `skillweave-lifecycle`
+- **Lifecycle**: Global / Setup
+- **Role**: Directory containing custom, domain-specific phase definition schemas and extension manifests.
+- **Key Artifacts**: Extended phase descriptors and lifecycle transitions.
+
+### 5.5 `schemas/`
+- **Owner**: Core Runtime / `skillweave-promptchain-execute`
+- **Lifecycle**: Build (Phase 4), Release (Phase 5), Global
+- **Role**: JSON schema specifications and validation contracts ensuring phase gate conformance and artifact structural integrity.
+- **Key Artifacts**: `blueprint-ready.schema.json`, `build-complete.schema.json`, `deployed.schema.json`, `handover.schema.json`, `launch-ready.schema.json`.
+
+### 5.6 `testing/`
+- **Owner**: `skillweave-promptchain-execute` / Verification Subsystem
+- **Lifecycle**: Build (Phase 4) / Verification
+- **Role**: Automated verification configurations, temporary test execution workspaces, and gate validation results cache.
+- **Key Artifacts**: `test-config.yaml`, `results/`.
+
+### 5.7 `wizard/`
+- **Owner**: `skillweave-lifecycle` / CLI
+- **Lifecycle**: Setup / Inception
+- **Role**: Interactive onboarding wizard scaffolds, project initialization state, and guided setup workflows.
+- **Key Artifacts**: Wizard step state and scaffolding templates.
+
+---
+
+## 6. Core Subsystem & Runtime Architecture Layout (SW-140)
+
+SkillWeave core runtime and execution components are structured under `src/skillweave/`:
+
+### 6.1 `src/skillweave/api/`
+- **Owner**: Core Runtime / API Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Programmatic entry points and service interfaces exposing execution capabilities, pipeline triggers, and lifecycle operations.
+- **Key Artifacts**: `api/run.py`, `api/__init__.py`.
+
+### 6.2 `src/skillweave/cli/`
+- **Owner**: Core Runtime / CLI Subsystem
+- **Lifecycle**: Cross-Cutting / Tooling
+- **Role**: Command-line interface orchestration, argument parsing, interactive terminal commands, and command routing.
+- **Key Artifacts**: `cli/main.py`, `cli/run.py`, `cli/__init__.py`.
+
+### 6.3 `src/skillweave/core/proc/`
+- **Owner**: Core Runtime / Process Subsystem
+- **Lifecycle**: Build (Phase 4) / Execution
+- **Role**: Low-level process execution management, async subprocess runners, isolation boundaries, and streaming process output capture.
+- **Key Artifacts**: `core/proc/runner.py`, `core/proc/__init__.py`.
+

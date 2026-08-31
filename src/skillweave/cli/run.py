@@ -10,10 +10,6 @@ import json
 import sys
 from typing import Optional, Sequence
 
-from skillweave.runtime.store import SQLiteRunStore
-from skillweave.runtime.journal import EventJournal
-from skillweave.runtime.registry import RawArtifactStore
-from skillweave.runsvc.service import RunApplicationService
 from skillweave.dispatch.application import generate_run_id
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,6 +65,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if not command:
         parser.error("A command to run is required.")
+
+    from skillweave.runtime.store import SQLiteRunStore
+    from skillweave.runtime.journal import EventJournal
+    from skillweave.runtime.registry import RawArtifactStore
+    from skillweave.runsvc.service import RunApplicationService
 
     store = SQLiteRunStore(args.db_path)
     journal = EventJournal(args.db_path)
