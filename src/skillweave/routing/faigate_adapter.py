@@ -23,8 +23,9 @@ import os
 import urllib.request
 import urllib.error
 import socket
-from dataclasses import dataclass
-from typing import Optional
+import time
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
 
 #: The gateway namespace the dispatch layer qualifies model ids with. Council
@@ -165,15 +166,231 @@ def _describe_error(exc: Exception, url: str) -> str:
     return f"{exc} (at {url})"
 
 
+DEFAULT_CACHE_TTL = 300.0  # 5 minutes default TTL for gateway model cache
+ 
+ 
 @dataclass
 class ModelInfo:
     id: str
     name: str
-    provider: str
-    available: bool
+    provider: str = "faigate"
+    available: bool = True
     credits_remaining: float = -1.0
     context_window: int = 128000
     cost_per_1k: float = 0.0
+    cost: float = 0.0
+    reasoning: bool = False
+    capabilities: list[str] = field(default_factory=list)
+    raw: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.cost == 0.0 and self.cost_per_1k != 0.0:
+            self.cost = self.cost_per_1k
+        elif self.cost_per_1k == 0.0 and self.cost != 0.0:
+            self.cost_per_1k = self.cost
+        if "reasoning" in self.capabilities and not self.reasoning:
+            self.reasoning = True
+        elif self.reasoning and "reasoning" not in self.capabilities:
+            self.capabilities.append("reasoning")
+
+    def has_capability(self, capability: str) -> bool:
+        cap_low = capability.lower().strip()
+        if cap_low == "reasoning" and self.reasoning:
+            return True
+        return cap_low in [c.lower() for c in self.capabilities]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "provider": self.provider,
+            "available": self.available,
+            "credits_remaining": self.credits_remaining,
+            "context_window": self.context_window,
+            "cost_per_1k": self.cost_per_1k,
+            "cost": self.cost,
+            "reasoning": self.reasoning,
+            "capabilities": list(self.capabilities),
+            "raw": dict(self.raw),
+        }
+
+
+def parse_model_info(entry: dict | str | ModelInfo, provider: str = "faigate") -> ModelInfo:
+    """Parse raw gateway model entry into a ModelInfo instance with parsed capabilities."""
+    if isinstance(entry, ModelInfo):
+        return entry
+
+    if isinstance(entry, str):
+        mid = entry.strip()
+        caps: set[str] = set()
+        id_lower = mid.lower()
+        if (
+            "reason" in id_lower
+            or "-r1" in id_lower
+            or "r1-" in id_lower
+            or id_lower.endswith("r1")
+            or "o1" in id_lower
+            or "o3" in id_lower
+        ):
+            caps.add("reasoning")
+        if "vision" in id_lower or "4o" in id_lower or "vl" in id_lower:
+            caps.add("vision")
+        if "coder" in id_lower or "code" in id_lower:
+            caps.add("coding")
+        return ModelInfo(
+            id=mid,
+            name=mid,
+            provider=provider,
+            available=True,
+            context_window=128000,
+            cost_per_1k=0.0,
+            cost=0.0,
+            reasoning=("reasoning" in caps),
+            capabilities=sorted(list(caps)),
+            raw={"id": mid},
+        )
+
+    if not isinstance(entry, dict):
+        mid = str(entry)
+        return ModelInfo(
+            id=mid,
+            name=mid,
+            provider=provider,
+            available=True,
+            capabilities=[],
+            raw={},
+        )
+
+    mid = str(entry.get("id") or "")
+    name = str(entry.get("name") or mid)
+    available = bool(entry.get("available", True))
+    try:
+        credits_remaining = float(entry.get("credits_remaining", -1.0))
+    except (ValueError, TypeError):
+        credits_remaining = -1.0
+
+    context_window = 128000
+    for cw_key in ("context_window", "context_length", "max_context_length", "max_tokens"):
+        val = entry.get(cw_key)
+        if val is not None:
+            try:
+                context_window = int(val)
+                break
+            except (ValueError, TypeError):
+                pass
+    if context_window == 128000 and isinstance(entry.get("top_provider"), dict):
+        top = entry["top_provider"]
+        for cw_key in ("context_length", "max_completion_tokens"):
+            val = top.get(cw_key)
+            if val is not None:
+                try:
+                    context_window = int(val)
+                    break
+                except (ValueError, TypeError):
+                    pass
+
+    cost = 0.0
+    for cost_key in ("cost", "cost_per_1k"):
+        val = entry.get(cost_key)
+        if val is not None:
+            try:
+                cost = float(val)
+                break
+            except (ValueError, TypeError):
+                pass
+    if cost == 0.0 and "pricing" in entry:
+        pricing = entry["pricing"]
+        if isinstance(pricing, dict):
+            try:
+                prompt_p = float(pricing.get("prompt") or 0.0)
+                cost = prompt_p
+            except (ValueError, TypeError):
+                pass
+        else:
+            try:
+                cost = float(pricing)
+            except (ValueError, TypeError):
+                pass
+
+    caps: set[str] = set()
+    raw_caps = entry.get("capabilities")
+    if isinstance(raw_caps, list):
+        for c in raw_caps:
+            if isinstance(c, str) and c.strip():
+                caps.add(c.lower().strip())
+    elif isinstance(raw_caps, dict):
+        for k, v in raw_caps.items():
+            if v:
+                caps.add(str(k).lower().strip())
+    elif isinstance(raw_caps, str):
+        for part in raw_caps.split(","):
+            if part.strip():
+                caps.add(part.lower().strip())
+
+    supp_params = entry.get("supported_parameters")
+    if isinstance(supp_params, list):
+        for sp in supp_params:
+            if isinstance(sp, str) and sp.strip():
+                caps.add(sp.lower().strip())
+
+    flags = entry.get("flags")
+    if isinstance(flags, list):
+        for f in flags:
+            if isinstance(f, str) and f.strip():
+                caps.add(f.lower().strip())
+
+    arch = entry.get("architecture")
+    if isinstance(arch, dict):
+        inst_type = str(arch.get("instruct_type") or "").lower().strip()
+        if inst_type:
+            caps.add(inst_type)
+        modality = str(arch.get("modality") or "").lower().strip()
+        if "image" in modality or "vision" in modality:
+            caps.add("vision")
+
+    if entry.get("reasoning") or entry.get("is_reasoning"):
+        caps.add("reasoning")
+
+    id_lower = mid.lower()
+    name_lower = name.lower()
+    desc_lower = str(entry.get("description") or "").lower()
+
+    if (
+        "reason" in id_lower
+        or "-r1" in id_lower
+        or "r1-" in id_lower
+        or id_lower.endswith("r1")
+        or "o1" in id_lower
+        or "o3" in id_lower
+        or "reasoning" in desc_lower
+        or "thinking" in desc_lower
+    ):
+        caps.add("reasoning")
+
+    if "vision" in id_lower or "4o" in id_lower or "vl" in id_lower or "vision" in desc_lower:
+        caps.add("vision")
+
+    if "coder" in id_lower or "code" in id_lower or "coding" in desc_lower or "coder" in name_lower:
+        caps.add("coding")
+
+    if "tool" in desc_lower or "tools" in id_lower:
+        caps.add("tools")
+
+    reasoning = ("reasoning" in caps)
+
+    return ModelInfo(
+        id=mid,
+        name=name,
+        provider=provider,
+        available=available,
+        credits_remaining=credits_remaining,
+        context_window=context_window,
+        cost_per_1k=cost,
+        cost=cost,
+        reasoning=reasoning,
+        capabilities=sorted(list(caps)),
+        raw=entry,
+    )
 
 
 class AttributedResponse(str):
@@ -268,7 +485,12 @@ _PROVIDER_MODEL_MAPS = {
 }
 
 class CouncilProvider:
-    """Abstract base: all providers implement query + availability."""
+    """Abstract base: all providers implement query + availability + model registry."""
+
+    def __init__(self):
+        self._models_cache: list[ModelInfo] = []
+        self._cache_timestamp: float = 0.0
+        self._cache_ttl: float = float(os.environ.get("FAIGATE_CACHE_TTL", DEFAULT_CACHE_TTL))
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         raise NotImplementedError
@@ -278,6 +500,34 @@ class CouncilProvider:
 
     async def check_credits(self, model: str) -> float:
         return -1.0
+
+    def _is_cache_valid(self) -> bool:
+        cache = getattr(self, "_models_cache", None)
+        ts = getattr(self, "_cache_timestamp", 0.0)
+        ttl = getattr(self, "_cache_ttl", DEFAULT_CACHE_TTL)
+        return bool(cache) and (time.time() - ts < ttl)
+
+    def clear_cache(self) -> None:
+        self._models_cache = []
+        self._cache_timestamp = 0.0
+
+    async def fetch_models(self, force_refresh: bool = False) -> list[ModelInfo]:
+        """Fetch available models and their capabilities from the provider (cached)."""
+        return []
+
+    async def get_model_info(self, model: str, force_refresh: bool = False) -> Optional[ModelInfo]:
+        """Get capabilities for a specific model."""
+        models = await self.fetch_models(force_refresh=force_refresh)
+        clean = translate_model_id(model, self.provider_name()) if model else model
+        for m in models:
+            if m.id == clean or m.id == model:
+                return m
+        return None
+
+    def get_available_models(self, force_refresh: bool = False) -> list[str]:
+        """Return model ids currently known to the provider."""
+        cache = getattr(self, "_models_cache", [])
+        return [m.id for m in cache if getattr(m, "available", True)]
 
     def provider_name(self) -> str:
         return "generic"
@@ -423,13 +673,16 @@ FAIGATE_DEFAULT_PORT = "8090"
 
 
 class FaigateProvider(CouncilProvider):
-    def __init__(self, base_url: str | None = None, api_key: str | None = None):
+    def __init__(self, base_url: str | None = None, api_key: str | None = None, cache_ttl: float | None = None):
+        super().__init__()
         self.base_url = (base_url or os.environ.get(
             "FAIGATE_BASE_URL",
             f"http://{os.environ.get('FAIGATE_HOST', FAIGATE_DEFAULT_HOST)}:"
             f"{os.environ.get('FAIGATE_PORT', FAIGATE_DEFAULT_PORT)}/v1"
         )).rstrip("/")
         self.api_key = api_key or os.environ.get("FAIGATE_API_KEY")
+        if cache_ttl is not None:
+            self._cache_ttl = cache_ttl
         # If no explicit key, try reading from ~/.config/faigate/tokens.json
         if not self.api_key:
             token_file = os.path.expanduser("~/.config/faigate/tokens.json")
@@ -467,8 +720,58 @@ class FaigateProvider(CouncilProvider):
         except Exception as e:
             return {"error": f"{str(e)} (at {url})"}
 
+    def _fetch_models_sync(self, force_refresh: bool = False) -> list[ModelInfo]:
+        """Fetch models synchronously from GET /models with caching."""
+        if not force_refresh and self._is_cache_valid():
+            return list(getattr(self, "_models_cache", []))
+
+        info = self._req("/models")
+        if info.get("error"):
+            cache = getattr(self, "_models_cache", [])
+            if cache:
+                return list(cache)
+            return []
+
+        model_list = info if isinstance(info, list) else info.get("data", [])
+        models: list[ModelInfo] = []
+        for entry in model_list:
+            if isinstance(entry, (dict, str)):
+                models.append(parse_model_info(entry, provider=self.provider_name()))
+
+        self._models_cache = models
+        self._cache_timestamp = time.time()
+        return list(models)
+
+    async def fetch_models(self, force_refresh: bool = False) -> list[ModelInfo]:
+        """Query gateway for available models and their capabilities (cached)."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: self._fetch_models_sync(force_refresh=force_refresh))
+
+    def get_available_models(self, force_refresh: bool = False) -> list[str]:
+        """Return list of available model ids."""
+        models = self._fetch_models_sync(force_refresh=force_refresh)
+        return [m.id for m in models if getattr(m, "available", True)]
+
+    async def get_model_info(self, model: str, force_refresh: bool = False) -> Optional[ModelInfo]:
+        """Return ModelInfo for a specific model id."""
+        clean = translate_model_id(model, self.provider_name())
+        models = await self.fetch_models(force_refresh=force_refresh)
+        for m in models:
+            if m.id == clean or m.id == model:
+                return m
+        return None
+
+    def get_model_capabilities(self, model: str, force_refresh: bool = False) -> Optional[ModelInfo]:
+        """Synchronously get ModelInfo with capabilities for a model id."""
+        clean = translate_model_id(model, self.provider_name())
+        models = self._fetch_models_sync(force_refresh=force_refresh)
+        for m in models:
+            if m.id == clean or m.id == model:
+                return m
+        return None
+
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
-        """Check model availability via Faigate GET /v1/models (single call).
+        """Check model availability via Faigate GET /v1/models (single call with caching).
 
         Each model id is translated exactly once before matching; a malformed
         prefix raises :class:`ModelNamespaceError` rather than being silently
@@ -478,20 +781,24 @@ class FaigateProvider(CouncilProvider):
         native = {}
         for m in models:
             native[m] = translate_model_id(m)
-        info = self._req("/models")
-        if info.get("error"):
-            return {m: True for m in models}  # fail open
 
-        # Faigate returns: {"object": "list", "data": [{"id": "...", ...}, ...]}
-        available_ids = set()
-        model_list = info if isinstance(info, list) else info.get("data", [])
-        for entry in model_list:
-            if isinstance(entry, dict):
-                mid = entry.get("id", "")
-                if mid:
-                    available_ids.add(mid)
-            elif isinstance(entry, str):
-                available_ids.add(entry)
+        loop = asyncio.get_event_loop()
+        model_infos = await loop.run_in_executor(None, lambda: self._fetch_models_sync())
+        if not model_infos:
+            info = self._req("/models")
+            if info.get("error"):
+                return {m: True for m in models}  # fail open
+            model_list = info if isinstance(info, list) else info.get("data", [])
+            available_ids = set()
+            for entry in model_list:
+                if isinstance(entry, dict):
+                    mid = entry.get("id", "")
+                    if mid:
+                        available_ids.add(mid)
+                elif isinstance(entry, str):
+                    available_ids.add(entry)
+        else:
+            available_ids = {info.id for info in model_infos if getattr(info, "available", True)}
 
         result = {}
         for m, clean in native.items():
@@ -523,9 +830,12 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 
 class OpenRouterProvider(CouncilProvider):
-    def __init__(self, base_url: str | None = None, api_key: str | None = None):
+    def __init__(self, base_url: str | None = None, api_key: str | None = None, cache_ttl: float | None = None):
+        super().__init__()
         self.base_url = (base_url or OPENROUTER_BASE).rstrip("/")
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
+        if cache_ttl is not None:
+            self._cache_ttl = cache_ttl
         if self.api_key is None:
             raise ValueError("OPENROUTER_API_KEY not set")
 
@@ -548,6 +858,31 @@ class OpenRouterProvider(CouncilProvider):
         except Exception as e:
             return {"error": _describe_error(e, url)}
 
+    def _fetch_models_sync(self, force_refresh: bool = False) -> list[ModelInfo]:
+        if not force_refresh and self._is_cache_valid():
+            return list(getattr(self, "_models_cache", []))
+        result = self._req("/models", method="GET")
+        if result.get("error"):
+            cache = getattr(self, "_models_cache", [])
+            if cache:
+                return list(cache)
+            return []
+        model_list = result.get("data", [])
+        models: list[ModelInfo] = []
+        for entry in model_list:
+            if isinstance(entry, (dict, str)):
+                models.append(parse_model_info(entry, provider=self.provider_name()))
+        self._models_cache = models
+        self._cache_timestamp = time.time()
+        return list(models)
+
+    async def fetch_models(self, force_refresh: bool = False) -> list[ModelInfo]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: self._fetch_models_sync(force_refresh=force_refresh))
+
+    def get_available_models(self, force_refresh: bool = False) -> list[str]:
+        models = self._fetch_models_sync(force_refresh=force_refresh)
+        return [m.id for m in models if getattr(m, "available", True)]
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         clean_model = translate_model_id(model, "openrouter")
@@ -560,14 +895,17 @@ class OpenRouterProvider(CouncilProvider):
         return _extract_answer(result, model, self.provider_name())
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
-        """OpenRouter: check model availability via /models endpoint."""
+        """OpenRouter: check model availability via /models endpoint (cached)."""
         try:
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: self._req("/models", method="GET")
-            )
-            available_ids = {m.get("id", "") for m in result.get("data", [])}
+            model_infos = await self.fetch_models()
+            available_ids = {m.id for m in model_infos if getattr(m, "available", True)}
+            if not available_ids:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: self._req("/models", method="GET")
+                )
+                available_ids = {m.get("id", "") for m in result.get("data", [])}
             results = {}
             for m in models:
                 clean_m = translate_model_id(m, "openrouter")
@@ -585,9 +923,12 @@ class OpenRouterProvider(CouncilProvider):
 class GenericRouterProvider(CouncilProvider):
     """OpenAI-compatible router: works with any /v1 endpoint."""
 
-    def __init__(self, base_url: str, api_key: str | None = None):
+    def __init__(self, base_url: str, api_key: str | None = None, cache_ttl: float | None = None):
+        super().__init__()
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
+        if cache_ttl is not None:
+            self._cache_ttl = cache_ttl
 
     def _req(self, path: str, body: dict | None = None, method: str = "POST", timeout: float | None = None) -> dict:
         url = f"{self.base_url}{path}"
@@ -605,6 +946,31 @@ class GenericRouterProvider(CouncilProvider):
         except Exception as e:
             return {"error": _describe_error(e, url)}
 
+    def _fetch_models_sync(self, force_refresh: bool = False) -> list[ModelInfo]:
+        if not force_refresh and self._is_cache_valid():
+            return list(getattr(self, "_models_cache", []))
+        result = self._req("/models", method="GET")
+        if result.get("error"):
+            cache = getattr(self, "_models_cache", [])
+            if cache:
+                return list(cache)
+            return []
+        model_list = result if isinstance(result, list) else result.get("data", [])
+        models: list[ModelInfo] = []
+        for entry in model_list:
+            if isinstance(entry, (dict, str)):
+                models.append(parse_model_info(entry, provider=self.provider_name()))
+        self._models_cache = models
+        self._cache_timestamp = time.time()
+        return list(models)
+
+    async def fetch_models(self, force_refresh: bool = False) -> list[ModelInfo]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: self._fetch_models_sync(force_refresh=force_refresh))
+
+    def get_available_models(self, force_refresh: bool = False) -> list[str]:
+        models = self._fetch_models_sync(force_refresh=force_refresh)
+        return [m.id for m in models if getattr(m, "available", True)]
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         clean_model = translate_model_id(model, "openrouter")
@@ -617,14 +983,17 @@ class GenericRouterProvider(CouncilProvider):
         return _extract_answer(result, model, self.provider_name())
 
     async def check_availability(self, models: list[str]) -> dict[str, bool]:
-        """Try /models endpoint, fall back to assuming all available."""
+        """Try /models endpoint, fall back to assuming all available (cached)."""
         try:
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: self._req("/models", method="GET")
-            )
-            available_ids = {m.get("id", "") for m in result.get("data", [])}
+            model_infos = await self.fetch_models()
+            available_ids = {m.id for m in model_infos if getattr(m, "available", True)}
+            if not available_ids:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: self._req("/models", method="GET")
+                )
+                available_ids = {m.get("id", "") for m in result.get("data", [])}
             return {m: (m in available_ids or any(m in a for a in available_ids)) for m in models}
         except Exception:
             return {m: True for m in models}
@@ -648,6 +1017,7 @@ class SingleModelProvider(CouncilProvider):
     """
 
     def __init__(self, model: str | None = None, base_url: str | None = None, api_key: str | None = None):
+        super().__init__()
         self.model = model or os.environ.get(
             "COUNCIL_MODEL",
             os.environ.get("OPENAI_MODEL", os.environ.get("DEFAULT_MODEL", "gpt-3.5-turbo"))
@@ -679,6 +1049,23 @@ class SingleModelProvider(CouncilProvider):
         except Exception as e:
             return {"error": _describe_error(e, url)}
 
+    async def fetch_models(self, force_refresh: bool = False) -> list[ModelInfo]:
+        return [
+            ModelInfo(
+                id=self.model,
+                name=self.model,
+                provider=self.provider_name(),
+                available=True,
+                context_window=128000,
+                cost_per_1k=0.0,
+                cost=0.0,
+                reasoning=False,
+                capabilities=[],
+            )
+        ]
+
+    def get_available_models(self, force_refresh: bool = False) -> list[str]:
+        return [self.model]
 
     async def query(self, model: str, messages: list[dict], temperature: float = 0.5, timeout: float | None = None) -> str:
         body = {"model": self.model, "messages": messages, "temperature": temperature}
@@ -715,6 +1102,49 @@ def list_profiles() -> list[str]:
 
 def list_detected_providers() -> dict[str, str]:
     return {name: p.provider_name() for name, p in detect_providers().items()}
+
+
+def fetch_available_models(
+    provider_name: str = "faigate",
+    force_refresh: bool = False,
+) -> list[ModelInfo]:
+    """Fetch available models and their capabilities from the detected or specified provider."""
+    providers = detect_providers()
+    provider = providers.get(provider_name) or get_best_provider()
+    if hasattr(provider, "_fetch_models_sync"):
+        return provider._fetch_models_sync(force_refresh=force_refresh)
+    if isinstance(provider, SingleModelProvider):
+        return [
+            ModelInfo(
+                id=provider.model,
+                name=provider.model,
+                provider=provider.provider_name(),
+                available=True,
+            )
+        ]
+    return []
+
+
+def get_model_capabilities(
+    model: str,
+    provider_name: str = "faigate",
+    force_refresh: bool = False,
+) -> Optional[ModelInfo]:
+    """Get parsed capabilities for a specific model."""
+    models = fetch_available_models(provider_name=provider_name, force_refresh=force_refresh)
+    clean = translate_model_id(model, provider_name)
+    for m in models:
+        if m.id == clean or m.id == model:
+            return m
+    return None
+
+
+def clear_model_cache() -> None:
+    """Clear cached models across all detected providers."""
+    providers = detect_providers()
+    for p in providers.values():
+        if hasattr(p, "clear_cache"):
+            p.clear_cache()
 
 
 def known_model_ids() -> frozenset[str]:
