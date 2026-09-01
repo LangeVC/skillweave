@@ -48,6 +48,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the raw artifact store directory",
     )
     parser.add_argument(
+        "--lane",
+        help="The lane identifier",
+    )
+    parser.add_argument(
+        "--rework",
+        action="store_true",
+        help="Draft rework briefs from failed gates",
+    )
+    parser.add_argument(
         "command",
         nargs=argparse.REMAINDER,
         help="The actual command to run (use -- to separate)",
@@ -95,7 +104,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "raw_digest": execution.raw_digest,
             "verification": execution.verification,
         }
-        sys.stdout.write(json.dumps(result_dict, sort_keys=True) + "\n")
+
+        if getattr(args, "rework", False) and execution.gate_state == "fail":
+            lane = getattr(args, "lane", "unknown")
+            rework_brief = (
+                f"REWORK BRIEF\\n"
+                f"Lane: {lane}\\n"
+                f"Run ID: {execution.run.run_id}\\n"
+                f"Gate State: FAILED\\n"
+                f"Raw Digest: {execution.raw_digest}\\n"
+                f"Verification: {execution.verification}\\n"
+                f"Review and correct the reported findings."
+            )
+            result_dict["rework_brief"] = rework_brief
+
+        sys.stdout.write(json.dumps(result_dict, sort_keys=True) + "\\n")
         return 0
 
     except Exception as exc:

@@ -8,6 +8,7 @@ import sys
 from typing import Optional, Sequence
 
 from skillweave.cli import run
+from skillweave.cli import rework
 from skillweave.dispatch import cli as dispatch
 
 
@@ -26,12 +27,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parents=[dispatch.build_parser()],
         add_help=False,
     )
-    
+
     # `run` subcommand
     parser_run = subparsers.add_parser(
         "run",
         help="Execute a single authoritative run command",
         parents=[run.build_parser()],
+        add_help=False,
+    )
+
+    # `rework` subcommand
+    parser_rework = subparsers.add_parser(
+        "rework",
+        help="Generate a structured rework brief from a failed gate log",
+        parents=[rework.build_parser()],
         add_help=False,
     )
 
@@ -41,6 +50,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return dispatch.main(argv[1:] if argv else sys.argv[2:])
     elif args.command == "run":
         return run.main(argv[1:] if argv else sys.argv[2:])
+    elif args.command == "rework":
+        return rework.main(argv[1:] if argv else sys.argv[2:])
     else:
         parser.print_help()
         return 1
