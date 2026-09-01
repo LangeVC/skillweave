@@ -69,6 +69,7 @@ class GateLogEntry:
     passed: bool
     detail: str = ""
     required: bool = True
+    fixed_when: str = ""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GateLogEntry":
@@ -79,6 +80,7 @@ class GateLogEntry:
             passed=bool(data.get("passed", False)),
             detail=str(data.get("detail", data.get("message", ""))),
             required=bool(data.get("required", True)),
+            fixed_when=str(data.get("fixed_when", data.get("done_when", ""))),
         )
 
 
@@ -96,6 +98,10 @@ class ReworkBrief:
         Entries from the gate log that did not pass.
     gate_log_path:
         Absolute path to the gate log file that was read.
+    candidate_sha:
+        The candidate commit SHA recorded by the gate (if any).
+    base_sha:
+        The base commit SHA the candidate was built against (if any).
     generated_at:
         UTC timestamp of when the brief was generated.
     """
@@ -104,6 +110,8 @@ class ReworkBrief:
     task_ids: List[str] = field(default_factory=list)
     failing_criteria: List[GateLogEntry] = field(default_factory=list)
     gate_log_path: Optional[Path] = None
+    candidate_sha: Optional[str] = None
+    base_sha: Optional[str] = None
     generated_at: datetime = field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
     )
@@ -144,11 +152,14 @@ class GateLogReader:
         log_path, raw = self._find_and_load(lane_id)
         entries, task_ids = self._parse(raw, lane_id)
         failing = [e for e in entries if not e.passed]
+        candidate_sha, base_sha = self._extract_shas(raw)
         return ReworkBrief(
             lane_id=lane_id,
             task_ids=task_ids,
             failing_criteria=failing,
             gate_log_path=log_path,
+            candidate_sha=candidate_sha,
+            base_sha=base_sha,
         )
 
     # ------------------------------------------------------------------
@@ -239,6 +250,9 @@ class GateLogReader:
                 for c in data["checks"]
                 if isinstance(c, dict)
             ]
+            for entry in entries:
+                if not entry.fixed_when:
+                    entry.fixed_when = _done_when_for(entry.check_id)
             return entries, task_ids
 
         # --- status.yaml shape ---
@@ -251,21 +265,57 @@ class GateLogReader:
 
         return entries, task_ids
 
+    @staticmethod
+    def _extract_shas(raw: Any) -> tuple[Optional[str], Optional[str]]:
+        """Extract candidate/base SHAs from a gate log.
+
+        Recognises the canonical ``candidate_sha`` / ``base_sha`` fields plus
+        the equivalent ``subject_commit`` / ``subject_sha`` aliases at the
+        top level of a release-gate JSON block.  Returns ``(candidate, base)``.
+        """
+        candidate: Optional[str] = None
+        base: Optional[str] = None
+        if not isinstance(raw, dict):
+            return candidate, base
+
+        candidate = (
+            raw.get("candidate_sha")
+            or raw.get("subject_commit")
+            or raw.get("subject_sha")
+        )
+        base = raw.get("base_sha")
+        if candidate is None:
+            base_field = raw.get("base")
+            if isinstance(base_field, dict):
+                candidate = base_field.get("candidate_sha") or base_field.get("commit")
+                base = base_field.get("base_sha")
+        return (str(candidate) if candidate else None,
+                str(base) if base else None)
+
     def _yaml_entries_from_status(self, data: dict) -> List[GateLogEntry]:
         """Convert known status.yaml fields into synthetic gate-check entries."""
         entries: List[GateLogEntry] = []
         state = str(data.get("state", ""))
         status_detail = str(data.get("status_detail", ""))
 
-        # An overall FAILED / ERROR state is itself a failing criterion
+        # An overall FAILED / ERROR state is itself a failing criterion.
+        # Build a real description that does not echo the state verbatim when
+        # status_detail merely repeats the state token.
         failed_states = {"FAILED", "ERROR", "BLOCKED", "REJECTED", "STOPPED"}
-        if any(s in state.upper() for s in failed_states):
+        state_tag = state.upper()
+        if any(s in state_tag for s in failed_states):
+            described_state = _describe_state(state)
+            detail = described_state
+            if status_detail and status_detail.strip().upper() != state_tag:
+                detail = f"{described_state}: {status_detail}"
+            done_when = _done_when_for("overall-state")
             entries.append(GateLogEntry(
                 check_id="overall-state",
                 name="Overall lane state",
                 passed=False,
-                detail=f"State: {state}. {status_detail}".strip(". "),
+                detail=detail,
                 required=True,
+                fixed_when=done_when,
             ))
 
         # Synthesize entries from reproducible_test_count
@@ -281,9 +331,11 @@ class GateLogReader:
                             passed=False,
                             detail=f"{val.get('passed', 0)} passed, {failed} failed",
                             required=True,
+                            fixed_when=_done_when_for(f"test-suite-{key}"),
                         ))
 
-        # Discovery baseline failures
+        # Discovery baseline failures — join failing test names so the
+        # criterion detail is actionable rather than a bare count.
         disc = data.get("discovery_baseline", {})
         if isinstance(disc, dict):
             for env, info in disc.items():
@@ -294,8 +346,9 @@ class GateLogReader:
                             check_id=f"discovery-{env}",
                             name=f"Discovery baseline ({env})",
                             passed=False,
-                            detail="Failed: " + ", ".join(str(t) for t in failed_tests),
+                            detail="Failed tests: " + ", ".join(str(t) for t in failed_tests),
                             required=False,
+                            fixed_when=_done_when_for("discovery"),
                         ))
 
         return entries
@@ -304,6 +357,47 @@ class GateLogReader:
 # ---------------------------------------------------------------------------
 # Brief writer
 # ---------------------------------------------------------------------------
+
+_STATE_DESCRIPTIONS: dict[str, str] = {
+    "FAILED": "The lane did not pass its gate",
+    "ERROR": "The lane ended in error before a gate verdict",
+    "BLOCKED": "The lane is blocked and cannot proceed",
+    "REJECTED": "The lane was rejected by the gate",
+    "STOPPED": "The lane stopped before a later gate",
+}
+
+
+def _describe_state(state: str) -> str:
+    """Produce a human-readable description for a gate state token."""
+    upper = state.upper()
+    for token, description in _STATE_DESCRIPTIONS.items():
+        if upper == token or upper.startswith(token + "_") or token in upper:
+            return description
+    return f"Lane is in state {state}"
+
+
+def _done_when_for(check_id: str) -> str:
+    """Return a definition-of-done invariant for a known criterion.
+
+    These invariants let a correcting session know when a failure is resolved
+    without re-running the entire gate by hand.
+    """
+    if check_id == "overall-state":
+        return "overall-state resets to a non-failing state (no FAILED/ERROR/BLOCKED/REJECTED/STOPPED)"
+    if check_id.startswith("capacium-manifests"):
+        return "0 out-of-sync manifests (all capability.yaml versions match pyproject)"
+    if check_id.startswith("test-suite-"):
+        return "the named test suite reports 0 failing tests"
+    if check_id.startswith("discovery-"):
+        return "the named discovery-baseline tests all pass (no items in failed_tests)"
+    if check_id.startswith("version-bump"):
+        return "the pyproject.toml version differs from the latest tag (vMAJOR.MINOR.PATCH)"
+    if check_id.startswith("changelog-"):
+        return "CHANGELOG.md contains a version entry matching the current version"
+    if check_id.startswith("no-wip"):
+        return "no WIP/TODO/FIXME/HACK/draft markers remain in tracked source/docs"
+    return "re-run the gate check and confirm it passes"
+
 
 _NEXT_STEPS_TEMPLATE = [
     "Review each failing criterion listed above and identify the root cause.",
@@ -424,6 +518,15 @@ class ReworkBriefWriter:
         else:
             lines.append("| Task IDs | _none recorded in gate log_ |")
 
+        if brief.candidate_sha:
+            lines.append(f"| Candidate SHA | `{brief.candidate_sha}` |")
+        else:
+            lines.append("| Candidate SHA | _not recorded in gate log_ |")
+        if brief.base_sha:
+            lines.append(f"| Base SHA | `{brief.base_sha}` |")
+        else:
+            lines.append("| Base SHA | _not recorded in gate log_ |")
+
         lines += [
             "",
             "---",
@@ -486,6 +589,13 @@ class ReworkBriefWriter:
             f"#### `{entry.check_id}` — {entry.name}",
             "",
         ]
+        if entry.fixed_when:
+            lines += [
+                "**Fixed when:**",
+                "",
+                f"> {entry.fixed_when}",
+                "",
+            ]
         if entry.detail:
             # Wrap long detail lines for readability
             wrapped = textwrap.fill(entry.detail, width=100)

@@ -161,6 +161,90 @@ def test_rework_missing_lane_via_cli(tmp_path):
     assert "ERROR" in err.getvalue()
 
 
+def test_rework_carries_shas_into_brief(tmp_path):
+    """Finding 1: candidate/base SHAs from the gate log are rendered."""
+    checks = [
+        {"id": "capacium-manifests", "name": "Sync", "passed": False,
+         "detail": "1 out of sync", "required": True},
+    ]
+    data = {
+        "can_release": False,
+        "candidate_sha": "a" * 40,
+        "base_sha": "b" * 40,
+        "checks": checks,
+    }
+    (tmp_path / "release-gate-data.json").write_text(
+        json.dumps(data, sort_keys=True), encoding="utf-8"
+    )
+    from skillweave.rework import GateLogReader
+
+    reader = GateLogReader(project_root=tmp_path)
+    brief = reader.read("SW-SHA-001")
+    assert brief.candidate_sha == "a" * 40
+    assert brief.base_sha == "b" * 40
+    text = ReworkBriefWriter(project_root=tmp_path).render(brief)
+    assert "Candidate SHA" in text and "a" * 40 in text
+    assert "Base SHA" in text and "b" * 40 in text
+
+
+def test_rework_overall_state_description_not_duplicated(tmp_path):
+    """Finding 2: overall-state yields a real description, not a verbatim echo."""
+    from skillweave.rework import GateLogReader
+
+    lane_dir = tmp_path / ".skillweave" / "tracking-log" / "SW-ST"
+    lane_dir.mkdir(parents=True, exist_ok=True)
+    (lane_dir / "status.yaml").write_text(
+        "state: STOPPED_BEFORE_B06\nstatus_detail: STOPPED_BEFORE_B06\n",
+        encoding="utf-8",
+    )
+    brief = GateLogReader(project_root=tmp_path).read("SW-ST")
+    overall = [e for e in brief.failing_criteria if e.check_id == "overall-state"]
+    assert len(overall) == 1
+    detail = overall[0].detail
+    assert "State: STOPPED_BEFORE_B06. STOPPED_BEFORE_B06" not in detail
+    # A meaningful description replaces the raw verbatim echo.
+    assert detail and detail != "STOPPED_BEFORE_B06"
+
+
+def test_rework_discovery_baseline_joins_test_names(tmp_path):
+    """Finding 2: discovery_baseline.failed_tests are joined by name."""
+    from skillweave.rework import GateLogReader
+
+    lane_dir = tmp_path / ".skillweave" / "tracking-log" / "SW-DIS"
+    lane_dir.mkdir(parents=True, exist_ok=True)
+    (lane_dir / "status.yaml").write_text(
+        "state: FAILED\n"
+        "discovery_baseline:\n"
+        "  opencode:\n"
+        "    failed_tests: [test_a, test_b]\n"
+        "    passed: 3\n"
+        "    failed: 2\n",
+        encoding="utf-8",
+    )
+    brief = GateLogReader(project_root=tmp_path).read("SW-DIS")
+    disc = [e for e in brief.failing_criteria if e.check_id == "discovery-opencode"]
+    assert len(disc) == 1
+    assert "test_a" in disc[0].detail and "test_b" in disc[0].detail
+
+
+def test_rework_criteria_carry_fixed_when(tmp_path):
+    """Finding 3: each failing criterion has a definition-of-done invariant."""
+    checks = [
+        {"id": "capacium-manifests", "name": "sync", "passed": False,
+         "detail": "2 out of sync", "required": True},
+        {"id": "no-wip-wip", "name": "no wip", "passed": False,
+         "detail": "found wip", "required": False},
+    ]
+    _write_gate_log(tmp_path, "SW-DONE", checks)
+    writer = ReworkBriefWriter(project_root=tmp_path)
+    brief = writer._reader.read("SW-DONE")
+    for entry in brief.failing_criteria:
+        assert entry.fixed_when, f"criterion {entry.check_id} lacks fixed_when"
+    text = writer.render(brief)
+    assert "**Fixed when:**" in text
+    assert "0 out-of-sync manifests" in text
+
+
 def _run_all() -> int:
     import argparse
 
@@ -174,6 +258,10 @@ def _run_all() -> int:
         test_rework_no_gate_log_raises,
         test_rework_cmd_end_to_end,
         test_rework_missing_lane_via_cli,
+        test_rework_carries_shas_into_brief,
+        test_rework_overall_state_description_not_duplicated,
+        test_rework_discovery_baseline_joins_test_names,
+        test_rework_criteria_carry_fixed_when,
     ]
     for t in tests:
         try:

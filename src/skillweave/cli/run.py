@@ -106,19 +106,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         }
 
         if getattr(args, "rework", False) and execution.gate_state == "fail":
-            lane = getattr(args, "lane", "unknown")
-            rework_brief = (
-                f"REWORK BRIEF\\n"
-                f"Lane: {lane}\\n"
-                f"Run ID: {execution.run.run_id}\\n"
-                f"Gate State: FAILED\\n"
-                f"Raw Digest: {execution.raw_digest}\\n"
-                f"Verification: {execution.verification}\\n"
-                f"Review and correct the reported findings."
-            )
-            result_dict["rework_brief"] = rework_brief
+            # Unify on the structured brief artifact. run.py delegates to the
+            # same writer as `skillweave rework` so exactly one brief (.md)
+            # exists rather than a divergent inline string.
+            from skillweave.rework import ReworkBriefWriter, ReworkError
 
-        sys.stdout.write(json.dumps(result_dict, sort_keys=True) + "\\n")
+            lane = getattr(args, "lane", "") or ""
+            brief_path: Optional[str] = None
+            if lane:
+                try:
+                    writer = ReworkBriefWriter()
+                    brief_path = str(writer.write(lane))
+                except ReworkError as exc:
+                    brief_path = f"<not written: {exc}>"
+            result_dict["rework_brief"] = {
+                "lane": lane,
+                "run_id": execution.run.run_id,
+                "gate_state": execution.gate_state,
+                "raw_digest": execution.raw_digest,
+                "verification": execution.verification,
+                "brief_path": brief_path,
+            }
+
+        sys.stdout.write(json.dumps(result_dict, sort_keys=True) + "\n")
         return 0
 
     except Exception as exc:
