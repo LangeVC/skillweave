@@ -309,6 +309,12 @@ The following areas under `.skillweave/` represent supplementary runtime artifac
 - **Role**: Interactive onboarding wizard scaffolds, project initialization state, and guided setup workflows.
 - **Key Artifacts**: Wizard step state and scaffolding templates.
 
+### 5.8 `catalogue.yaml`
+- **Owner**: Core Runtime / Model & Harness Catalogue Subsystem
+- **Lifecycle**: Global / Setup
+- **Role**: Declares the model-and-harness catalogue (runtime CLI, harness statuses, model capabilities, role defaults, contract index), the single source of truth for role-to-model resolution and the `!= ops` separation-of-duties guard.
+- **Key Artifacts**: `catalogue.yaml`.
+
 ---
 
 ## 6. Core Subsystem & Runtime Architecture Layout (SW-140)
@@ -365,3 +371,9 @@ SkillWeave core runtime and execution components are structured under `src/skill
 - **Lifecycle**: Execution / Runtime
 - **Role**: Delegated autonomous operator agent capable of running reversible, in-scope decisions while strictly escalating irreversible actions.
 - **Key Artifacts**: `operator_agent.py`, `__init__.py`.
+
+### 6.10 `src/skillweave/core/catalogue/`
+- **Owner**: Core Runtime / Model & Harness Catalogue Subsystem
+- **Lifecycle**: Execution / Runtime
+- **Role**: Parses the model & harness catalogue (`config/catalogue.yaml`) and resolves roles to models, honouring the `!= ops` separation-of-duties constraint and `cost_index` preference.
+- **Key Artifacts**: `__init__.py`.

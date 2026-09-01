@@ -1,0 +1,74 @@
+# SkillWeave Model & Harness Catalogue
+#
+# SW-CATALOG-001 — SkillWeave 1.5.1
+# Single source of truth for which model serves which role and which harnesses
+# are proven. Consumed by ``src/skillweave/core/catalogue/__init__.py``.
+#
+# role_defaults.<role>.constraints use the mini-language "!= ops": the role's
+# resolved model MUST NOT equal the model assigned to the ``ops`` role. This is
+# the reviewer/ops separation-of-duties guard (the reviewer never reviews with
+# the same model that mutates run state).
+
+schema_version: "1.0"
+
+runtime:
+  cli: opencode run --model {model} -
+  version: "1.5.1"
+  repo_root_source: config/catalogue.yaml
+
+harnesses:
+  opencode:
+    status: PROVEN
+    cli: opencode run --model {model} -
+  claude-code:
+    status: UNPROVEN
+    cli: claude -p
+  antigravity:
+    status: UNPROVEN
+    cli: antigravity run
+
+models:
+  faigate/deepseek-v4-pro:
+    display_name: DeepSeek V4 Pro
+    strengths:
+      - deep_analysis
+      - architectural_reasoning
+      - code_review
+      - council_deliberation
+    error_mode: empty_completion_on_budget_exhaustion
+    cost_index: 3
+    variance: 0.2
+  faigate/deepseek-v4-flash:
+    display_name: DeepSeek V4 Flash
+    strengths:
+      - fast_iteration
+      - code_generation
+      - text_summarization
+    error_mode: rate_limit
+    cost_index: 1
+    variance: 0.4
+
+role_defaults:
+  discovery:
+    model: faigate/deepseek-v4-pro
+  verification:
+    model: faigate/deepseek-v4-flash
+  ops:
+    model: faigate/deepseek-v4-pro
+  reviewer:
+    model: faigate/deepseek-v4-pro
+    constraints:
+      - "!= ops"
+
+contracts:
+  - schemas/dispatch-handoff.schema.json
+  - schemas/dispatch-sequence.schema.json
+  - schemas/dispatch-trace.schema.json
+  - schemas/dual-review-attestation.schema.json
+  - schemas/evidence.schema.json
+  - schemas/gate-1312-manifest.schema.json
+  - schemas/harness-capability.schema.json
+  - schemas/prompt-sequence.schema.json
+  - schemas/run-state.schema.json
+  - schemas/transfer-entry.schema.json
+  - schemas/workflow-context.schema.json
