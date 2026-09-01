@@ -29,6 +29,12 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# The repository's own .skillweave/ is git-excluded (docs/substrate-map.md,
+# invariant 5). The generated mirror is kept as a checked-in fixture so the
+# drift guard below still compares the generator against a stored snapshot.
+SUBSTRATE = os.path.join(
+    REPO_ROOT, "tests", "fixtures", "substrate-root", ".skillweave"
+)
 
 from skillweave import lifecycle
 from skillweave.phase_enforcement import PHASE_MEMBERSHIP
@@ -73,15 +79,15 @@ def test_generator_and_consumer_agree_on_bundles():
 
 
 def test_checked_in_yaml_matches_the_generator():
-    """The checked-in .skillweave YAML is a faithful mirror of the module."""
+    """The checked-in substrate fixture is a faithful mirror of the module."""
     text = lifecycle.to_yaml()
     gen_phases, gen_bundles = lifecycle.load_skillweave_yaml(text)
 
     import yaml
 
-    with open(os.path.join(REPO_ROOT, ".skillweave", "phases.yaml")) as f:
+    with open(os.path.join(SUBSTRATE, "phases.yaml")) as f:
         disk_phases = yaml.safe_load(f)["phases"]
-    with open(os.path.join(REPO_ROOT, ".skillweave", "bundles.yaml")) as f:
+    with open(os.path.join(SUBSTRATE, "bundles.yaml")) as f:
         disk_bundles = yaml.safe_load(f)["bundles"]
 
     assert [p["id"] for p in disk_phases] == [p["id"] for p in gen_phases]

@@ -10,7 +10,7 @@ or test path depends on Path.cwd or a relative glob rooted at the caller.
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '.skillweave', 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'fixtures', 'substrate-root', '.skillweave', 'lib'))
 
 import yaml
 import tempfile
@@ -26,13 +26,17 @@ from ideation import IdeationSession, IdeationConfig, IdeationMode
 from assumptions import AssumptionTracker, Assumption
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-PROMPTS_DIR = REPO_ROOT / ".skillweave" / "prompts" / "discovery"
-TEMPLATES_DIR = REPO_ROOT / ".skillweave" / "templates" / "discovery"
+# The repository's own .skillweave/ is git-excluded (docs/substrate-map.md,
+# invariant 5), so no test may read it. Discovery assets are resolved from a
+# checked-in substrate root under tests/fixtures/ instead, which is also what
+# resolve_discovery_asset() expects: a project root containing .skillweave/.
+SUBSTRATE_ROOT = Path(__file__).resolve().parent / "fixtures" / "substrate-root"
+PROMPTS_DIR = SUBSTRATE_ROOT / ".skillweave" / "prompts" / "discovery"
+TEMPLATES_DIR = SUBSTRATE_ROOT / ".skillweave" / "templates" / "discovery"
 
 
 def _lens_data():
-    path = resolve_discovery_asset(REPO_ROOT, "lenses", "design-thinking.yaml")
+    path = resolve_discovery_asset(SUBSTRATE_ROOT, "lenses", "design-thinking.yaml")
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -68,7 +72,7 @@ def test_lens_opt_in_by_default():
 
 
 def test_config_yaml_lens_section():
-    path = REPO_ROOT / ".skillweave" / "config.yaml"
+    path = SUBSTRATE_ROOT / ".skillweave" / "config.yaml"
     with open(path) as f:
         data = yaml.safe_load(f)
     assert 'lens' in data
@@ -124,7 +128,7 @@ def test_prompt_inventory_registered():
     assert data['total_prompts'] >= 10
     assert len(data['inventory']) >= 10
     assert data['total_prompts'] == len(data['inventory'])
-    registered = {(REPO_ROOT / entry['file']).resolve() for entry in data['inventory']}
+    registered = {(SUBSTRATE_ROOT / entry['file']).resolve() for entry in data['inventory']}
     assert registered.issubset({p.resolve() for p in library})
 
 
@@ -133,7 +137,7 @@ def test_prompt_inventory_registered():
 def test_all_five_templates_exist():
     expected = ['persona-card.md', 'competitor-matrix.md', 'assumption-log.yaml', 'opportunity-canvas.md', 'research-summary.md']
     for name in expected:
-        path = resolve_discovery_asset(REPO_ROOT, "templates", f"discovery/{name}")
+        path = resolve_discovery_asset(SUBSTRATE_ROOT, "templates", f"discovery/{name}")
         assert path.exists(), f'Missing template: {name}'
 
 
@@ -146,7 +150,7 @@ def test_templates_have_placeholders():
 
 
 def test_assumption_log_yaml_valid():
-    path = resolve_discovery_asset(REPO_ROOT, "templates", "discovery/assumption-log.yaml")
+    path = resolve_discovery_asset(SUBSTRATE_ROOT, "templates", "discovery/assumption-log.yaml")
     with open(path) as f:
         data = yaml.safe_load(f)
     assert 'assumptions' in data
@@ -295,14 +299,14 @@ def test_iteration_log_exists():
 
 
 def test_feedback_synthesis_template_exists():
-    path = resolve_discovery_asset(REPO_ROOT, "templates", "discovery/feedback-synthesis.md")
+    path = resolve_discovery_asset(SUBSTRATE_ROOT, "templates", "discovery/feedback-synthesis.md")
     with open(path) as f:
         content = f.read()
     assert '{{' in content
 
 
 def test_revision_prompt_requires_evidence():
-    path = resolve_discovery_asset(REPO_ROOT, "prompts", "discovery/iteration-revision.md")
+    path = resolve_discovery_asset(SUBSTRATE_ROOT, "prompts", "discovery/iteration-revision.md")
     with open(path) as f:
         content = f.read()
     assert 'Evidence' in content or 'evidence' in content
@@ -324,6 +328,6 @@ def test_missing_discovery_asset_fails_explicitly(tmp_path):
 
 def test_discovery_assets_resolve_from_repo_root_not_cwd(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    lens = resolve_discovery_asset(REPO_ROOT, "lenses", "design-thinking.yaml")
-    assert lens == (REPO_ROOT / ".skillweave" / "lenses" / "design-thinking.yaml").resolve()
+    lens = resolve_discovery_asset(SUBSTRATE_ROOT, "lenses", "design-thinking.yaml")
+    assert lens == (SUBSTRATE_ROOT / ".skillweave" / "lenses" / "design-thinking.yaml").resolve()
     assert lens.exists()

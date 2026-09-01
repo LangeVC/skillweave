@@ -5,6 +5,15 @@ import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+# The repository's own .skillweave/ is git-excluded (docs/substrate-map.md,
+# invariant 5). These tests read the checked-in substrate fixture, and by an
+# absolute path: the previous relative form silently depended on the caller's
+# working directory.
+SUBSTRATE_ROOT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "fixtures", "substrate-root"
+)
+SUBSTRATE = os.path.join(SUBSTRATE_ROOT, ".skillweave")
+
 from skillweave.phase_detection import detect_phase, detect_phase_with_detail, phase_from_config
 from skillweave.workflow_recommendation import recommend
 from skillweave.onboarding_cli import run_onboarding, load_onboarding_state, _save_state
@@ -125,13 +134,13 @@ class TestPhaseEnforcement:
 
 class TestIntegration:
     def test_enrich_config_adds_lifecycle(self):
-        config = enrich_config(".")
+        config = enrich_config(SUBSTRATE_ROOT)
         assert config is not None
         assert "lifecycle" in config
         assert config["lifecycle"]["current_phase"] is not None
 
     def test_get_lifecycle_context(self):
-        ctx = get_lifecycle_context(".")
+        ctx = get_lifecycle_context(SUBSTRATE_ROOT)
         assert ctx["phase_system_configured"] is True
         assert ctx["current_phase"] is not None
 
@@ -141,7 +150,7 @@ class TestIntegration:
             assert ctx["phase_system_configured"] is False
 
     def test_config_yaml_structure_preserved(self):
-        with open(".skillweave/config.yaml") as f:
+        with open(os.path.join(SUBSTRATE, "config.yaml")) as f:
             config = yaml.safe_load(f)
         assert config["mode"] == "medium"
         assert "features" in config
@@ -160,17 +169,17 @@ class TestIntegration:
 
 class TestBundleYAML:
     def test_bundles_yaml_exists(self):
-        assert os.path.exists(".skillweave/bundles.yaml")
+        assert os.path.exists(os.path.join(SUBSTRATE, "bundles.yaml"))
 
     def test_phases_yaml_exists(self):
-        assert os.path.exists(".skillweave/phases.yaml")
+        assert os.path.exists(os.path.join(SUBSTRATE, "phases.yaml"))
 
     def test_phases_yaml_has_7_phases(self):
-        with open(".skillweave/phases.yaml") as f:
+        with open(os.path.join(SUBSTRATE, "phases.yaml")) as f:
             data = yaml.safe_load(f)
         assert len(data["phases"]) == 7
 
     def test_bundles_yaml_has_5_bundles(self):
-        with open(".skillweave/bundles.yaml") as f:
+        with open(os.path.join(SUBSTRATE, "bundles.yaml")) as f:
             data = yaml.safe_load(f)
         assert len(data["bundles"]) == 5
