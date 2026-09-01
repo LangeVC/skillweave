@@ -8,10 +8,22 @@ import sys
 from typing import Optional, Sequence
 
 from skillweave.cli import run
+from skillweave.cli import rework
 from skillweave.dispatch import cli as dispatch
+from skillweave.cli import observe as observe_mod
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    args_list = list(sys.argv[1:] if argv is None else argv)
+
+    # `--dispatch` flag (Handshake & Observe: non-blocking dispatch)
+    if "--dispatch" in args_list:
+        return observe_mod.main_dispatch(args_list)
+
+    # `--observe <execution_id>` flag (Handshake & Observe: read-only tailer)
+    if "--observe" in args_list:
+        return observe_mod.main_observe(args_list)
+
     parser = argparse.ArgumentParser(
         prog="skillweave",
         description="SkillWeave Multi-agent AI Orchestration",
@@ -19,28 +31,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     subparsers = parser.add_subparsers(title="commands", dest="command")
 
     # `dispatch` subcommand
-    parser_dispatch = subparsers.add_parser(
+    subparsers.add_parser(
         "dispatch",
         help="Execute one wave of a dispatch sequence (experimental)",
-        # Inherit the exact arguments from the existing dispatch parser
         parents=[dispatch.build_parser()],
         add_help=False,
     )
-    
+
     # `run` subcommand
-    parser_run = subparsers.add_parser(
+    subparsers.add_parser(
         "run",
         help="Execute a single authoritative run command",
         parents=[run.build_parser()],
         add_help=False,
     )
 
-    args = parser.parse_args(argv)
+    # `rework` subcommand
+    parser_rework = subparsers.add_parser(
+        "rework",
+        help="Generate a structured rework brief from a failed gate log",
+        parents=[rework.build_parser()],
+        add_help=False,
+    )
+
+    args = parser.parse_args(args_list)
 
     if args.command == "dispatch":
-        return dispatch.main(argv[1:] if argv else sys.argv[2:])
+        return dispatch.main(args_list[1:] if args_list else sys.argv[2:])
     elif args.command == "run":
-        return run.main(argv[1:] if argv else sys.argv[2:])
+        return run.main(args_list[1:] if args_list else sys.argv[2:])
+    elif args.command == "rework":
+        return rework.main(args_list[1:] if args_list else sys.argv[2:])
     else:
         parser.print_help()
         return 1
