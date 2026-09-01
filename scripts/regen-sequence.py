@@ -220,19 +220,25 @@ def generate_review_briefs(sequence_path: Path, out_dir: Path) -> list[Path]:
 
 
 def inject_prd(prd_dir: Path, repo_root: Path) -> Path:
-    """Copy ``prd.md`` from ``prd_dir`` into ``repo_root/.skillweave/prd.md``.
+    """Inject the governing PRD artifacts into ``repo_root/.skillweave/``.
 
-    The injected PRD sits at the worktree root so every agent that reads
-    ``.skillweave/`` sees the governing requirements without a path lookup.
-    Raises ``FileNotFoundError`` when ``prd_dir/prd.md`` is absent.
+    ``prd.json`` holds the requirements a lane must honour (the task list, the
+    acceptance criteria, the creates/modifies paths); ``prd.md`` is the narrative
+    summary. Both are copied so an agent that reads ``.skillweave/`` sees the full
+    intent, not only the summary. This is the same ``prd.json`` artifact that
+    ``--from-prd`` consumes, so sequence generation and injection are keyed to one
+    shape. Fails closed when ``prd_dir/prd.json`` is absent.
     """
-    source = prd_dir / "prd.md"
-    if not source.is_file():
-        raise FileNotFoundError(f"no prd.md in PRD directory {prd_dir}")
+    source_json = prd_dir / "prd.json"
+    if not source_json.is_file():
+        raise FileNotFoundError(f"no prd.json in PRD directory {prd_dir}")
     target_dir = repo_root / ".skillweave"
     target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / "prd.md"
-    shutil.copy2(source, target)
+    target = target_dir / "prd.json"
+    shutil.copy2(source_json, target)
+    narrative = prd_dir / "prd.md"
+    if narrative.is_file():
+        shutil.copy2(narrative, target_dir / "prd.md")
     return target
 
 
@@ -419,7 +425,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     ap.add_argument(
         "--inject-prd", type=Path, metavar="prd_dir",
-        help="copy prd.md into .skillweave/prd.md at the worktree root",
+        help="copy prd.json (and prd.md if present) into .skillweave/ at the worktree root",
     )
     ap.add_argument(
         "--out", type=Path, default=Path("."),
