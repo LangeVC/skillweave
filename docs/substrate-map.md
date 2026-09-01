@@ -8,13 +8,37 @@ Every area under `.skillweave/` is machine-checked for documentation completenes
 
 ## 1. Overview and Core Invariants
 
-The `.skillweave/` directory is the local, version-controlled state and artifact substrate for SkillWeave projects. It houses planning artifacts, persistent architecture memory, lifecycle configurations, prompt chains, release gates, and execution journals.
+The `.skillweave/` directory is the **local, generated, git-excluded** state and artifact substrate for SkillWeave projects. It houses planning artifacts, persistent architecture memory, lifecycle configurations, prompt chains, release gates, and execution journals.
+
+It is created in a consuming project by the preflight (`SkillWeavePersistence.ensure_folder_structure`), which makes the folder and its subdirectories on demand. It is **not** shipped: `tests/packaging/test_discovery_installed.py` asserts that the installed distribution contains no `.skillweave/` at all, and `pyproject.toml` packages only `py.typed`.
 
 ### Invariants:
 1. **Isolated Output Routing**: All AI planning, execution, and validation artifacts reside inside `.skillweave/`—never in arbitrary root-level directories.
 2. **Single Ownership**: Every top-level area has exactly one primary owning skill or subsystem responsible for its schema, read/write semantics, and evolution.
 3. **Phase Traceability**: Every area is bound to a defined lifecycle phase (Discovery, Blueprint, Design, Build, Release, Launch, Post-Release) or designated as Cross-Cutting/Global.
 4. **Drift Enforcement**: Any new file or directory introduced into `.skillweave/` must be registered and documented in this specification; undocumented additions fail CI gates.
+5. **Git Exclusion**: `.skillweave/` belongs in `.gitignore` in every project, including this one. What SkillWeave generates into the substrate — PRDs, specifications, sequences, discovery findings, handover records — is intellectual property, and for an open-core product it is the part that is not open. A public repository must never carry it. The private per-org planning repository is the only place substrate content is tracked, and it is tracked there deliberately rather than as a side effect of a tool writing into a working tree.
+
+   `Versioned` in the Mutability column below means *revised across iterations*. It does not mean *tracked in git*.
+6. **Reachability is Injection, not Tracking**: A dispatched lane needs the PRD inside its worktree. That is solved by copying or linking it in at dispatch time (`regen-sequence.py`; see the 1.5.1 dispatch initiative), never by committing the substrate so that `git worktree add` happens to carry it along. Tracking the substrate to make it reachable trades an IP boundary for a convenience the dispatcher already provides.
+
+### Current deviation from invariant 5
+
+This repository does not yet satisfy invariant 5. `.skillweave/` is tracked here, and 105 files are on the public GitHub mirror as a result.
+
+Invariant 5 cannot simply be applied, because the **test suite** — not the product — reads this repository's own substrate instance as if it were a fixture. Measured by exporting `git archive HEAD` twice, once with and once without `.skillweave/`, and taking the difference against a baseline: **10 tests fail and `tests/test_discovery.py` fails to collect.** Five files carry the whole dependency:
+
+| File | Consumed by | What it actually is |
+|---|---|---|
+| `.skillweave/phases.yaml` | `test_lifecycle_system.py`, `test_lifecycle_single_source.py` | A generated mirror. `lifecycle.to_yaml()` is the source of truth; the test is named `test_checked_in_yaml_matches_the_generator`. |
+| `.skillweave/bundles.yaml` | same | same |
+| `.skillweave/config.yaml` | `test_lifecycle_system.py::TestIntegration` | Config the preflight can generate |
+| `.skillweave/release/skill-boundaries.yaml` | `test_skill_boundaries.py` | Policy |
+| `.skillweave/lib/ideation.py` | `test_discovery.py` (`from ideation import …`) | Project-local library; no `src/skillweave/ideation.py` exists |
+
+None of these is a planning artifact. Disentangling them — generated mirrors and policy into `tests/fixtures/`, `config.yaml` produced by `ensure_folder_structure()` in the test rather than read from disk, `ideation.py` into `src/` or a fixture — is the precondition for adding `.skillweave/` to this repository's `.gitignore`.
+
+`tests/unit/test_substrate_drift.py` is unaffected: it checks only that what is on disk is documented, so an absent substrate leaves it green.
 
 ---
 

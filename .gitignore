@@ -10,8 +10,17 @@ build/
 install.log
 strategy.md
 
-# SkillWeave runtime data (auto-generated, per-project)
-.skillweave/
+# SkillWeave substrate — generated, local, never committed.
+# What SkillWeave writes here (PRDs, specs, sequences, discovery findings,
+# handover records) is IP, and this repository is publicly mirrored. See
+# docs/substrate-map.md, invariant 5. Substrate content is tracked only in the
+# private per-org planning repository.
+#
+# Anchored on purpose: this excludes THIS project's substrate and leaves the
+# checked-in test fixture under tests/fixtures/substrate-root/.skillweave/
+# tracked. Dropping the leading slash would swallow that fixture, and the suite
+# would fail in CI while passing locally.
+/.skillweave/
 
 # Session state file (worktree-local, never committed)
 .swci-state.md
