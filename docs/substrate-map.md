@@ -351,5 +351,5 @@ SkillWeave core runtime and execution components are structured under `src/skill
 ### 6.10 `src/skillweave/core/catalogue/`
 - **Owner**: Core Runtime / Model & Harness Catalogue Subsystem
 - **Lifecycle**: Execution / Runtime
-- **Role**: Parses the model & harness catalogue (`.skillweave/catalogue.yaml`) and resolves roles to models, honouring the `!= ops` separation-of-duties constraint and `cost_index` preference.
-- **Key Artifacts**: `catalogue.py`, `__init__.py`.
+- **Role**: Parses the model & harness catalogue (`config/catalogue.yaml`) and resolves roles to models, honouring the `!= ops` separation-of-duties constraint and `cost_index` preference.
+- **Key Artifacts**: `__init__.py`.

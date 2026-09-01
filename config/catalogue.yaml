@@ -2,7 +2,7 @@
 #
 # SW-CATALOG-001 — SkillWeave 1.5.1
 # Single source of truth for which model serves which role and which harnesses
-# are proven. Consumed by ``src/skillweave/core/catalogue.py``.
+# are proven. Consumed by ``src/skillweave/core/catalogue/__init__.py``.
 #
 # role_defaults.<role>.constraints use the mini-language "!= ops": the role's
 # resolved model MUST NOT equal the model assigned to the ``ops`` role. This is
@@ -14,7 +14,7 @@ schema_version: "1.0"
 runtime:
   cli: opencode run --model {model} -
   version: "1.5.1"
-  repo_root_source: .skillweave/catalogue.yaml
+  repo_root_source: config/catalogue.yaml
 
 harnesses:
   opencode:

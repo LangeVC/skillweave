@@ -159,6 +159,8 @@ def get_model_for_role(role: str, exclude: str = None) -> str:
     if "!= ops" in constraints:
         ops_model = _role_model("ops")
         banned_ops = candidate == ops_model
+        if banned_ops:
+            rejected.add(ops_model)
 
     if banned_ops or candidate in rejected:
         candidate = _cheapest_non_rejected(rejected)

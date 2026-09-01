@@ -29,6 +29,53 @@ def _write(tmp_path: Path, data: dict) -> Path:
 
 
 @pytest.fixture
+def cheapest_ops_catalogue_path(tmp_path) -> Path:
+    """Catalogue where the ``ops`` model is the cheapest by ``cost_index``.
+
+    This is the adversarial case for the ``!= ops`` separation-of-duties
+    guard: if ``get_model_for_role`` falls back to the cheapest eligible
+    model WITHOUT excluding the ``ops`` model, it returns the ops model,
+    violating the very ban the constraint exists for.
+    """
+    data = {
+        "schema_version": "1.0",
+        "runtime": {
+            "cli": "opencode run --model {model} -",
+            "version": "1.5.1",
+            "repo_root_source": "config/catalogue.yaml",
+        },
+        "harnesses": {
+            "opencode": {"status": "PROVEN", "cli": "opencode run --model {model} -"},
+        },
+        "models": {
+            "faigate/deepseek-v4-flash": {
+                "display_name": "DeepSeek V4 Flash",
+                "strengths": ["fast_iteration", "code_generation"],
+                "error_mode": "rate_limit",
+                "cost_index": 1,
+                "variance": 0.4,
+            },
+            "faigate/deepseek-v4-pro": {
+                "display_name": "DeepSeek V4 Pro",
+                "strengths": ["deep_analysis", "code_review"],
+                "error_mode": "empty_completion_on_budget_exhaustion",
+                "cost_index": 3,
+                "variance": 0.2,
+            },
+        },
+        "role_defaults": {
+            "ops": {"model": "faigate/deepseek-v4-flash"},
+            "reviewer": {
+                "model": "faigate/deepseek-v4-flash",
+                "constraints": ["!= ops"],
+            },
+        },
+        "contracts": [],
+    }
+    return _write(tmp_path, data)
+
+
+@pytest.fixture
 def catalogue_path(tmp_path) -> Path:
     data = {
         "schema_version": "1.0",
@@ -139,6 +186,15 @@ class TestGetModelForRole:
         cat.load_catalogue(catalogue_path)
         result = cat.get_model_for_role("discovery", exclude="ops")
         assert result == "faigate/deepseek-v4-flash"
+
+    def test_ops_guard_rejects_cheapest_ops_model(self, cheapest_ops_catalogue_path):
+        """Regression (SW-CATALOG-001 R3 F1): when the ``ops`` model is the
+        cheapest, ``!= ops`` must still keep reviewer off it."""
+        cat.load_catalogue(cheapest_ops_catalogue_path)
+        ops_model = cat.get_model_for_role("ops")
+        reviewer_model = cat.get_model_for_role("reviewer")
+        assert reviewer_model != ops_model
+        assert reviewer_model == "faigate/deepseek-v4-pro"
 
     def test_raises_key_error_for_unknown_role(self, catalogue_path):
         cat.load_catalogue(catalogue_path)
