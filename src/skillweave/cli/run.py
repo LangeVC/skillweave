@@ -48,6 +48,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the raw artifact store directory",
     )
     parser.add_argument(
+        "--lane",
+        help="The lane identifier",
+    )
+    parser.add_argument(
+        "--rework",
+        action="store_true",
+        help="Draft rework briefs from failed gates",
+    )
+    parser.add_argument(
         "command",
         nargs=argparse.REMAINDER,
         help="The actual command to run (use -- to separate)",
@@ -95,6 +104,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "raw_digest": execution.raw_digest,
             "verification": execution.verification,
         }
+
+        if getattr(args, "rework", False) and execution.gate_state == "fail":
+            # Unify on the structured brief artifact. run.py delegates to the
+            # same writer as `skillweave rework` so exactly one brief (.md)
+            # exists rather than a divergent inline string.
+            from skillweave.rework import ReworkBriefWriter, ReworkError
+
+            lane = getattr(args, "lane", "") or ""
+            brief_path: Optional[str] = None
+            if lane:
+                try:
+                    writer = ReworkBriefWriter()
+                    brief_path = str(writer.write(lane))
+                except ReworkError as exc:
+                    brief_path = f"<not written: {exc}>"
+            result_dict["rework_brief"] = {
+                "lane": lane,
+                "run_id": execution.run.run_id,
+                "gate_state": execution.gate_state,
+                "raw_digest": execution.raw_digest,
+                "verification": execution.verification,
+                "brief_path": brief_path,
+            }
+
         sys.stdout.write(json.dumps(result_dict, sort_keys=True) + "\n")
         return 0
 

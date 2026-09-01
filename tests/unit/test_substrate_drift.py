@@ -1,7 +1,7 @@
 """Substrate map and drift detection tests (SW-SUBSTRATE-DOC-001).
 
 Proves that:
-1. ``docs/substrate-map.md`` exists, is well-formed, and documents all 26 canonical
+1. ``docs/substrate-map.md`` exists, is well-formed, and documents all 27 canonical
    substrate areas under ``.skillweave/``.
 2. Every item currently on disk in ``.skillweave/`` is documented (no undocumented drift).
 3. Each area entry includes required metadata: owner skill/subsystem and lifecycle phase.
@@ -17,8 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DOC_PATH = REPO_ROOT / "docs" / "substrate-map.md"
 DOT_SKILLWEAVE = REPO_ROOT / ".skillweave"
 
-#: The 26 canonical substrate areas under .skillweave/
-CANONICAL_26_AREAS = [
+#: The 27 canonical substrate areas under .skillweave/
+CANONICAL_27_AREAS = [
     "archive",
     "bundles.yaml",
     "checklists",
@@ -45,6 +45,7 @@ CANONICAL_26_AREAS = [
     "specs",
     "templates",
     "tracking-log",
+    "rework",
 ]
 
 
@@ -99,8 +100,8 @@ def check_substrate_drift(doc_path: Path = DOC_PATH, dot_skillweave_dir: Path = 
             f"Please register and document them in docs/substrate-map.md."
         )
 
-    # Check that all canonical 26 areas are documented
-    missing_canonical = set(CANONICAL_26_AREAS) - documented
+    # Check that all canonical 27 areas are documented
+    missing_canonical = set(CANONICAL_27_AREAS) - documented
     if missing_canonical:
         errors.append(
             f"Canonical area(s) missing from docs/substrate-map.md: {sorted(missing_canonical)}"
@@ -119,15 +120,15 @@ class TestSubstrateDocumentationAndDrift:
         assert len(text) > 1000, "docs/substrate-map.md is too short or empty"
         assert "# SkillWeave Substrate Map" in text
 
-    def test_all_26_canonical_areas_documented(self):
-        """Verify all 26 canonical areas are explicitly documented."""
+    def test_all_27_canonical_areas_documented(self):
+        """Verify all 27 canonical areas are explicitly documented."""
         doc_text = DOC_PATH.read_text(encoding="utf-8")
         documented = extract_documented_areas(doc_text)
         
-        for area in CANONICAL_26_AREAS:
+        for area in CANONICAL_27_AREAS:
             assert area in documented, f"Canonical area '{area}' is missing from docs/substrate-map.md"
 
-        assert len(documented.intersection(set(CANONICAL_26_AREAS))) == 26
+        assert len(documented.intersection(set(CANONICAL_27_AREAS))) == 27
 
     def test_no_disk_drift(self):
         """Verify that every entry currently on disk in .skillweave/ is documented."""
@@ -143,7 +144,7 @@ class TestSubstrateDocumentationAndDrift:
             r'\|\s*\d+\s*\|\s*`([^`/]+)(?:/)?`\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|'
         )
         matches = list(table_pattern.finditer(doc_text))
-        assert len(matches) == 26, f"Expected exactly 26 table rows, found {len(matches)}"
+        assert len(matches) == 27, f"Expected exactly 27 table rows, found {len(matches)}"
 
         for match in matches:
             area = match.group(1).strip()

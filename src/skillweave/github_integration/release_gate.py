@@ -32,6 +32,8 @@ class ReleaseGateResult:
     all_required_passed: bool = False
     can_release: bool = False
     errors: list[str] = field(default_factory=list)
+    candidate_sha: str = ""
+    base_sha: str = ""
 
     @property
     def passed_count(self) -> int:
@@ -394,6 +396,8 @@ class ReleaseReadinessGate:
             "all_required_passed": result.all_required_passed,
             "passed_count": result.passed_count,
             "total_checks": len(result.checks),
+            "candidate_sha": result.candidate_sha,
+            "base_sha": result.base_sha,
             "checks": [
                 {
                     "id": c.id,
@@ -418,6 +422,14 @@ def run_cli():
         latest_tag=latest_tag,
         wip_scan_paths=["src", "README.md", "CHANGELOG.md"],
     )
+    # The gate always records which commit it inspected so a rework brief can
+    # later point at the exact candidate/base pair. In Action runs these are
+    # provided by GitHub; locally they may be absent, in which case keep them
+    # empty rather than fabricate a value.
+    result.candidate_sha = os.environ.get(
+        "GITHUB_SHA", os.environ.get("CANDIDATE_SHA", "")
+    )
+    result.base_sha = os.environ.get("GITHUB_BASE_SHA", "") or result.candidate_sha
 
     markdown = gate.generate_markdown(result)
     with open("release-gate-report.md", "w") as f:
