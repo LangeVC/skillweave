@@ -198,15 +198,15 @@ class TestUtilities:
 
 
 # ---------------------------------------------------------------------------
-# Integration: real catalogue.yaml on disk
+# Integration: the tracked catalogue deliverable on disk
 # ---------------------------------------------------------------------------
 
 class TestRealCatalogueFile:
     REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-    REAL = REPO_ROOT / ".skillweave" / "catalogue.yaml"
+    REAL = REPO_ROOT / "config" / "catalogue.yaml"
 
     def test_exists(self):
-        assert self.REAL.exists(), "Missing .skillweave/catalogue.yaml"
+        assert self.REAL.exists(), "Missing config/catalogue.yaml (tracked deliverable)"
 
     def test_parseable_with_all_sections(self):
         data = cat.load_catalogue(self.REAL)
@@ -215,3 +215,26 @@ class TestRealCatalogueFile:
     def test_reviewer_never_equals_ops(self):
         cat.load_catalogue(self.REAL)
         assert cat.get_model_for_role("reviewer") != cat.get_model_for_role("ops")
+
+
+# ---------------------------------------------------------------------------
+# Default resolution from a clean checkout (no .skillweave operator override)
+# ---------------------------------------------------------------------------
+
+class TestDefaultResolution:
+    def test_fallback_to_tracked_deliverable(self, monkeypatch, tmp_path):
+        # chdir to a directory that has no .skillweave/catalogue.yaml anywhere
+        # up its parent chain, so _default_path() must fall back to the
+        # module-anchored config/catalogue.yaml deliverable.
+        monkeypatch.chdir(tmp_path)
+        default = cat._default_path()
+        assert default.exists(), f"default path missing: {default}"
+        assert default.name == "catalogue.yaml"
+        loader = cat.load_catalogue()
+        assert set(("runtime", "harnesses", "models", "role_defaults", "contracts")).issubset(loader)
+
+    def test_load_catalogue_without_path_resolves(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        data = cat.load_catalogue()
+        assert isinstance(data, dict)
+        assert "role_defaults" in data
