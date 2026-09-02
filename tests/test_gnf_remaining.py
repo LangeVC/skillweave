@@ -1,16 +1,16 @@
 """
-Golden Negative Fixture Suite — SW-RTF I00
+Golden Negative Fixture Suite
 
-Die neun realen Fehler der Welle CP-OPT-2026-08-05-W1 als dauerhafte
-Regressionspruefung.
+Nine real defects, observed together in one production wave, preserved as
+a durable regression guard.
 
-v1.2.0-Gegenprobe: der Code versucht, den Schutzmechanismus zu
-importieren. Wenn das scheitert (ImportError), fehlt der Schutz auf
-dieser Version — der Defekt wuerde unerkannt durchrutschen. Der Test
-dokumentiert das explizit als PASS mit Begruendung.
+v1.2.0 cross-check: the code attempts to import the protection module.
+If the import fails (ImportError), protection is absent on this baseline —
+the defect would slip through uncaught. The test documents that fact
+explicitly as a PASS, with a reason attached.
 
-Gegen den Kandidaten (Schutz vorhanden) wird der negative Fall
-assertiert: die Fixture muss den Defekt erkennen.
+Against the candidate (protection present) the negative case is asserted:
+each fixture must surface the defect.
 """
 import pytest
 
@@ -53,7 +53,7 @@ class TestGNFSuite:
     - If yes (v1.3 candidate): the negative case is asserted.
     """
 
-    # ── GNF-01: S03/S05 Selbstfreigabe releasechain_ready ──────────────────
+    # ── GNF-01: S03/S05 self-approval releasechain_ready ──────────────────
 
     def test_gnf_01_s03_s05_self_approval_releasechain_ready(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.authority"):
@@ -72,7 +72,7 @@ class TestGNFSuite:
             guard.validate_approval(approval, approving_role="ops")
         assert "ops" in str(exc.value).lower()
 
-    # ── GNF-02: S04/S05 wechselseitiger Deadlock ueber 12 Stunden ─────────
+    # ── GNF-02: S04/S05 mutual deadlock over 12 hours ─────────────────────
 
     def test_gnf_02_mutual_deadlock_over_12_hours(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.store"):
@@ -100,7 +100,7 @@ class TestGNFSuite:
         block_events = [e for e in events if "BLOCKED" in e.payload.get("state", "")]
         assert len(block_events) >= 2
 
-    # ── GNF-03: fuenf Enum-Drift-Werte ────────────────────────────────────
+    # ── GNF-03: five enum-drift values ────────────────────────────────────
 
     def test_gnf_03_five_enum_drift_values_rejected(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.schema.vocabulary"):
@@ -118,7 +118,7 @@ class TestGNFSuite:
             with pytest.raises(StatusRejectedError):
                 validate_status(value)
 
-    # ── GNF-04: fabrizierter Subagentenbericht ────────────────────────────
+    # ── GNF-04: fabricated subagent report ────────────────────────────────
 
     def test_gnf_04_fabricated_subagent_report_rejected(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.context"):
@@ -140,7 +140,7 @@ class TestGNFSuite:
             "GNF-04 FAIL: fabricated subagent report was accepted as authoritative"
         )
 
-    # ── GNF-05: bridge-p0.patch byte-identisch mit mcp-p0.patch ───────────
+    # ── GNF-05: bridge-p0.patch byte-identical to mcp-p0.patch ────────────
 
     def test_gnf_05_duplicate_patch_rejected(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.registry"):
@@ -167,7 +167,7 @@ class TestGNFSuite:
             "GNF-05 FAIL: identical hash with conflicting purposes not detected"
         )
 
-    # ── GNF-06: SKILLWEAVE_TOPOLOGY_AUTHORIZED ohne erzeugenden Task ──────
+    # ── GNF-06: SKILLWEAVE_TOPOLOGY_AUTHORIZED without a generating task ──
 
     def test_gnf_06_topology_authorized_without_creating_task(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.gate_reconciliation"):
@@ -199,7 +199,7 @@ class TestGNFSuite:
             "GNF-06 FAIL: unresolved external gate was reconciled instead of blocked"
         )
 
-    # ── GNF-07: Coralspine-Prompt in Amberleaf-Session ────────────────────
+    # ── GNF-07: Coralspine prompt in an Amberleaf session ─────────────────
 
     def test_gnf_07_coralspine_prompt_in_amberleaf_session(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.preflight"):
@@ -222,7 +222,7 @@ class TestGNFSuite:
             "GNF-07 FAIL: Coralspine prompt was not rejected in Amberleaf session"
         )
 
-    # ── GNF-08: Observer-Empfehlung widerspricht offenem Finding ──────────
+    # ── GNF-08: Observer recommendation contradicts an open finding ───────
 
     def test_gnf_08_observer_recommendation_contradicts_open_finding(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.observer"):
@@ -253,7 +253,7 @@ class TestGNFSuite:
             "GNF-08 FAIL: contradicting recommendation did not trigger self-alert"
         )
 
-    # ── GNF-09: manuell uebertragene Testzahlen 866/841/24/1 ──────────────
+    # ── GNF-09: manually transferred test counts 866/841/24/1 ─────────────
 
     def test_gnf_09_manually_transferred_test_counts(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.registry"):

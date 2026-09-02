@@ -20,10 +20,10 @@ it is injected so a caller can supply a recorder or a stub, and so a test can
 prove the decision without spawning a worker. Whether the seam runs is the
 contract, not where it imports.
 
-The lower half of the module is the cold-session resume path (FFR-700-2,
-dispatch 2). A sequence is split into batches and every batch is a session
-boundary; a cold session receives the *state file* alone — :class:`SessionState`
-— and from it executes exactly one batch. A second batch in the same session is
+The lower half of the module is the cold-session resume path (dispatch 2).
+A sequence is split into batches and every batch is a session boundary; a
+cold session receives the *state file* alone — :class:`SessionState` — and
+from it executes exactly one batch. A second batch in the same session is
 refused (:class:`SessionConsumedError`), and a state file that omits
 ``session_boundary`` is refused the same way a sequence is.
 """
@@ -520,7 +520,7 @@ def load_sequence_file(path: str) -> SequenceDeclaration:
     return load_sequence(data)
 
 
-# --- Cold-session resume: one batch from the state file alone (FFR-700-2) ---
+# --- Cold-session resume: one batch from the state file alone ---
 #
 # A sequence is split into batches, and every batch is a session boundary.
 # A cold session does not receive the sequence, the PRD, or a transcript: it
