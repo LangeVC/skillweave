@@ -38,8 +38,22 @@ jobs:
           # The tag must be an ancestor of origin's default branch so a stray
           # tag pushed to a side branch cannot publish. Default branch is
           # determined, never assumed (mirror model reads it at run time).
-          DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD \
-            | sed 's|origin/||')"
+          # Guarded form (SW152-002): on a fresh actions/checkout there is no
+          # origin/HEAD symref, so `git symbolic-ref` exits 128 and would kill
+          # the gate before its ancestor check ever runs. Fall back to the
+          # remote's declared HEAD, then to a fail-closed "main" (a wrong guess
+          # yields an empty merge-base -> rejected, never a bypass).
+          DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#^refs/remotes/origin/##' || true)"
+          if [ -z "${DEFAULT_BRANCH}" ]; then
+            DEFAULT_BRANCH="$(git ls-remote --symref origin HEAD 2>/dev/null | sed -n '1s/^ref: refs\/heads\/\([^[:space:]]*\).*/\1/p' || true)"
+          fi
+          if [ -z "${DEFAULT_BRANCH}" ]; then
+            DEFAULT_BRANCH="main"
+          fi
+          echo "default branch: ${DEFAULT_BRANCH}"
+          # Ensure the default-branch tip is a local ref before merge-base
+          # (the checkout only fetched the triggering tag ref).
+          git fetch --no-tags --force origin "refs/heads/${DEFAULT_BRANCH}:refs/remotes/origin/${DEFAULT_BRANCH}" >/dev/null 2>&1 || true
           if ! git merge-base --is-ancestor "${TAG}" "refs/remotes/origin/${DEFAULT_BRANCH}"; then
             echo "HARD GATE REJECTED — tag ${TAG} is not on the default branch"
             exit 1

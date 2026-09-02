@@ -27,12 +27,14 @@ from assumptions import AssumptionTracker, Assumption
 
 
 # The repository's own .skillweave/ is git-excluded (docs/substrate-map.md,
-# invariant 5), so no test may read it. Discovery assets are resolved from a
-# checked-in substrate root under tests/fixtures/ instead, which is also what
-# resolve_discovery_asset() expects: a project root containing .skillweave/.
+# invariant 5), so no test may read it. Discovery assets (lenses, prompts and
+# templates) now ship as packaged defaults under src/skillweave/assets/ and are
+# resolved through resolve_discovery_asset(): a project root with no
+# skillweave.config/ tier falls through to the packaged default. SUBSTRATE_ROOT
+# (tests/fixtures/substrate-root/) no longer copies those assets; it only holds
+# fixture-only files (phases.yaml, bundles.yaml, config.yaml, lib/, and the
+# release policy). See tests/fixtures/substrate-root/README.md.
 SUBSTRATE_ROOT = Path(__file__).resolve().parent / "fixtures" / "substrate-root"
-PROMPTS_DIR = SUBSTRATE_ROOT / ".skillweave" / "prompts" / "discovery"
-TEMPLATES_DIR = SUBSTRATE_ROOT / ".skillweave" / "templates" / "discovery"
 
 
 def _lens_data():
@@ -42,7 +44,20 @@ def _lens_data():
 
 
 def _prompt_files():
-    return sorted(PROMPTS_DIR.glob("*.md"))
+    # No fixture-directory glob: the prompts are the shipped packaged defaults,
+    # enumerated by name and resolved through resolve_discovery_asset().
+    return sorted(
+        resolve_discovery_asset(SUBSTRATE_ROOT, "prompts", name)
+        for name in PACKAGED_DISCOVERY_ASSETS["prompts"]
+    )
+
+
+def _template_files():
+    # Resolved through resolve_discovery_asset(), not a fixture-directory glob.
+    return sorted(
+        resolve_discovery_asset(SUBSTRATE_ROOT, "templates", name)
+        for name in PACKAGED_DISCOVERY_ASSETS["templates"]
+    )
 
 
 # ===== Lens Configuration Tests =====
@@ -128,7 +143,15 @@ def test_prompt_inventory_registered():
     assert data['total_prompts'] >= 10
     assert len(data['inventory']) >= 10
     assert data['total_prompts'] == len(data['inventory'])
-    registered = {(SUBSTRATE_ROOT / entry['file']).resolve() for entry in data['inventory']}
+    # Each inventory entry points at a discovery prompt; resolve it through the
+    # packaged default (the fixture no longer carries a copy) and require it to
+    # exist among the shipped prompts.
+    registered = {
+        resolve_discovery_asset(
+            SUBSTRATE_ROOT, "prompts", entry["file"].split("prompts/", 1)[1]
+        ).resolve()
+        for entry in data["inventory"]
+    }
     assert registered.issubset({p.resolve() for p in library})
 
 
@@ -142,7 +165,8 @@ def test_all_five_templates_exist():
 
 
 def test_templates_have_placeholders():
-    md_templates = sorted(TEMPLATES_DIR.glob("*.md"))
+    md_templates = [t for t in _template_files() if t.name.endswith(".md")]
+    assert md_templates, "no markdown templates resolved"
     for t in md_templates:
         with open(t) as f:
             content = f.read()
@@ -314,20 +338,102 @@ def test_revision_prompt_requires_evidence():
 
 # ===== Hermetic Resource Resolution Tests =====
 
+# The full discovery surface the product ships as tier-1 packaged defaults
+# (src/skillweave/assets/). Enumerated explicitly so the red proof below fails
+# if any asset stops shipping, rather than silently passing because the
+# packaged tree under test happened to be empty.
+PACKAGED_DISCOVERY_ASSETS = {
+    "lenses": ["design-thinking.yaml"],
+    "prompts": [
+        "discovery/empathy-pain-points.md",
+        "discovery/empathy-persona-dev.md",
+        "discovery/empathy-user-context.md",
+        "discovery/framing-assumption-prioritization.md",
+        "discovery/framing-assumption-surfacing.md",
+        "discovery/framing-opportunity.md",
+        "discovery/framing-problem-statement.md",
+        "discovery/iteration-revision.md",
+        "discovery/research-competitor-analysis.md",
+        "discovery/research-landscape-map.md",
+        "discovery/research-opportunity-assessment.md",
+    ],
+    "templates": [
+        "discovery/assumption-log.yaml",
+        "discovery/competitor-matrix.md",
+        "discovery/feedback-synthesis.md",
+        "discovery/opportunity-canvas.md",
+        "discovery/persona-card.md",
+        "discovery/research-summary.md",
+    ],
+}
+
+
+def _empty_project(tmp_path):
+    """A fresh project root whose skillweave.config/ is absent (empty inputs tier)."""
+    root = tmp_path / "empty-project"
+    root.mkdir()
+    return root
+
+
 def test_missing_discovery_asset_fails_explicitly(tmp_path):
     from skillweave.design_thinking import DiscoveryAssetNotFound
     missing = tmp_path / "pkgroot"
-    expected = (missing / ".skillweave" / "lenses" / "design-thinking.yaml").resolve()
+    missing.mkdir()
+    project_expected = (missing / "skillweave.config" / "lenses" / "no-such-asset.yaml").resolve()
+    packaged_expected = (
+        Path(__file__).resolve().parent.parent
+        / "src" / "skillweave" / "assets" / "lenses" / "no-such-asset.yaml"
+    ).resolve()
     try:
-        resolve_discovery_asset(missing, "lenses", "design-thinking.yaml")
+        resolve_discovery_asset(missing, "lenses", "no-such-asset.yaml")
         assert False, "expected DiscoveryAssetNotFound"
     except DiscoveryAssetNotFound as exc:
-        assert exc.expected_path == expected
-        assert str(expected) in str(exc)
+        assert exc.project_path == project_expected
+        assert exc.packaged_path == packaged_expected
+        assert str(project_expected) in str(exc)
+        assert str(packaged_expected) in str(exc)
 
 
 def test_discovery_assets_resolve_from_repo_root_not_cwd(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    lens = resolve_discovery_asset(SUBSTRATE_ROOT, "lenses", "design-thinking.yaml")
-    assert lens == (SUBSTRATE_ROOT / ".skillweave" / "lenses" / "design-thinking.yaml").resolve()
+    lens = resolve_discovery_asset(_empty_project(tmp_path), "lenses", "design-thinking.yaml")
+    packaged = (
+        Path(__file__).resolve().parent.parent
+        / "src" / "skillweave" / "assets" / "lenses" / "design-thinking.yaml"
+    ).resolve()
+    assert lens == packaged
     assert lens.exists()
+
+
+# ===== Resolver Chain Tests (SW152-009) =====
+
+
+def test_package_only_asset_resolves(tmp_path):
+    root = _empty_project(tmp_path)
+    path = resolve_discovery_asset(root, "lenses", "design-thinking.yaml")
+    packaged = (
+        Path(__file__).resolve().parent.parent
+        / "src" / "skillweave" / "assets" / "lenses" / "design-thinking.yaml"
+    ).resolve()
+    assert path == packaged
+    assert path.exists()
+
+
+def test_project_input_wins_over_packaged_default(tmp_path):
+    root = _empty_project(tmp_path)
+    tier = root / "skillweave.config" / "lenses"
+    tier.mkdir(parents=True)
+    (tier / "design-thinking.yaml").write_text("tuned: true\n")
+    path = resolve_discovery_asset(root, "lenses", "design-thinking.yaml")
+    assert path == (tier / "design-thinking.yaml").resolve()
+    assert "tuned: true" in path.read_text()
+
+
+def test_empty_config_tier_resolves_every_packaged_asset(tmp_path):
+    root = _empty_project(tmp_path)
+    for kind, names in PACKAGED_DISCOVERY_ASSETS.items():
+        for name in names:
+            path = resolve_discovery_asset(root, kind, name)
+            assert path.exists(), f"packaged default missing: {kind}/{name}"
+            assert path.is_absolute()
+            assert "skillweave.config" not in path.parts

@@ -14,7 +14,7 @@ schema_version: "1.0"
 runtime:
   cli: opencode run --model {model} -
   version: "1.5.1"
-  repo_root_source: config/catalogue.yaml
+  repo_root_source: src/skillweave/assets/catalogue.yaml
 
 harnesses:
   opencode:

@@ -259,10 +259,10 @@ class TestUtilities:
 
 class TestRealCatalogueFile:
     REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-    REAL = REPO_ROOT / "config" / "catalogue.yaml"
+    REAL = REPO_ROOT / "src" / "skillweave" / "assets" / "catalogue.yaml"
 
     def test_exists(self):
-        assert self.REAL.exists(), "Missing config/catalogue.yaml (tracked deliverable)"
+        assert self.REAL.exists(), "Missing src/skillweave/assets/catalogue.yaml (tracked deliverable)"
 
     def test_parseable_with_all_sections(self):
         data = cat.load_catalogue(self.REAL)
@@ -281,7 +281,7 @@ class TestDefaultResolution:
     def test_fallback_to_tracked_deliverable(self, monkeypatch, tmp_path):
         # chdir to a directory that has no .skillweave/catalogue.yaml anywhere
         # up its parent chain, so _default_path() must fall back to the
-        # module-anchored config/catalogue.yaml deliverable.
+        # module-anchored packaged assets/catalogue.yaml deliverable.
         monkeypatch.chdir(tmp_path)
         default = cat._default_path()
         assert default.exists(), f"default path missing: {default}"
@@ -294,3 +294,33 @@ class TestDefaultResolution:
         data = cat.load_catalogue()
         assert isinstance(data, dict)
         assert "role_defaults" in data
+
+    def test_resolves_tier2_override_over_shipped_default(self, monkeypatch, tmp_path):
+        # SW152-008 criterion 4: a team-tuned skillweave.config/catalogue.yaml
+        # must win over the shipped config/catalogue.yaml when no path is given.
+        tier2 = tmp_path / "skillweave.config"
+        tier2.mkdir()
+        (tier2 / "catalogue.yaml").write_text(
+            yaml.dump(
+                {
+                    "runtime": {"repo_root_source": "skillweave.config/catalogue.yaml"},
+                    "harnesses": {},
+                    "models": {"faigate/tuned-model": {"cost_index": 0}},
+                    "role_defaults": {"ops": {"model": "faigate/tuned-model"}},
+                    "contracts": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        data = cat.load_catalogue()
+        assert data["runtime"]["repo_root_source"] == "skillweave.config/catalogue.yaml"
+        assert cat.get_model_for_role("ops") == "faigate/tuned-model"
+
+    def test_no_tier2_override_falls_back_to_shipped(self, monkeypatch, tmp_path):
+        # A directory with neither skillweave.config/ nor any override must
+        # still resolve the module-anchored shipped deliverable.
+        monkeypatch.chdir(tmp_path)
+        default = cat._default_path()
+        assert not str(default).startswith(str(tmp_path))
+        assert default.exists()

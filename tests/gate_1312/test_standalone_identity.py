@@ -17,6 +17,7 @@ import yaml
 
 from tests.gate_1312 import CANONICAL_SCHEMA_DIGEST
 from tests.gate_1312 import _sibling as sib
+from tests.gate_1312._sibling import require
 
 SCHEMA_VERSION = "0.1.0"
 
@@ -36,6 +37,9 @@ def test_criterion_02_standalone_sdk_identical_version_and_digest():
     ``sdkContract`` and ``direct-install`` compatibility) pins that same
     ``schemaVersion`` and ``schemaDigest``.
     """
+    require(sib.sdk_schemas_dir, name="skillweave-sdk")
+    require(sib.base_profiles_dir, name="skillweave-profiles")
+    require(sib.cms_pack_dir, name="skillweave-packs-pro")
     # --- Standalone SDK: no runtime import, zero dependencies -----------------
     validator = sib.sdk_validator_module()
     root = sib.sdk_root()
@@ -103,6 +107,7 @@ def test_canonical_digest_is_deterministic_over_sorted_schema_files():
     """The canonical digest is a pure function of the five preview schema bytes,
     so Core, OSS and Pro can never disagree unless their pinned schema bytes do.
     """
+    require(sib.sdk_schemas_dir, name="skillweave-sdk")
     validator = sib.sdk_validator_module()
     schemas_dir = sib.sdk_schemas_dir()
     assert validator.canonical_digest(schemas_dir) == validator.canonical_digest(

@@ -33,6 +33,7 @@ from skillweave.routing.profile import (
 )
 
 from tests.gate_1312 import _sibling as sib
+from tests.gate_1312._sibling import require
 
 
 def _core_root() -> Path:
@@ -47,6 +48,8 @@ def test_criterion_07_static_rejects_and_architecture_negatives():
     """Rejects copied schemas, CMS/provider branches in Core, weakened Pro-pack
     authority, implicit profile mode, and unsupported silent fallback.
     """
+    require(sib.sdk_root, name="skillweave-sdk")
+    require(sib.cms_pack_dir, name="skillweave-packs-pro")
     core = _core_root()
 
     # --- Copied schemas: Core must not vendor the SDK's preview contract -------
@@ -136,9 +139,10 @@ def test_core_schemas_dir_does_not_copy_sdk_preview_ids():
     authority). The legacy co-located schemas (run-state, evidence) predate the
     four-way split and are not preview-contract copies.
     """
+    require(sib.sdk_schemas_dir, name="skillweave-sdk")
     core = _core_root()
     schemas_dir = core / "schemas"
-    sdk_schemas = sib.sdk_root() / "schemas"
+    sdk_schemas = sib.sdk_schemas_dir()
     import json
     preview_ids = set()
     for f in sdk_schemas.rglob("*.preview.schema.json"):

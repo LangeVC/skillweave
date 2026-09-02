@@ -106,8 +106,24 @@ git pull origin main
 # Verify tests pass
 python3 -m pytest tests/ -v
 
-# Update version references (if applicable)
-# Sync Capacium manifests to the new version
+# --- Version bump (REQUIRED — see "Version bump contract" below) ---
+# Fetch the canonical, tag-pinned version-sync helper and write the new version
+# into every location declared in .version.yaml (16 locations: pyproject.toml,
+# capability.yaml — both its own version: and the 13 capabilities[] member pins —
+# and all 13 skills/*/capability.yaml).
+# This MUST happen before the tag is created, or the tag gate rejects the push.
+curl -fsSL \
+  "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.0.0/scripts/version-sync.py" \
+  -o /tmp/version-sync.py
+python3 /tmp/version-sync.py bump X.Y.Z --repo .
+# The bump self-verifies: it re-runs `check` and fails if any location drifted.
+
+# Commit the written versions; the tag gate compares the tag against
+# source_of_truth (pyproject.toml) at the commit the tag points at.
+git add pyproject.toml capability.yaml skills/
+git commit -m "chore: bump version to X.Y.Z"
+
+# Sync Capacium manifests to the new version (distribution-bundle step)
 python3 scripts/sync-capacium-manifests.py
 
 # Verify Capacium manifests are in sync
@@ -116,6 +132,23 @@ python3 scripts/sync-capacium-manifests.py --check
 # Check CHANGELOG.md is updated
 # Verify documentation is current
 ```
+
+### Version bump contract
+
+The release gate (`.forgejo/workflows/mirror.yml`, `version-gate` job) rejects
+any `v*` tag whose `source_of_truth` (`pyproject.toml`) does not equal the tag
+number. Five releases (v1.3.12 through v1.5.0) shipped a tag with no written
+version because nothing ever called the bump. The required order is therefore:
+
+1. `python3 version-sync.py bump X.Y.Z --repo .` — writes every declared location.
+2. Commit the written versions.
+3. `git tag vX.Y.Z` and push — only now can the gate pass.
+
+The bump tool is fetched from the pinned ops-engine tag `v3.0.0` (not the moving
+`master` branch), and the workflow re-proves the fetched file is Python and
+carries the `bump` subcommand before use. Do not hand-edit version strings: the
+`.version.yaml` `locations` list is the single inventory, and the bump writes it
+in full.
 
 ### 2. Create Release
 ```bash
