@@ -1767,28 +1767,79 @@
   },
   "coverage": {
     "decided_and_not_reopened": {
-      "Neutral place": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms",
-      "Neutral placeholder": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any proje",
-      "Neutral pla": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail",
-      "Neutral placeholder wo": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any"
+      "ship_model": "Ticket ref, dated 2026-08-22: local -> primary (canonical) -> mirror -> secondary runs distribution only. Release creation is the release handler on primary via tag push.",
+      "layer_boundary": "Two cross-cutting concerns: generic mechanics in the shared templates (engine, agent-test, suite-test); business logic in the operator layover; configuration optionally per repository.",
+      "effort_unit": "complexity points in a fixed sequence, no time estimates. The template asset's estimated field is stale against practice; practice wins.",
+      "dispatch_path": "Operator decision 2026-08-23: the dispatch flow follows the standard model without exception. The measured state (an older producer, no primary producer, mirror being written to) is a divergence to be corrected, not a benchmark to copy. One dispatch removes secondary-side production; another supplies the engine configuration in the operator repository.",
+      "pipeline_model": "Operator, 2026-08-23: the model 'local -> primary (canonical) -> mirror -> secondary distribution only' applies to effectively every repository. Exactly two exceptions: secondary-only repositories with no primary canonical (e.g. a profile repository), and distribution artefacts the primary host cannot build, produced on the secondary side after the mirror. The second is an exception about the build environment, never about where the release object is created. Written down in a document, given reach and an instrument by a later ticket. Not to be re-litigated per repository."
     },
     "tickets_covered": {
-      "Neutral": [
-        "FFR-600-2"
+      "TK-224": [
+        "FFR-100-1",
+        "FFR-100-2",
+        "FFR-100-3",
+        "FFR-100-4"
       ],
-      "Neutral placeho": [
+      "TK-229": [
+        "FFR-200-1",
+        "FFR-200-2",
+        "FFR-200-3",
+        "FFR-200-4",
+        "FFR-200-5"
+      ],
+      "TK-221": [
+        "FFR-300-2"
+      ],
+      "TK-222": [
+        "FFR-300-1"
+      ],
+      "TK-223": [
+        "FFR-600-1"
+      ],
+      "TK-101/TK-102": [
         "FFR-400-1",
         "FFR-400-2"
       ],
-      "Neutral placeholder": [
+      "TK-225": [
+        "FFR-500-1",
+        "FFR-500-2"
+      ],
+      "TK-002": [
+        "FFR-500-3"
+      ],
+      "TK-209": [
+        "FFR-600-3"
+      ],
+      "TK-210": [
+        "FFR-600-4"
+      ],
+      "TK-208": [
+        "FFR-600-5"
+      ],
+      "TK-217": [
+        "FFR-700-1"
+      ],
+      "TK-219": [
+        "FFR-700-2"
+      ],
+      "TK-111": [
+        "FFR-700-3"
+      ],
+      "TK-207/226/227/228": [
         "FFR-000-2"
+      ],
+      "TK-211": [
+        "FFR-600-2"
       ]
     },
     "deliberately_out_of_scope": {
-      "Neutral": "Neutral placeholder word",
-      "Neutral placeholder": "Neutral placeholder wording describing the work item in general terms without naming",
-      "Neutral placeholder wording des": "Neutral placeholder wording describing the",
-      "Neutral plac": "Neutral placeholder wording describing the work item in general terms without naming any project, organization"
+      "TK-211": "P1 runner contract — a sub-epic child, not on the primary spine. Schedule after FFR-600-5.",
+      "TK-212": "P2 job isolation — same.",
+      "TK-201/202/204/205": "P1 planning visibility and planning-repo backup. Related through the mirror-as-backup path but a separate cut.",
+      "TK-213/215/218/220": "P1/P2 follow-ups; TK-218 must not start before FFR-700-1 lands, per its own handoff.",
+      "TK-106/103/104/105/107/109/110": "P1/P2/P3, unrelated to release and mirror.",
+      "TK-EPIC-001": "The cockpit. FFR-200-5 produces the release/mirror record it needs; the cockpit itself is not built here.",
+      "TK-EPIC-003": "The framing epic. Its children 208/209/210 are in scope; 211/212 are not, so the epic is advanced, not closed."
     },
     "new_findings_not_in_any_ticket": [
       "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording d",
