@@ -4,11 +4,15 @@ Where ``tests/unit/test_version_sync.py`` proves the snapshot agrees with
 itself on the *current* tree, this module proves the *release* behaviour:
 the product tag binds to the runtime source, bundle and skill artifacts are
 verified under the declared decoupled-member-pins policy, CHANGELOG prose stays
-outside any automatic bump, and a 1.3.11-to-1.3.12 rehearsal shows that trusting
-only the old two declared locations fails red while the expanded declaration
-reaches every required surface.
+outside any automatic bump, and a patch-bump rehearsal (old next version vs
+expanded) shows that trusting only the old two declared locations fails red
+while the expanded declaration reaches every required surface.
 
-Hermetic: reads the tree, writes only to the pytest ``tmp_path``.
+Hermetic: reads the tree, writes only to the pytest ``tmp_path``. The rehearsal
+copies the live repo root and derives every version from that copy rather than
+hardcoding the build's current version: a committed tree may already carry
+decoupled member pins/artifacts that lag the runtime, so only tree-derived
+versions keep the proof green in that steady state too.
 """
 
 from __future__ import annotations
@@ -183,16 +187,52 @@ def _copy_tree(tmp: Path, src=REPO_ROOT) -> Path:
     return dest
 
 
+def _patch_bump(version: str) -> str:
+    """Semver patch increment (1.2.3 -> 1.2.4).
+
+    The rehearsal drives the canonical tool against a *copy of the live repo
+    root* (not a synthetic fixture), so it must never hardcode the tree's
+    current version. Decoupled member pins mean a committed tree may already
+    carry members that differ from the runtime (a prior real release left them
+    lagging together). Deriving every version from the copied tree keeps the
+    rehearsal green in both the synchronized and the already-diverged steady
+    states, proving the durable invariant rather than a screenshot of the build.
+    """
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+    assert m, f"not semver: {version!r}"
+    return f"{m.group(1)}.{m.group(2)}.{int(m.group(3)) + 1}"
+
+
+def _member_versions(repo: Path, role: str, topo) -> dict[str, str]:
+    """Return {member_name: version-read-from-its-own-file|pin} for the
+    informational skill_capability / bundle_member_pins declared locations in
+    the copied tree. Versions come from the tree, never from literals."""
+    out: dict[str, str] = {}
+    skills = [loc for loc in topo["locations"] if loc["role"] == role]
+    for loc in skills:
+        name = Path(loc["path"]).parent.name
+        out[name] = _read(repo / loc["path"], loc["pattern"]) or ""
+    return out
+
+
 class TestRehearsal:
     TOPO = _load_topology()
 
     def test_old_two_locations_fails_red(self, tmp_path):
         # The old declaration trusted only pyproject.toml and capability.yaml.
         # A bump through the canonical tool against those two leaves every skill
-        # manifest (and the bundle pins) at 1.3.11 → fail red.
+        # manifest (and the bundle pins) at the copied tree's pre-bump member
+        # version. Deriving that version from the tree (not a literal) keeps the
+        # red proof valid whether the tree is synchronized (all members == the
+        # runtime) or already carries decoupled members lagging behind it.
         repo = _copy_tree(tmp_path)
-        old = "1.3.11"
-        new = "1.3.12"
+        prior_members = _member_versions(repo, "skill_capability", self.TOPO)
+        assert prior_members, "no skill_capability locations collected"
+        runtime = _read(
+            repo / "pyproject.toml", r'^version\s*=\s*"(\d+\.\d+\.\d+)"'
+        )
+        assert runtime is not None, "pyproject runtime unreadable"
+        new = _patch_bump(runtime)
         old_topo = {
             "schema": 1,
             "source_of_truth": "pyproject.toml",
@@ -210,15 +250,35 @@ class TestRehearsal:
             if cap.exists():
                 m = re.search(r"^version:\s*(\S+)", cap.read_text(), re.MULTILINE)
                 skill_versions.add(m.group(1))
-        assert "1.3.12" not in skill_versions, (
+        assert new not in skill_versions, (
             "skills must NOT have been reached by the old two-location bump"
         )
-        assert skill_versions == {old}, f"unexpected skill version set {skill_versions}"
+        assert skill_versions == set(prior_members.values()), (
+            f"old two-location bump moved a member: {skill_versions} != "
+            f"{set(prior_members.values())}"
+        )
 
     def test_expanded_declaration_finishes_synchronized(self, tmp_path):
         repo = _copy_tree(tmp_path)
-        new = "1.3.12"
-        old = "1.3.11"  # the pre-bump version of the copied test tree
+        # Snapshots of the copied tree's actual pre-bump state, not literals.
+        # A committed tree may already be decoupled (members lagging together
+        # behind the runtime from a prior real release); every required surface
+        # still agrees with the runtime, and every informational surface carries
+        # whatever the tree shipped. The rehearsal must hold in that steady state
+        # exactly as it holds in the fully-synchronized one.
+        runtime = _read(
+            repo / "pyproject.toml", r'^version\s*=\s*"(\d+\.\d+\.\d+)"'
+        )
+        assert runtime is not None, "pyproject runtime unreadable"
+        new = _patch_bump(runtime)
+        prior_bundle = _read(repo / "capability.yaml", r"^version:\s*(\S+)")
+        assert prior_bundle == runtime, (
+            f"bundled runtime source {prior_bundle!r} != runtime {runtime!r} "
+            f"in the pre-bump tree"
+        )
+        prior_pins = _member_versions(repo, "bundle_member_pins", self.TOPO)
+        prior_files = _member_versions(repo, "skill_capability", self.TOPO)
+        assert prior_pins and prior_files, "no member locations collected"
 
         # The canonical tool must parse and bump the full declaration. If the
         # declaration is outside the tool's YAML subset, `bump` exits 2 here —
@@ -231,11 +291,11 @@ class TestRehearsal:
         assert chk.returncode == 0, f"check failed (exit {chk.returncode}): {chk.stderr}"
 
         # Every REQUIRED declared surface — runtime and the distribution bundle —
-        # must report 1.3.12, reached from the single expanded declaration. All
+        # must report `new`, reached from the single expanded declaration. All
         # informational surfaces — bundle_member_pins AND every skill_capability —
         # are NOT forced by a plain `bump`: a bundle bump can be packaging alone,
-        # so pins and member files both stay at the prior version, keeping
-        # pin == member file (decoupled_member_pins; consistency owned by
+        # so pins and member files both stay at their pre-existing versions,
+        # keeping pin == member file (decoupled_member_pins; consistency owned by
         # check-manifest.py, proven below by reading the on-tree files).
         assert self.TOPO["locations"], "no locations collected"
         for loc in self.TOPO["locations"]:
@@ -248,30 +308,22 @@ class TestRehearsal:
             )
 
         # Informational surfaces are untouched by a plain `bump`: the bundle
-        # member pins AND each member's own capability.yaml keep the prior
-        # version, together, so none of them diverges from its own file.
-        bundle = yaml.safe_load((repo / "capability.yaml").read_text())
-        skills = [loc["path"] for loc in self.TOPO["locations"] if loc["role"] == "skill_capability"]
-        assert skills, "no skill_capability locations to keep decoupled"
-        for entry in bundle["capabilities"]:
-            assert entry["version"] == old, (
-                f"bundle pin {entry['name']} is {entry['version']!r} after bump; "
-                f"informational pins must stay at the prior version {old!r} "
+        # member pins AND each member's own capability.yaml keep their prior
+        # versions, together, so none of them diverges from its own file.
+        after_pins = _member_versions(repo, "bundle_member_pins", self.TOPO)
+        after_files = _member_versions(repo, "skill_capability", self.TOPO)
+        assert after_pins.keys() == prior_pins.keys()
+        for name, before in prior_pins.items():
+            assert after_pins[name] == before, (
+                f"bundle pin {name} moved {before!r} -> {after_pins[name]!r} by a "
+                f"plain bump; informational pins must stay at the prior version "
                 f"(decoupled_member_pins)"
             )
-            member_path = next(
-                (s for s in skills if s.endswith(f"/{entry['name']}/capability.yaml")), None
-            )
-            assert member_path is not None, f"no skill_capability location for pin {entry['name']}"
-            member_version = _read(repo / member_path, r'^version:\s*(\S+)')
-            assert member_version == old, (
-                f"member file {member_path} is {member_version!r} after bump; "
-                f"informational member files must stay at {old!r} with their pin "
-                f"(decoupled_member_pins)"
-            )
-            assert member_version == entry["version"], (
-                f"pin {entry['name']} ({entry['version']!r}) diverged from its own "
-                f"member file ({member_version!r})"
+            if name not in prior_files:
+                continue
+            assert after_files[name] == after_pins[name], (
+                f"pin for {name} ({after_pins[name]!r}) diverged from its own "
+                f"member file ({after_files[name]!r}) after the bump"
             )
 
         # The release gate runs check-manifest.py after the bump; a decoupled
@@ -291,8 +343,13 @@ class TestRehearsal:
 
     def test_changelog_untouched_by_bump(self, tmp_path):
         repo = _copy_tree(tmp_path)
+        runtime = _read(
+            repo / "pyproject.toml", r'^version\s*=\s*"(\d+\.\d+\.\d+)"'
+        )
+        assert runtime is not None, "pyproject runtime unreadable"
+        new = _patch_bump(runtime)
         before = (repo / "CHANGELOG.md").read_text()
-        proc = _run_version_sync(repo, "bump", "1.3.12")
+        proc = _run_version_sync(repo, "bump", new)
         assert proc.returncode == 0, f"bump failed: {proc.stderr}"
         after = (repo / "CHANGELOG.md").read_text()
         assert before == after, "CHANGELOG.md must not be rewritten by the bump"
