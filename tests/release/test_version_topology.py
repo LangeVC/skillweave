@@ -68,18 +68,22 @@ class TestTagBinding:
                 f"runtime is {runtime!r}"
             )
 
-    def test_every_skill_artifact_matches_the_product_tag(self):
+    def test_skill_artifacts_are_decoupled_not_lockstep(self):
+        # Under decoupled_member_pins each member skill is informational: its
+        # own capability.yaml may LAG the product tag (a packaging-only bump
+        # moves neither the member file nor its bundle pin). A member file is
+        # therefore NOT lockstep to the tag; pin == member file consistency is
+        # the contract, owned by scripts/check-manifest.py. Declaring a skill
+        # `required: true` again would drag it back under the lockstep tag gate,
+        # so each skill_capability must stay informational.
         topo = _load_topology()
-        runtime = None
-        for loc in topo["locations"]:
-            if loc["role"] == "runtime_product":
-                runtime = _read(REPO_ROOT / loc["path"], loc["pattern"])
-        for loc in topo["locations"]:
-            if loc["role"] == "skill_capability":
-                v = _read(REPO_ROOT / loc["path"], loc["pattern"])
-                assert v == runtime, (
-                    f"skill {loc['path']} version {v!r} diverges from product tag {runtime!r}"
-                )
+        skills = [loc for loc in topo["locations"] if loc["role"] == "skill_capability"]
+        assert skills, "no skill_capability locations declared"
+        require_lockstep = [loc["path"] for loc in skills if loc.get("required", True)]
+        assert require_lockstep == [], (
+            f"skill_capability must stay decoupled (not lockstep) under "
+            f"decoupled_member_pins, but declared required: {require_lockstep}"
+        )
 
     def test_bundle_manifest_version_matches_the_product_tag(self):
         topo = _load_topology()
@@ -226,31 +230,64 @@ class TestRehearsal:
         chk = _run_version_sync(repo, "check")
         assert chk.returncode == 0, f"check failed (exit {chk.returncode}): {chk.stderr}"
 
-        # Every REQUIRED declared surface — runtime, bundle and all skill
-        # capabilities — must report 1.3.12, reached from the single expanded
-        # declaration. The bundle_member_pins role is informational and is NOT
-        # forced by a plain `bump`: a bundle bump can be packaging alone, so the
-        # pins legitimately stay at the prior version (decoupled_member_pins).
+        # Every REQUIRED declared surface — runtime and the distribution bundle —
+        # must report 1.3.12, reached from the single expanded declaration. All
+        # informational surfaces — bundle_member_pins AND every skill_capability —
+        # are NOT forced by a plain `bump`: a bundle bump can be packaging alone,
+        # so pins and member files both stay at the prior version, keeping
+        # pin == member file (decoupled_member_pins; consistency owned by
+        # check-manifest.py, proven below by reading the on-tree files).
         assert self.TOPO["locations"], "no locations collected"
         for loc in self.TOPO["locations"]:
             v = _read(repo / loc["path"], loc["pattern"])
             assert v is not None, f"no match for {loc['role']} at {loc['path']}"
             if not loc.get("required", True):
-                continue  # informational (bundle member pins) may lag on purpose
+                continue  # informational (pins + member files) may lag on purpose
             assert v == new, (
                 f"{loc['role']} at {loc['path']} is {v!r}, expected {new!r} after bump"
             )
 
-        # The bundle member pins (capabilities[] entries) are NOT bumped by a
-        # plain `bump`; they keep the pre-bump version because member versions
-        # may legitimately differ from the bundle's.
+        # Informational surfaces are untouched by a plain `bump`: the bundle
+        # member pins AND each member's own capability.yaml keep the prior
+        # version, together, so none of them diverges from its own file.
         bundle = yaml.safe_load((repo / "capability.yaml").read_text())
+        skills = [loc["path"] for loc in self.TOPO["locations"] if loc["role"] == "skill_capability"]
+        assert skills, "no skill_capability locations to keep decoupled"
         for entry in bundle["capabilities"]:
             assert entry["version"] == old, (
                 f"bundle pin {entry['name']} is {entry['version']!r} after bump; "
                 f"informational pins must stay at the prior version {old!r} "
                 f"(decoupled_member_pins)"
             )
+            member_path = next(
+                (s for s in skills if s.endswith(f"/{entry['name']}/capability.yaml")), None
+            )
+            assert member_path is not None, f"no skill_capability location for pin {entry['name']}"
+            member_version = _read(repo / member_path, r'^version:\s*(\S+)')
+            assert member_version == old, (
+                f"member file {member_path} is {member_version!r} after bump; "
+                f"informational member files must stay at {old!r} with their pin "
+                f"(decoupled_member_pins)"
+            )
+            assert member_version == entry["version"], (
+                f"pin {entry['name']} ({entry['version']!r}) diverged from its own "
+                f"member file ({member_version!r})"
+            )
+
+        # The release gate runs check-manifest.py after the bump; a decoupled
+        # bump that leaves every pin and every member file at the prior version
+        # together must still pass it (the exact red/regression the lane fixes).
+        manifest_check = REPO_ROOT / "scripts" / "check-manifest.py"
+        assert manifest_check.exists(), "scripts/check-manifest.py missing"
+        mc = subprocess.run(
+            [sys.executable, str(manifest_check), "--repo", str(repo)],
+            capture_output=True,
+            text=True,
+        )
+        assert mc.returncode == 0, (
+            f"check-manifest after decoupled bump failed (exit {mc.returncode}): "
+            f"{mc.stdout}\n{mc.stderr}"
+        )
 
     def test_changelog_untouched_by_bump(self, tmp_path):
         repo = _copy_tree(tmp_path)

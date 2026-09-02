@@ -8,12 +8,13 @@ schema: 1
 
 # release_policy names how the distinct artifact roles below relate to one
 # another for this release train. `decoupled_member_pins` means the runtime
-# product, the distribution bundle and every separately installable skill
-# capability carry one train version, while the bundle's `capabilities[]`
-# member pins are NOT forced to that version: a bundle bump can be packaging
-# alone, so a member's version may legitimately differ from the bundle's
-# (OPS decision 2026-09-01). The consistency of each pin with the member's own
-# capability.yaml is owned by scripts/check-manifest.py, not by this gate.
+# product and the distribution bundle carry the train (release-tag) version,
+# while every member artifact — the bundle's `capabilities[]` member pins AND
+# each member's own skill_capability.yaml — is informational and may LAG the
+# bundle: a bundle bump can be packaging alone (OPS decision 2026-09-02). The
+# pin never diverges from its own member file though: both lag together, and
+# that pin == file consistency is owned by scripts/check-manifest.py, not by
+# this gate (loosening that check is out of scope for SW152-020).
 release_policy: decoupled_member_pins
 
 # The single authority whose version the bump reads as its reference and whose
@@ -47,11 +48,12 @@ locations:
   # The bundle's `capabilities[]` entries are dependency pins to member
   # skills, not the version authority for those skills. A member skill's
   # version may legitimately differ from the bundle's: a bundle bump can be
-  # packaging alone (OPS decision 2026-09-01). The consistency of each pin
-  # with the member's own capability.yaml is owned by scripts/check-manifest.py
-  # (case 4 in validate-release-tag.yml), never by this gate. This location is
-  # therefore informational, not lockstep; version-sync must NOT force it equal
-  # to source_of_truth.
+  # packaging alone (OPS decision 2026-09-02), and the pin lags the bundle
+  # TOGETHER WITH the skill_capability entry for the same member, so the pin
+  # never diverges from its own member file. The pin == file consistency is
+  # owned by scripts/check-manifest.py (case 4 in validate-release-tag.yml),
+  # never by this gate. This location is therefore informational, not lockstep;
+  # version-sync must NOT force it equal to source_of_truth.
   - path: capability.yaml
     role: bundle_member_pins
     pattern: '^  version:\s*(\S+)'
@@ -59,55 +61,60 @@ locations:
 
   # Every independently installable skill-capability artifact. One explicit
   # entry per shipped skill; each is a separate artifact in its own right.
+  # Each skill_capability is informational together with its bundle_member_pins
+  # slot: a packaging-only bump moves neither the member file nor the pin, so
+  # the two stay consistent and both may lag the bundle version (OPS decision
+  # 2026-09-02). version-sync must NOT force a skill file equal to
+  # source_of_truth; its own version surface is its capability.yaml.
   - path: skills/skillweave-blueprint/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-council/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-design/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-discovery/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-launch/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-lifecycle/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-observe/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-post-release/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-promptchain-execute/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-promptchain-generate/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-promptchain-validate/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-releasechain/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false
   - path: skills/skillweave-repo-health/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
-    required: true
+    required: false

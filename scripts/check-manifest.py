@@ -14,12 +14,6 @@ Ohne jeden Bezug auf source_of_truth. Abweichende Mitgliedsversionen sind
 erlaubt und muessen erlaubt bleiben (der Normalfall eines Bundles); verboten
 ist nur, dass Manifest und Mitgliedsdatei sich widersprechen.
 
-Dieses Werkzeug ist die ALLEINIGE Autoritaet fuer die Pin-Konsistenz: die
-bundle_member_pins-Location in .version.yaml ist informational (required:
-false, OPS-Entscheidung 2026-09-01), damit version-sync eine legitime
-Abweichung der Mitgliedspins nicht als Gate-Fehler meldet. Die inhaltliche
-Pruefung Pin == Mitgliedsdatei bleibt hier, nicht in version-sync.
-
 Stdlib only, laeuft auf leerem ubuntu-latest-Runner.
 
 Usage:
