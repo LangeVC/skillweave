@@ -50,16 +50,25 @@ class UnclassifiedAreaError(ValueError):
 
 @dataclass(frozen=True)
 class ResolvedArea:
-    """The effective axes for one area as realised by a backing store."""
+    """The effective axes for one area as realised by a backing store.
+
+    ``at_risk`` marks a durable area whose durability has no reachable store to
+    realise it (no git repository and no configured planning repository). Such
+    an area is not silently accepted as durable: ``is_durable`` returns False.
+    """
 
     name: str
     direction: Direction
     durability: Durability
     disclosure: Disclosure
     store: StoreKind
+    at_risk: bool = False
 
     def is_durable(self) -> bool:
-        return self.durability is Durability.DURABLE
+        return self.durability is Durability.DURABLE and not self.at_risk
+
+    def is_at_risk(self) -> bool:
+        return self.at_risk
 
 
 class BackingStore(ABC):
