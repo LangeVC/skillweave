@@ -60,3 +60,5 @@ py-modules = ["skillweave_degraded"]
 
 [tool.setuptools.package-data]
 skillweave = ["py.typed"]
+"skillweave.assets" = ["catalogue.yaml", "lenses/**/*", "prompts/**/*", "templates/**/*"]
+"skillweave.studio.reference" = ["lean_startup.md"]

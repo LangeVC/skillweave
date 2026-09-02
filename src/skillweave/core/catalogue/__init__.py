@@ -1,11 +1,12 @@
 """SkillWeave Model & Harness Catalogue (SW-CATALOG-001).
 
-Reads ``config/catalogue.yaml`` — the single source of truth for which model
-serves which role and which harnesses are proven — and exposes three lookup
+Reads ``catalogue.yaml`` — the single source of truth for which model serves
+which role and which harnesses are proven — and exposes three lookup
 functions:
 
-- :func:`load_catalogue` — parse the tracked catalogue (shipped at
-  ``config/catalogue.yaml``, resolvable from the module location).
+- :func:`load_catalogue` — parse the tracked catalogue (shipped as a packaged
+  default at ``skillweave/assets/catalogue.yaml``, resolvable from the module
+  location).
 - :func:`get_model_for_role` — resolve a role to a model id, honouring the
   ``!= ops`` constraint and ``cost_index`` preference.
 - :func:`get_harness_config` — return the raw config dict for a named harness.
@@ -37,22 +38,23 @@ _catalogue_path: Path | None = None
 
 
 def _default_path() -> Path:
-    """Locate the tracked ``config/catalogue.yaml``, preferring an override.
+    """Locate the tracked ``catalogue.yaml``, preferring an override.
 
     Resolution order:
 
     1. An operator-provided ``.skillweave/catalogue.yaml`` found by walking up
        from the current working directory (this is substrate IP and is never
        committed, but may be supplied at runtime).
-    2. The deliverable shipped with the repository at ``config/catalogue.yaml``,
-       anchored to the installed package so the lookup works from any ``cwd``.
+    2. The deliverable shipped with the package at
+       ``skillweave/assets/catalogue.yaml``, anchored to the installed package
+       so the lookup works from any ``cwd``.
     """
     candidate = Path.cwd()
     for parent in (candidate, *candidate.parents):
         probe = parent / ".skillweave" / "catalogue.yaml"
         if probe.exists():
             return probe
-    return Path(__file__).resolve().parents[4] / "config" / "catalogue.yaml"
+    return Path(__file__).resolve().parents[2] / "assets" / "catalogue.yaml"
 
 
 # --- public API -------------------------------------------------------------
@@ -62,8 +64,8 @@ def load_catalogue(path: str | Path | None = None) -> dict[str, Any]:
     """Load (or reload) the catalogue from *path*.
 
     If *path* is ``None`` the default catalogue is resolved: an operator
-    ``.skillweave/catalogue.yaml`` if present, else ``config/catalogue.yaml``
-    (see :func:`_default_path`).
+    ``.skillweave/catalogue.yaml`` if present, else the packaged default
+    ``skillweave/assets/catalogue.yaml`` (see :func:`_default_path`).
 
     Args:
         path: Filesystem path to the catalogue YAML file.
@@ -84,7 +86,7 @@ def load_catalogue(path: str | Path | None = None) -> dict[str, Any]:
     if not resolved.exists():
         raise FileNotFoundError(
             f"SkillWeave catalogue not found at: {resolved!s}\n"
-            "Create config/catalogue.yaml or supply a custom path."
+            "Create a catalogue.yaml or supply a custom path."
         )
 
     with resolved.open(encoding="utf-8") as fh:
