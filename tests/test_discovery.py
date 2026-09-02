@@ -27,12 +27,14 @@ from assumptions import AssumptionTracker, Assumption
 
 
 # The repository's own .skillweave/ is git-excluded (docs/substrate-map.md,
-# invariant 5), so no test may read it. Discovery assets are resolved from a
-# checked-in substrate root under tests/fixtures/ instead, which is also what
-# resolve_discovery_asset() expects: a project root containing .skillweave/.
+# invariant 5), so no test may read it. Discovery assets (lenses, prompts and
+# templates) now ship as packaged defaults under src/skillweave/assets/ and are
+# resolved through resolve_discovery_asset(): a project root with no
+# skillweave.config/ tier falls through to the packaged default. SUBSTRATE_ROOT
+# (tests/fixtures/substrate-root/) no longer copies those assets; it only holds
+# fixture-only files (phases.yaml, bundles.yaml, config.yaml, lib/, and the
+# release policy). See tests/fixtures/substrate-root/README.md.
 SUBSTRATE_ROOT = Path(__file__).resolve().parent / "fixtures" / "substrate-root"
-PROMPTS_DIR = SUBSTRATE_ROOT / ".skillweave" / "prompts" / "discovery"
-TEMPLATES_DIR = SUBSTRATE_ROOT / ".skillweave" / "templates" / "discovery"
 
 
 def _lens_data():
@@ -42,7 +44,20 @@ def _lens_data():
 
 
 def _prompt_files():
-    return sorted(PROMPTS_DIR.glob("*.md"))
+    # No fixture-directory glob: the prompts are the shipped packaged defaults,
+    # enumerated by name and resolved through resolve_discovery_asset().
+    return sorted(
+        resolve_discovery_asset(SUBSTRATE_ROOT, "prompts", name)
+        for name in PACKAGED_DISCOVERY_ASSETS["prompts"]
+    )
+
+
+def _template_files():
+    # Resolved through resolve_discovery_asset(), not a fixture-directory glob.
+    return sorted(
+        resolve_discovery_asset(SUBSTRATE_ROOT, "templates", name)
+        for name in PACKAGED_DISCOVERY_ASSETS["templates"]
+    )
 
 
 # ===== Lens Configuration Tests =====
@@ -128,7 +143,15 @@ def test_prompt_inventory_registered():
     assert data['total_prompts'] >= 10
     assert len(data['inventory']) >= 10
     assert data['total_prompts'] == len(data['inventory'])
-    registered = {(SUBSTRATE_ROOT / entry['file']).resolve() for entry in data['inventory']}
+    # Each inventory entry points at a discovery prompt; resolve it through the
+    # packaged default (the fixture no longer carries a copy) and require it to
+    # exist among the shipped prompts.
+    registered = {
+        resolve_discovery_asset(
+            SUBSTRATE_ROOT, "prompts", entry["file"].split("prompts/", 1)[1]
+        ).resolve()
+        for entry in data["inventory"]
+    }
     assert registered.issubset({p.resolve() for p in library})
 
 
@@ -142,7 +165,8 @@ def test_all_five_templates_exist():
 
 
 def test_templates_have_placeholders():
-    md_templates = sorted(TEMPLATES_DIR.glob("*.md"))
+    md_templates = [t for t in _template_files() if t.name.endswith(".md")]
+    assert md_templates, "no markdown templates resolved"
     for t in md_templates:
         with open(t) as f:
             content = f.read()
