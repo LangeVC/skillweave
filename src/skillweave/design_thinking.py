@@ -17,45 +17,75 @@ DISCOVERY_RESOURCE_KINDS = ("lenses", "prompts", "templates")
 
 
 class DiscoveryAssetNotFound(FileNotFoundError):
-    """Raised when a required packaged discovery asset is missing at its resolved path."""
+    """Raised when a required discovery asset is missing at both attempted paths.
 
-    def __init__(self, expected_path: Path) -> None:
-        self.expected_path = Path(expected_path).resolve()
+    Carries the two absolute paths the resolver tried — the project input path
+    (``skillweave.config/<kind>/<name>``) and the packaged default
+    (``skillweave/assets/<kind>/<name>``) — and names both in the message. The
+    property this preserves is that a packaged install cannot silently resolve
+    another checkout: when resolution fails, both locations that were consulted
+    are spelled out rather than a single vague path.
+    """
+
+    def __init__(self, project_path: Path, packaged_path: Path) -> None:
+        self.project_path = Path(project_path).resolve()
+        self.packaged_path = Path(packaged_path).resolve()
         super().__init__(
-            f"Required packaged discovery asset not found at resolved path: {self.expected_path}"
+            "Required discovery asset not found. Tried project inputs ("
+            f"{self.project_path}) and packaged defaults ({self.packaged_path})."
         )
+
+
+def _packaged_assets_root() -> Path:
+    """Return the shipped tier-1 discovery asset root, anchored to this module.
+
+    ``skillweave/assets/{lenses,prompts,templates}/`` ships with the package
+    (see ``pyproject.toml`` ``package-data``). Anchoring to ``__file__`` means
+    the lookup resolves identically from a source checkout and from an installed
+    wheel, regardless of the caller's working directory.
+    """
+    return Path(__file__).resolve().parent / "assets"
 
 
 def resolve_discovery_asset(resource_root: Path, kind: str, name: str) -> Path:
     """
-    Resolve a discovery asset from an explicit resource root.
+    Resolve a discovery asset through a chain of two tiers, then fail explicitly.
 
-    The root is anchored absolutely and never falls back to the caller's
-    working directory or a relative glob rooted at the caller. If the asset
-    is missing, failure is explicit and names the exact resolved expected
-    path so a packaged install cannot silently resolve another checkout.
+    Resolution order:
+
+    1. Project input — ``skillweave.config/<kind>/<name>`` under ``resource_root``
+       (the durable, tracked tier-2 input a team hand-edits).
+    2. Packaged default — ``skillweave/assets/<kind>/<name>`` shipped with the
+       package (the read-only tier-1 deliverable).
+
+    When neither exists, the failure names both absolute paths that were tried,
+    so a packaged install can never silently resolve another checkout rooted at
+    the caller's working directory.
 
     Args:
         resource_root: Explicit repository or package resource root.
         kind: One of DISCOVERY_RESOURCE_KINDS (lenses, prompts, templates).
-        name: Asset path relative to ``<root>/.skillweave/<kind>``, e.g.
-            ``"discovery/iteration-revision.md"`` for a prompt or
-            ``"design-thinking.yaml"`` for a lens.
+        name: Asset path relative to ``skillweave.config/<kind>`` or
+            ``skillweave/assets/<kind>``, e.g. ``"discovery/iteration-revision.md"``
+            for a prompt or ``"design-thinking.yaml"`` for a lens.
 
     Returns:
         The resolved absolute path to the asset.
 
     Raises:
-        DiscoveryAssetNotFound: If the asset is absent at the resolved path.
+        DiscoveryAssetNotFound: If the asset is absent at both attempted paths.
     """
     if kind not in DISCOVERY_RESOURCE_KINDS:
         raise ValueError(
             f"Unknown discovery resource kind {kind!r}; expected one of {DISCOVERY_RESOURCE_KINDS}"
         )
-    path = Path(resource_root).resolve() / ".skillweave" / kind / name
-    if not path.exists():
-        raise DiscoveryAssetNotFound(path)
-    return path
+    project_path = Path(resource_root).resolve() / "skillweave.config" / kind / name
+    packaged_path = _packaged_assets_root() / kind / name
+    if project_path.exists():
+        return project_path
+    if packaged_path.exists():
+        return packaged_path
+    raise DiscoveryAssetNotFound(project_path, packaged_path)
 
 
 class DesignRule(str, Enum):

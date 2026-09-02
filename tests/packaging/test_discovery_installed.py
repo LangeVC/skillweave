@@ -112,27 +112,62 @@ def test_installed_discovery_imports_and_runs(tmp_path):
 
 
 def test_installed_discovery_missing_asset_fails_explicit(tmp_path):
-    """Criterion 4: missing packaged discovery assets fail explicitly with the
-    resolved expected path rather than falling back to another checkout."""
+    """Criterion 2: a missing packaged discovery asset raises DiscoveryAssetNotFound
+    naming both attempted absolute paths — project inputs and packaged defaults."""
     _build_and_install(tmp_path)
     site = (tmp_path / "site").resolve()
-    expected = (site / ".skillweave" / "lenses" / "design-thinking.yaml").resolve()
+    project_expected = (site / "skillweave.config" / "lenses" / "no-such-asset.yaml").resolve()
+    packaged_expected = (site / "skillweave" / "assets" / "lenses" / "no-such-asset.yaml").resolve()
 
     foreign_cwd = tmp_path / "work"
     foreign_cwd.mkdir()
 
     body = (
         "try:\n"
-        "    resolve_discovery_asset(root, 'lenses', 'design-thinking.yaml')\n"
+        "    resolve_discovery_asset(root, 'lenses', 'no-such-asset.yaml')\n"
         "    raise SystemExit('expected DiscoveryAssetNotFound')\n"
         "except DiscoveryAssetNotFound as exc:\n"
-        "    assert exc.expected_path == Path("
-        + repr(str(expected))
-        + ").resolve(), (exc.expected_path, "
-        + repr(str(expected))
+        "    assert exc.project_path == Path("
+        + repr(str(project_expected))
+        + ").resolve(), (exc.project_path, "
+        + repr(str(project_expected))
         + ")\n"
-        "    assert str(exc.expected_path) in str(exc)\n"
-        "    assert exc.expected_path.anchor and '.skillweave' in exc.expected_path.parts\n"
+        "    assert exc.packaged_path == Path("
+        + repr(str(packaged_expected))
+        + ").resolve(), (exc.packaged_path, "
+        + repr(str(packaged_expected))
+        + ")\n"
+        "    assert str(exc.project_path) in str(exc)\n"
+        "    assert str(exc.packaged_path) in str(exc)\n"
+    )
+    proc = _run_driver(tmp_path, foreign_cwd, body)
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_installed_discovery_resolves_packaged_default(tmp_path):
+    """Criterion 1: an asset present only in the package resolves from the installed
+    wheel, and a project input in skillweave.config/ wins over it."""
+    _build_and_install(tmp_path)
+    site = (tmp_path / "site").resolve()
+    packaged_expected = (
+        site / "skillweave" / "assets" / "lenses" / "design-thinking.yaml"
+    ).resolve()
+
+    foreign_cwd = tmp_path / "work"
+    foreign_cwd.mkdir()
+
+    body = (
+        "lens = resolve_discovery_asset(root, 'lenses', 'design-thinking.yaml')\n"
+        "assert lens == Path("
+        + repr(str(packaged_expected))
+        + ").resolve(), lens\n"
+        "assert lens.exists()\n"
+        "tier = root / 'skillweave.config' / 'lenses'\n"
+        "tier.mkdir(parents=True, exist_ok=True)\n"
+        "(tier / 'design-thinking.yaml').write_text('tuned: true\\n')\n"
+        "tuned = resolve_discovery_asset(root, 'lenses', 'design-thinking.yaml')\n"
+        "assert tuned == (tier / 'design-thinking.yaml').resolve(), tuned\n"
+        "assert 'tuned: true' in tuned.read_text()\n"
     )
     proc = _run_driver(tmp_path, foreign_cwd, body)
     assert proc.returncode == 0, proc.stderr
