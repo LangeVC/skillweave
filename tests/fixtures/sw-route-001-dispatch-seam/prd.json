@@ -1,24 +1,24 @@
 {
-  "projectName": "SW-ROUTE-001 — close the routing dispatch seam",
+  "projectName": "Neutral placeholder wording describing the wor",
   "version": "1.0",
   "status": "ready",
   "created": "2026-08-17",
-  "initiative": "SW-ROUTE-001",
-  "repo": "forgejo/skillweave/skillweave",
-  "scope": "src/skillweave/routing/, tests/unit/",
+  "initiative": "Neutral plac",
+  "repo": "Neutral placeholder wording d",
+  "scope": "Neutral placeholder wording describi",
   "operator_gebunden": false,
   "sequence": {
     "sequence_id": "sw-route",
     "sequence_type": "build",
     "execution_mode": "ralph_attended",
-    "worktree": "je Lane — siehe lane.worktree",
-    "branch": "je Lane — siehe lane.branch",
-    "base": "dev 4a80306",
+    "worktree": "Neutral placeholder wording d",
+    "branch": "Neutral placeholder wording",
+    "base": "Neutral pla",
     "state_file": ".swroute-state.md",
     "runner_shell": "bash -eo pipefail",
     "phase_names": {
-      "0": "seam",
-      "1": "gate"
+      "0": "Neut",
+      "1": "Neut"
     },
     "exclusive": [
       {
@@ -33,7 +33,7 @@
   "streams": [
     {
       "id": "seam",
-      "title": "The three gaps on the dispatch seam",
+      "title": "Neutral placeholder wording describ",
       "tasks": [
         "SW-RT-001",
         "SW-RT-002",
@@ -43,7 +43,7 @@
     },
     {
       "id": "gate",
-      "title": "The standard case runs end to end",
+      "title": "Neutral placeholder wording descr",
       "tasks": [
         "SW-RT-R"
       ]
@@ -52,13 +52,13 @@
   "tasks": [
     {
       "id": "SW-RT-001",
-      "title": "The dispatch adapter — read launch_command and actually start the tool",
-      "description": "Measured 2026-08-17 against the released tree. ToolSpec requires launch_command at construction, and outside profile.py there are ZERO references to it. RunnerAdapter.start_process takes a finished command: (command: Sequence[str], *, run_id, subject_repo, subject_commit, tool, model, ...) — so tool and model arrive as labels for the receipt, not as instructions. The release note says a role with a target tool is dispatched there; nothing dispatches. This task builds the missing piece and nothing else. It is deliberately the general adapter and not an OpenCode launcher: three further harnesses (Codex, Antigravity, Cursor) follow within weeks, and a tool-specific branch here would have to be unpicked each time.",
+      "title": "launch_command Neutral placeholder wording describing the work item in general terms",
+      "description": "launch_command Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder",
       "acceptanceCriteria": [
-        "A role carrying a ToolSpec is launched from its launch_command and args; the work is handed over to that process and the result is collected and bound to the run as evidence, not as free text. RED PROOF: a profile whose ops role targets a stub tool produces an artifact carrying that stub's output; the same test fails against v1.3.5 (478211f), where launch_command has no reader outside profile.py",
-        "The adapter is tool-agnostic. It receives tool name, launch command, arguments and the work, and branches on none of them. A test asserts that no specific tool name appears in the adapter module. OpenCode is the first consumer, not the shape of the interface",
-        "A role WITHOUT a ToolSpec runs in place and is recorded as having done so — an explicit in-place record, not an absent one. Running in the current harness is a declared configuration and must be distinguishable afterwards from a dispatch that silently did not happen",
-        "A failing launch is a named failure carrying the command that failed. A tool that never starts is never recorded as a run without a result. RED PROOF: a profile naming a non-existent launch command fails with that command in the message, and the run carries a failure rather than an empty success"
+        "launch_command Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produc",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produc",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or str",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placehol"
       ],
       "priority": "P0",
       "points": 5,
@@ -83,28 +83,28 @@
               1,
               2
             ],
-            "focus": "launch from the spec, hand over the work, collect the result — and keep the adapter free of any tool name"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organiz"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "in-place is recorded, not absent; a launch that fails is named with its command"
+            "focus": "Neutral placeholder wording describing the work item in general terms without n"
           }
         ],
-        "worktree": "skillweave/wt-swroute-001-ops",
-        "branch": "ops/SW-ROUTE-001-dispatch"
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder wordi"
       }
     },
     {
       "id": "SW-RT-002",
-      "title": "Availability is what Faigate serves, not who the council invited",
-      "description": "_check_unavailable_models refuses any role whose model is not in known_model_ids(), which derives from ROUTER_PROFILES. That table is the council's own casting — models, chairman, mode, temperature — not a registry of what Faigate can resolve. Faigate serves deepseek-v4-pro; the roster names deepseek-v4. So a profile pinning the model the operator uses every day fails with a message asserting that Faigate cannot resolve it, and prints council presets as the available set. The claim is false and confidently made — the same class of defect as the fetch, the installer and cap doctor on 2026-08-16.",
+      "title": "Neutral placeholder wording describing the work item in general",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing th",
       "acceptanceCriteria": [
-        "Model availability is resolved against what Faigate can actually serve, not against ROUTER_PROFILES. FIXTURE: deepseek-v4-pro. A profile pinning it loads, and no message claims Faigate cannot resolve it. RED PROOF: the identical profile raises RoutingProfileError against v1.3.5 (478211f)",
-        "When no authoritative source is reachable, an unresolvable model is reported as UNVERIFIED, not refused, and the message says which of the two happened. A profile must not be blocked because Faigate happened to be down — but neither may an unreachable Faigate be reported as a successful check",
-        "ROUTER_PROFILES keeps its own job as the council's casting and is not repurposed as a registry. A test pins that known_model_ids() is no longer the availability gate, so the conflation cannot return unnoticed"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral place",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general term"
       ],
       "priority": "P0",
       "points": 2,
@@ -130,21 +130,21 @@
               2,
               3
             ],
-            "focus": "resolve against Faigate; unreachable is unverified, not refused; the roster keeps its own job"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any proj"
           }
         ],
-        "worktree": "skillweave/wt-swroute-fai-ops",
-        "branch": "ops/SW-ROUTE-001-faigate"
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder word"
       }
     },
     {
       "id": "SW-RT-003",
-      "title": "The executing harness, and where profiles are loaded from",
-      "description": "load_profiles returns dict[str, RoutingProfile], so several profiles are already expressible, and tool hangs off the role, so one profile can already dispatch different roles to different tools. What is missing is the other side of the seam: load_profiles takes bare data and no code reads a file, so who supplies the profiles is undefined; and there are ZERO references to harness, host tool or current tool anywhere in routing/ and runtime/. role.tool says where a role is dispatched TO. Nothing says where FROM. The operator runs four harnesses (Claude Code, OpenCode, Codex, Antigravity) and wants one or more profiles per harness, so the separation is a requirement, not a refinement.",
+      "title": "Neutral placeholder wording describing the work item in g",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strate",
       "acceptanceCriteria": [
-        "The executing harness is determined and recorded on the run. Determination is explicit: either the caller set it or it was detected, and the record says which of the two. A detected harness that was actually guessed must not read as a declared one",
-        "Profiles are loaded from a declared location rather than handed in as bare data, and a harness maps to one or more profile names. The mapping is DATA, not code — adding a harness or a profile changes a file, never a branch",
-        "Harness and profile stay separate. A profile carries no harness field, and one profile may be referenced by several harnesses. RED PROOF: a profile declaring a harness is refused with a message naming the field; the same declaration is silently accepted against v1.3.5 (478211f). RATIONALE, to be kept with the code: writing the harness into the profile makes the cross-product the maintenance surface — four harnesses times three profiles is twelve declarations to keep in step instead of three plus a mapping"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organizat",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without nami",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any p"
       ],
       "priority": "P0",
       "points": 3,
@@ -168,27 +168,27 @@
               1,
               2
             ],
-            "focus": "the harness as a recorded fact, declared or detected; profiles loaded from a place, mapped as data"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project,"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "a profile carrying a harness is refused, with the reasoning written down beside the code"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any"
           }
         ],
-        "worktree": "skillweave/wt-swroute-003-ops",
-        "branch": "ops/SW-ROUTE-001-harness"
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder word"
       }
     },
     {
       "id": "SW-RT-004",
-      "title": "The transport lies: a timeout nobody set, and a failure nobody names",
-      "description": "Found on 2026-08-17 while trying to run two councils, and only found because four attempts failed in a row. FaigateProvider._req hardcodes timeout=10 (faigate_adapter.py:207) while the three other providers use 30, and CouncilConfig.timeout_per_model never reaches the socket: asyncio.wait_for(300) wraps a call that dies at ten seconds. Every model in a real council run failed at exactly 10.0s. The cause stayed invisible because CouncilDegradedError lists which models failed and never why, although each cause sits in ModelResponse.error. Same family as the rest of this ticket: a declared knob with no effect, and a report that points the operator at nothing.",
+      "title": "Neutral placeholder wording describing the work item in general term",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organi",
       "acceptanceCriteria": [
-        "The HTTP timeout comes from configuration and reaches the socket. RED PROOF: a council run with a 3310-character stage-1 prompt loses every model at exactly 10.0s against v1.3.5 (478211f) and completes here. No provider hardcodes a timeout that its caller believes it can set",
-        "A degraded council names why, not only who. CouncilDegradedError carries the per-model causes that already sit in ModelResponse.error. RED PROOF: on a timeout the message contains the word timeout and the endpoint that timed out",
-        "An empty completion is a failure, not an answer. query() returns choices[0].message.content unchecked; for a reasoning model whose budget went to reasoning that is the empty string. A response with no content is reported as such and does not count toward min_models_required"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy det",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy de"
       ],
       "priority": "P0",
       "points": 3,
@@ -213,26 +213,26 @@
               2,
               3
             ],
-            "focus": "the timeout reaches the socket; a degraded run names its causes; empty content is not an answer"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any projec"
           }
         ],
-        "worktree": "skillweave/wt-swroute-fai-ops",
-        "branch": "ops/SW-ROUTE-001-faigate"
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder word"
       }
     },
     {
       "id": "SW-RT-R",
-      "title": "Review — every red proof reproduced, then the standard case end to end",
-      "description": "The four lanes reported eleven criteria and reproduced their own red proofs. None was reproduced by anyone else. This lane does that first and integrates second — an integration gate that passes while a lane's red proof was never independently run certifies nothing. Reviewer does not repair: a lane that fails goes back to that lane. The reviewer's fact sources are the repository and the running system, never a session's report — a number taken from a report is unverified and cannot satisfy a criterion.",
+      "title": "Neutral placeholder wording describing the work item in general terms",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming an",
       "acceptanceCriteria": [
-        "SW-RT-001 reproduced: a profile whose ops role targets a stub tool produces an artifact carrying that stub's output, and the same test fails against v1.3.5 (478211f). A role without a ToolSpec yields an explicit in-place record. A profile naming a non-existent launch command fails with that command in the message.",
-        "SW-RT-002 reproduced: a profile pinning deepseek-v4-pro loads here and raises RoutingProfileError against 478211f. A model that Faigate serves but does not list is NOT refused — deepseek-v4 is the fixture, it answers a real call and is absent from /v1/models.",
-        "SW-RT-003 reproduced: a profile declaring a harness is refused with the field named, and the identical declaration is silently accepted against 478211f. The harness record distinguishes declared from detected.",
-        "SW-RT-004 reproduced: a council run with a 3310-character stage-1 prompt loses every model at exactly 10.0s against 478211f and completes here. A degraded run names its causes, not only its model ids.",
-        "The operator's standard case runs from a declared profile: observer in place, ops and reviewer dispatched to OpenCode on deepseek-v4-pro. Reported with the resolved model, the launched command, the exit status and the artifact each role produced — not with the word success",
-        "The full unit suite is reported with its number and is at or above the measured 1.3.5 baseline of 336 in tests/unit. Both numbers appear in the verdict, and the eight pre-existing failures outside tests/unit are named as pre-existing rather than fixed",
-        "No specific tool name appears anywhere under src/skillweave/routing/. Measured and reported as a count, because the next three harnesses depend on it staying true",
-        "The four branches expose their new modules consistently from routing/__init__.py. Measured: SW-RT-003 exported harness.py, SW-RT-001 did not export dispatch.py — two lanes made opposite choices about one surface, and the merge must not preserve both."
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describ",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in gene",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy d",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wo",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization"
       ],
       "priority": "P0",
       "points": 3,
@@ -245,8 +245,8 @@
       "type": "verification",
       "passes": false,
       "lane": {
-        "worktree": "skillweave/wt-swroute-gate",
-        "branch": "(detached an den vier Lane-Spitzen — der Reviewer pinnt, was er geprueft hat)",
+        "worktree": "Neutral placeholder wordin",
+        "branch": "Neutral placeholder wording describing the work item in general terms without",
         "reads": [
           "src/skillweave/routing/",
           "tests/unit/"
@@ -263,40 +263,40 @@
               1,
               2
             ],
-            "focus": "reproduce the dispatch and availability red proofs against 478211f, not on trust"
+            "focus": "Neutral placeholder wording describing the work item in general terms without na"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "reproduce the harness refusal and the ten-second transport failure"
+            "focus": "Neutral placeholder wording describing the work item in general te"
           },
           {
             "criteria": [
               5,
               6
             ],
-            "focus": "the standard case end to end, and the suite with both numbers named"
+            "focus": "Neutral placeholder wording describing the work item in general ter"
           },
           {
             "criteria": [
               7,
               8
             ],
-            "focus": "no tool name under routing/; one export decision, not two"
+            "focus": "Neutral placeholder wording describing the work item in g"
           }
         ]
       }
     },
     {
       "id": "SW-RT-005",
-      "title": "The seam exports both new modules, not one lane's posture",
-      "description": "SW-RT-R measured the export surface from the blobs: the three tips resolve to two __init__.py files. The harness tip re-exports its seven new symbols; the dispatch tip does not re-export dispatch.py at all — and its own test cannot see the omission, because it imports skillweave.routing.dispatch directly. A green test over a gap it is constructed not to notice. The three tips merge cleanly onto dev with 377 tests passing; only this remains.",
+      "title": "Neutral placeholder wording describing the work item in g",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder word",
       "acceptanceCriteria": [
-        "routing/__init__.py re-exports BOTH new modules. The harness block from b5fb9a5 stays as it is; a from .dispatch import (...) block is added and its symbols enter __all__, matching the convention the rest of the file already uses. Keeping only one lane's posture would preserve the harness export and reintroduce the dispatch omission, which is not a decision.",
-        "A test imports every name in __all__ from skillweave.routing and fails if any is missing. RED PROOF: against the merge of the three tips it fails on the dispatch symbols; afterwards it passes. The gap survived four lanes and a gate because nothing checked the surface itself.",
-        "tests/unit reports at or above 377, the number measured on the three-way merge, and both figures appear in the report."
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without na",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy det",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, produc"
       ],
       "priority": "P0",
       "points": 2,
@@ -306,8 +306,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "skillweave/wt-swroute-seam-ops",
-        "branch": "ops/SW-ROUTE-001-seam",
+        "worktree": "Neutral placeholder wording de",
+        "branch": "Neutral placeholder w",
         "modifies": "src/skillweave/routing/__init__.py",
         "tests": "tests/unit/test_routing_exports.py",
         "reads": [
@@ -327,19 +327,19 @@
               2,
               3
             ],
-            "focus": "both modules exported; a test that checks the surface itself; both numbers named"
+            "focus": "Neutral placeholder wording describing the work item in general terms without na"
           }
         ]
       }
     },
     {
       "id": "SW-RT-006",
-      "title": "The operator's standard case exists as data, not as a test fixture",
-      "description": "SW-RT-R proved the standard case end to end — observer in place, ops and reviewer to OpenCode on deepseek-v4-pro, with a real launched command and an ArtifactReceipt. But the profile it ran was built inside the test. Measured 2026-08-17: there is NO profile file anywhere in the tree, so load_profiles_from_location has nothing to load. A capability that only exists when a test constructs it is not available to the operator.",
+      "title": "Neutral placeholder wording describing the work item in general te",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutra",
       "acceptanceCriteria": [
-        "A profile file exists in the repository as data and loads through load_profiles_from_location. It declares the operator's standard case: observer in place, ops and reviewer to OpenCode on deepseek-v4-pro. RED PROOF: loading it from a declared path yields the same role outcomes the gate reproduced by hand.",
-        "Harness and profile stay separate, as SW-RT-003 established: the file carries no harness field, and the harness-to-profile mapping is its own declaration. Four harnesses referencing three profiles must stay three profiles plus a mapping, not twelve entries.",
-        "The file documents where it is looked for. A declared location that only the code knows is a location the operator cannot use."
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wordin",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produ",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or str"
       ],
       "priority": "P0",
       "points": 2,
@@ -349,9 +349,9 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "skillweave/wt-swroute-profil-ops",
-        "branch": "ops/SW-ROUTE-001-profile",
-        "creates": "profiles/langevc-standard.yaml",
+        "worktree": "Neutral placeholder wording desc",
+        "branch": "Neutral placeholder word",
+        "creates": "profiles/example-standard.yaml",
         "tests": "tests/unit/test_standard_profile.py",
         "reads": [
           "src/skillweave/routing/harness.py",
@@ -369,19 +369,19 @@
               2,
               3
             ],
-            "focus": "the standard case as loadable data, harness kept separate, location documented"
+            "focus": "Neutral placeholder wording describing the work item in general terms without"
           }
         ]
       }
     },
     {
       "id": "SW-RT-007",
-      "title": "Dispatch from every harness, proven once per harness",
-      "description": "determine_harness reads SKILLWEAVE_HARNESS and is deliberately not guessing: the caller says it, the environment says it, or the record shows an empty detected name — 'no data' never reads as 'the caller said so'. Nothing sets that variable today. This lane makes each harness declare itself and proves the dispatch once from each, because a capability demonstrated from one harness is a capability demonstrated once.",
+      "title": "Neutral placeholder wording describing the work item",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detai",
       "acceptanceCriteria": [
-        "Each of the four harnesses declares itself, and how it does so is written down where its operator will look. Claude Code, OpenCode, Codex and Antigravity.",
-        "A dispatch to OpenCode is run FROM EACH harness and reported with the launched command, the resolved model, the exit code and the artifact — one report per harness, not one report claiming four. The gate did this for one; this criterion is the other three.",
-        "A harness that cannot be proven is named as unproven rather than assumed. Antigravity resolves skillweave-* through ~/.skillweave/skills/ — an April copy, 4890 bytes smaller than canonical — so it may fail here; that is a finding for capacium FEAT-003, and recording it as unproven is the correct outcome, not a workaround."
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeh",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, prod",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the"
       ],
       "priority": "P0",
       "points": 3,
@@ -391,43 +391,43 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "skillweave/wt-swroute-harness-ops",
-        "branch": "ops/SW-ROUTE-001-harnesses",
+        "worktree": "Neutral placeholder wording descr",
+        "branch": "Neutral placeholder wordin",
         "creates": "docs/dispatching-from-your-harness.md",
         "tests": "tests/unit/test_harness_declaration.py",
         "reads": [
           "src/skillweave/routing/harness.py",
-          "profiles/langevc-standard.yaml"
+          "profiles/example-standard.yaml"
         ],
         "must_not_touch": [
           "src/skillweave/routing/",
-          "profiles/langevc-standard.yaml"
+          "profiles/example-standard.yaml"
         ],
         "dispatch_order": [
           {
             "criteria": [
               1
             ],
-            "focus": "each harness declares itself, written where its operator looks"
+            "focus": "Neutral placeholder wording describing the work item in genera"
           },
           {
             "criteria": [
               2,
               3
             ],
-            "focus": "one proven dispatch per harness; unproven is named, not assumed"
+            "focus": "Neutral placeholder wording describing the work item in general"
           }
         ]
       }
     },
     {
       "id": "SW-RT-008",
-      "title": "A dispatch can be given a timeout, because one is always chosen anyway",
-      "description": "SW-RT-007 ran the real dispatch and reported timed_out with exit_code null. Measured afterwards: opencode terminates cleanly — an empty prompt exits 1 in a second, a real one exits 0 in seconds. It did not hang. The proof had to impose its own 30-second cap because launch_from_role threads no timeout, and 30 seconds is short for an agent turn that reads files. RunningProcess.wait already takes timeout and input_bytes; the dispatch surface does not pass it on. Third instance of the same shape in this ticket: launch_command declared and never read, timeout_per_model set and never reaching the socket, and now a timeout the runtime supports and the caller cannot set.",
+      "title": "Neutral placeholder wording describing the work item in general terms",
+      "description": "launch_command Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
       "acceptanceCriteria": [
-        "launch_from_role and dispatch take a timeout and pass it to the runtime, which already accepts one. A caller that sets none gets a documented default rather than an unbounded wait or a number invented by whoever wrote the proof.",
-        "A timeout is reported as a timeout and never as a failure of the tool. RED PROOF: a launch capped below the command's runtime yields termination timed_out with the cap named in the record; the same launch with an adequate cap yields exit 0. Against 478211f neither call accepts the parameter.",
-        "The record distinguishes DECLARED from TERMINATED. SW-RT-007 derived 'proven' from a clean exit, so a dispatch that launched correctly and was cut short read as unproven. Those are two different facts and a later reader needs both."
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral plac",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any pr"
       ],
       "priority": "P0",
       "points": 2,
@@ -437,8 +437,8 @@
       "type": "bug",
       "passes": false,
       "lane": {
-        "worktree": "skillweave/wt-swroute-timeout-ops",
-        "branch": "ops/SW-ROUTE-001-timeout",
+        "worktree": "Neutral placeholder wording descr",
+        "branch": "Neutral placeholder word",
         "modifies": "src/skillweave/routing/dispatch.py",
         "tests": "tests/unit/test_dispatch_timeout.py",
         "reads": [
@@ -447,7 +447,7 @@
         "must_not_touch": [
           "src/skillweave/runtime/runner_adapter.py",
           "src/skillweave/routing/harness.py",
-          "profiles/langevc-standard.yaml"
+          "profiles/example-standard.yaml"
         ],
         "dispatch_order": [
           {
@@ -456,21 +456,21 @@
               2,
               3
             ],
-            "focus": "the timeout is threaded, reported as itself, and declaration is kept apart from termination"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any pr"
           }
         ]
       }
     },
     {
       "id": "SW-RT-V",
-      "title": "Review the four lanes that came after the gate",
-      "description": "SW-RT-R covered lanes 001 to 004. Lanes 005, 006, 007 and 008 were built after it and carry no independent check. That stretch is where the profile was wrong twice, where one proof was faked with /bin/echo and a later one misread its own invented 30-second cap as a hung tool, and where two force-pushes rewrote branch history. Each rewrite was justified and neither was verified. Reviewer repairs nothing; a lane that fails goes back to that lane. Fact sources are the repository and the running system, never a session's report.",
+      "title": "Neutral placeholder wording describing the wor",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization",
       "acceptanceCriteria": [
-        "Branch tips refetched and named for all four lanes. The dispatch proof is REPRODUCED by the reviewer — a real run through launch_from_role against profiles/langevc-standard.yaml with an explicit timeout, reporting termination, exit code and the artifact. Reading docs/dispatch-2-report.json is not reproduction; one earlier report in this ticket was fabricated with /bin/echo.",
-        "The two force-pushes are traced: origin/ops/SW-ROUTE-001-harnesses was rewritten from 77619b9 and again from cbb9d6a. For each, establish whether any commit that existed before the rewrite is now reachable from no ref — and whether its content survived elsewhere. Justified and lost nothing are two claims; only the first was ever made.",
-        "The name collision is decided: skillweave.routing.dispatch is both a module and a re-exported function, so `from skillweave.routing import dispatch` yields the function and hides the module. SW-RT-005's export test cannot see it because both names import. Name the decision — rename, alias or document — without implementing it.",
-        "The suite is reported with its number against the measured 336 baseline at 4a80306, and the pre-existing failures outside tests/unit are named as pre-existing rather than fixed.",
-        "Reviewer repaired nothing and pushed nothing."
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describin",
+        "Neutral placeholder wording describing the wo"
       ],
       "priority": "P0",
       "points": 3,
@@ -483,18 +483,18 @@
       "type": "verification",
       "passes": false,
       "lane": {
-        "worktree": "skillweave/wt-swroute-late-review",
-        "branch": "(detached an den vier spaeten Lane-Spitzen — der Reviewer pinnt, was er geprueft hat)",
+        "worktree": "Neutral placeholder wording descr",
+        "branch": "Neutral placeholder wording describing the work item in general terms without naming",
         "reads": [
           "src/skillweave/routing/",
-          "profiles/langevc-standard.yaml",
+          "profiles/example-standard.yaml",
           "docs/"
         ],
         "must_not_touch": [
           "src/skillweave/routing/dispatch.py",
           "src/skillweave/routing/harness.py",
           "src/skillweave/routing/faigate_adapter.py",
-          "profiles/langevc-standard.yaml"
+          "profiles/example-standard.yaml"
         ],
         "dispatch_order": [
           {
@@ -502,7 +502,7 @@
               1,
               2
             ],
-            "focus": "reproduce the dispatch proof yourself; trace both history rewrites for anything now unreachable"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any projec"
           },
           {
             "criteria": [
@@ -510,7 +510,7 @@
               4,
               5
             ],
-            "focus": "name the collision decision; the suite with both numbers; nothing repaired"
+            "focus": "Neutral placeholder wording describing the work item in general terms with"
           }
         ]
       }
@@ -522,9 +522,9 @@
   },
   "execution_recommendation": {
     "mode": "standard",
-    "reason": "4 Tasks, 10 Punkte, drei unabhaengige Lanes plus Gate. Die drei Luecken liegen auf derselben Naht und sind einzeln nutzlos: mit 001 und 002 allein entstuende genau der eine fest verdrahtete Fall, den 003 ausschliessen soll.",
+    "reason": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without namin",
     "suggested_workflow": "ralph-loop-attended",
     "parallel_opportunities": 3,
-    "note": "Jeder Nachweis laeuft unter bash -eo pipefail — in der Login-Shell geprueft gilt nicht als geprueft (LVC-214). JEDE parallele Lane hat ihren EIGENEN Worktree und Branch: zwei Sessions in einem Baum kollidieren am git-Index, egal wie disjunkt ihre Dateien sind. SW-RT-002 und SW-RT-004 fassen beide faigate_adapter.py an, laufen deshalb nacheinander und teilen sich einen Baum. Das Gate merged die drei Branches. Alles im Repo englisch."
+    "note": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeho"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "projectName": "Forgejo-first release and mirror flow: one generic engine, five layovers, a contract that holds",
+  "projectName": "Neutral placeholder wording describing the work item in general terms without naming any projec",
   "version": "1.0",
   "status": "draft",
   "sequence": {
@@ -7,20 +7,20 @@
     "sequence_type": "build",
     "execution_mode": "ralph_attended",
     "session_boundary": "batch",
-    "worktree": "langevc/wt-ffr-controller",
-    "branch": "ops/FFR-controller",
-    "base": "lvc-planning main 0020c4e",
+    "worktree": "Neutral placeholder wordi",
+    "branch": "Neutral placeholde",
+    "base": "Neutral placeholder wordi",
     "state_file": ".ffr-state.md",
     "runner_shell": "bash -eo pipefail",
     "phase_names": {
-      "0": "secure",
-      "1": "contract",
-      "2": "identity",
-      "3": "template",
-      "4": "pin",
-      "5": "mirror",
-      "6": "release",
-      "7": "rules"
+      "0": "Neutra",
+      "1": "Neutral",
+      "2": "Neutral",
+      "3": "Neutral",
+      "4": "Neu",
+      "5": "Neutra",
+      "6": "Neutral",
+      "7": "Neutr"
     },
     "exclusive": [
       {
@@ -35,12 +35,12 @@
   "tasks": [
     {
       "id": "FFR-000-1",
-      "title": "Secure the planning state that records this work",
-      "description": "Measured 2026-08-23 in lvc-planning: `git status` reports LVC-229-ops-engine-config-driven-identity.md and evidence/2026-08-22-ops-engine-template-drift/ as UNTRACKED. The ticket that owns the identity fix and the artifact that measures the drift are both unsecured in a working tree. Per the standing rule (secure first, then note): a note about an unsecured state is a promise without execution.\n\nAlso measured: .skillweave/planning/doing/ and done/ are EMPTY, while LVC-203/214/216 carry status:done and LVC-207/221 carry status:doing — all five sit physically in backlog/. The directory carries no truth; the frontmatter does. Decide which is authoritative and make the other follow it.",
+      "title": "Neutral placeholder wording describing the work",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produ\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral pla",
       "acceptanceCriteria": [
-        "LVC-229 and the 2026-08-22 drift evidence are committed and pushed to origin",
-        "Either the status: field or the directory is declared authoritative, in writing, and the five mismatched tickets agree with it",
-        "A repository-local check reports a ticket whose status: and directory disagree"
+        "Neutral placeholder wording describing the work item in general terms withou",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or str",
+        "Neutral placeholder wording describing the work item in general terms without"
       ],
       "priority": "P0",
       "points": 3,
@@ -48,8 +48,8 @@
       "type": "infrastructure",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-planning-1-secure",
-        "branch": "ops/FFR-000-1-secure",
+        "worktree": "Neutral placeholder wording describi",
+        "branch": "Neutral placeholder",
         "modifies": ".skillweave/planning/backlog/",
         "tests": "tests/test_ticket_state_consistency.sh",
         "reads": [
@@ -64,27 +64,27 @@
             "criteria": [
               1
             ],
-            "focus": "commit and push LVC-229 and the drift evidence"
+            "focus": "Neutral placeholder wording describing the wor"
           },
           {
             "criteria": [
               2,
               3
             ],
-            "focus": "declare status: or directory authoritative; check reports a disagreeing ticket"
+            "focus": "Neutral placeholder wording describing the work item in general terms without"
           }
         ]
       },
-      "repo": "langevc/lvc-planning"
+      "repo": "Neutral placeholder"
     },
     {
       "id": "FFR-000-2",
-      "title": "The unsecured-work check answers which branch, not just that something is unreachable",
-      "description": "Reproduced 2026-08-23 while surveying 24 worktrees. `git rev-list --count @{u}..HEAD` on wt-ops002-parity-ops reported 25 unpushed commits. The true number is 0: the worktree's upstream is set to origin/ops/OPS-002-rollout while its branch is ops/OPS-002-parity, and every commit is reachable from origin/ops/OPS-002-parity. Measured against ALL remote refs, the whole repository has 4 commits on no remote — not 4 per worktree, as a per-worktree reading of the same command suggests.\n\nThis is exactly LVC-226/227/228: the check finds unreachable work but leaves the deciding question open. A wrong upstream turns a clean tree into a false alarm, and a false alarm gets muted — which is how real unsecured work goes unnoticed. The check must measure against remotes, not against @{u}.",
+      "title": "Neutral placeholder wording describing the work item in general terms without naming",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholde",
       "acceptanceCriteria": [
-        "The check measures reachability against all remote refs, never against @{u} alone",
-        "A worktree whose upstream points at a different branch is reported as a configuration finding, not as unpushed work",
-        "Red proof: wt-ops002-parity-ops reports 0 unsecured commits and 1 wrong-upstream finding"
+        "Neutral placeholder wording describing the work item in general terms without nam",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, pro",
+        "Neutral placeholder wording describing the work item in general terms without naming any"
       ],
       "priority": "P0",
       "points": 5,
@@ -92,12 +92,12 @@
       "type": "bug",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-2-unsecured-check",
-        "branch": "ops/FFR-000-2-unsecured-check",
-        "modifies": "server/langevc-prod-01/scripts/unsecured-work-check.sh",
-        "tests": "server/langevc-prod-01/tests/test_unsecured_work_check.sh",
+        "worktree": "Neutral placeholder wording describing t",
+        "branch": "Neutral placeholder wording d",
+        "modifies": "Neutral placeholder wording describing the work item i",
+        "tests": "Neutral placeholder wording describing the work item in g",
         "reads": [
-          "server/langevc-prod-01/scripts/"
+          "Neutral placeholder wording des"
         ],
         "must_not_touch": [
           "docs/templates/unified-mirror.yml"
@@ -108,26 +108,26 @@
               1,
               2
             ],
-            "focus": "measure against all remote refs; a wrong upstream is a config finding, not unpushed work"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "red proof on wt-ops002-parity-ops: 0 unsecured, 1 wrong-upstream"
+            "focus": "Neutral placeholder wording describing the work item in general"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-100-1",
-      "title": "ops-engine declares its public surface",
-      "description": "LVC-224, measured again 2026-08-23. src/ops_engine/__init__.py exports 28 names across Core, Config, Handlers v1 and Handlers v2, so a de facto public API exists. There is no statement anywhere about what survives a version jump — zero occurrences of semver, breaking, compatibility or deprecation in README and CONTRIBUTING.\n\nA pin promises precision it cannot deliver: it says exactly v2.0.0 while nothing says what v2.0.0 guaranteed. A name that is not declared is not promised.",
+      "title": "Neutral placeholder wording describing",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the wo\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeh",
       "acceptanceCriteria": [
-        "Every exported name is classified as contract or internal, in a machine-readable declaration",
-        "The declaration states what a minor and a major bump are each allowed to change",
-        "A name absent from the declaration is documented as unpromised, and the check treats it that way"
+        "Neutral placeholder wording describing the work item in general terms without naming any pro",
+        "Neutral placeholder wording describing the work item in general terms without n",
+        "Neutral placeholder wording describing the work item in general terms without naming any project"
       ],
       "priority": "P0",
       "points": 8,
@@ -135,8 +135,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-1-public-surface",
-        "branch": "ops/FFR-100-1-public-surface",
+        "worktree": "Neutral placeholder wording describing the",
+        "branch": "Neutral placeholder wording",
         "creates": "CONTRACT.md",
         "tests": "tests/test_public_surface.py",
         "reads": [
@@ -151,26 +151,26 @@
               1,
               2
             ],
-            "focus": "classify all 28 exports contract vs internal; state what minor and major may change"
+            "focus": "Neutral placeholder wording describing the work item in general terms without namin"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "an undeclared name is unpromised, and the check treats it so"
+            "focus": "Neutral placeholder wording describing the work item in gene"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-100-2",
-      "title": "Fix the config-type defect that kills every push on the deployed engine",
-      "description": "Recorded in LVC-229's handoff and owned here. The bot runs ops-engine v2.0.0 while the template is 2.2.0. On v2.0.0 get_repo_config returns mirror/notifications as a raw dict instead of a Pydantic config, so process_webhook_event fails on every push with `'dict' object has no attribute 'enabled'` and lands in retry-then-dead-letter.\n\nThis is the live cost of the pin drift: the layovers do not merely lack later features, the version they run throws on the normal path. Fix the type contract so a raw dict is either coerced at the boundary or rejected with a named error — never handed to code that expects an attribute.",
+      "title": "Neutral placeholder wording describing the work item in general terms w",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item i\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutra",
       "acceptanceCriteria": [
-        "get_repo_config returns a typed config for every declared section, or fails with a named error identifying the section",
-        "A raw dict reaching an .enabled access is impossible by construction, not by convention",
-        "Red proof: a config that produced the dict/.enabled failure is replayed and yields either a valid config or a named error, never AttributeError"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, produc",
+        "Neutral placeholder wording describing the work item in general terms without naming an",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neu"
       ],
       "priority": "P0",
       "points": 8,
@@ -178,8 +178,8 @@
       "type": "bug",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-2-config-type",
-        "branch": "ops/FFR-100-2-config-type",
+        "worktree": "Neutral placeholder wording describing",
+        "branch": "Neutral placeholder wordi",
         "modifies": "src/ops_engine/config_loader.py",
         "tests": "tests/test_config_loader_types.py",
         "reads": [
@@ -195,26 +195,26 @@
               1,
               2
             ],
-            "focus": "typed config or named error per section; a raw dict cannot reach .enabled"
+            "focus": "Neutral placeholder wording describing the work item in general terms wit"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "replay the dict/.enabled failure; never AttributeError"
+            "focus": "Neutral placeholder wording describing the work item i"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-100-3",
-      "title": "Each layover declares what it consumes, not only which version it pinned",
-      "description": "LVC-224: '@v2.0.0' is not checkable; 'we use QueueManager and MirrorConfig' is. Five layovers exist (lvc-ops, capacium-ops, elementeer-ops, fusionaize-ops, skillweave-ops) and none of them states its consumed surface. capacium-ops has moved out of the no-pin state since LVC-224 was written — measured 2026-08-23 it pins v2.1.2 with the [postgres] extra, which is expected (migration-runner target) and is not drift.",
+      "title": "Neutral placeholder wording describing the work item in general terms wi",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy deta",
       "acceptanceCriteria": [
-        "Every one of the five layovers declares the contract names it consumes",
-        "The declaration lives with the layover, next to its pin, and is machine-readable",
-        "A consumed name that is not in the engine's contract declaration is a hard error"
+        "Neutral placeholder wording describing the work item in general terms",
+        "Neutral placeholder wording describing the work item in general terms without na",
+        "Neutral placeholder wording describing the work item in general terms without na"
       ],
       "priority": "P0",
       "points": 5,
@@ -225,8 +225,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-3-consumption",
-        "branch": "ops/FFR-100-3-consumption",
+        "worktree": "Neutral placeholder wording describing",
+        "branch": "Neutral placeholder wordi",
         "creates": "docs/layover-consumption.md",
         "tests": "tests/test_consumption_declared.py",
         "reads": [
@@ -242,26 +242,26 @@
               1,
               2
             ],
-            "focus": "all five layovers declare consumed names, machine-readable, next to the pin"
+            "focus": "Neutral placeholder wording describing the work item in general terms witho"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "a consumed name outside the contract is a hard error"
+            "focus": "Neutral placeholder wording describing the work item"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-100-4",
-      "title": "A check reports pin against latest and whether the consumed surface moved — by itself",
-      "description": "LVC-224's core criterion. Five releases of silent drift is what happens when a check runs on request. The check must run on a schedule and report, per layover: pinned version, latest release, and whether anything that layover consumes changed in between.\n\nThe noise boundary is part of the criterion: a change to an undeclared internal must stay quiet, otherwise the check becomes noise and gets muted — which is how the current silence started.",
+      "title": "Neutral placeholder wording describing the work item in general terms without naming",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, pr\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work i",
       "acceptanceCriteria": [
-        "The check runs unattended and reports per layover: pin, latest, and changed consumed names",
-        "Red proof A: bump the engine changing a declared name, and every layover consuming it is reported",
-        "Red proof B: bump the engine changing an undeclared internal, and the check stays quiet"
+        "Neutral placeholder wording describing the work item in general terms without naming any p",
+        "Neutral placeholder wording describing the work item in general terms without naming any project,",
+        "Neutral placeholder wording describing the work item in general terms without naming an"
       ],
       "priority": "P0",
       "points": 8,
@@ -272,8 +272,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-4-drift-check",
-        "branch": "ops/FFR-100-4-drift-check",
+        "worktree": "Neutral placeholder wording describing",
+        "branch": "Neutral placeholder wordi",
         "creates": "scripts/pin-drift-check.py",
         "tests": "tests/test_pin_drift_check.py",
         "reads": [
@@ -288,27 +288,27 @@
             "criteria": [
               1
             ],
-            "focus": "unattended run reports pin, latest, changed consumed names per layover"
+            "focus": "Neutral placeholder wording describing the work item in general terms"
           },
           {
             "criteria": [
               2,
               3
             ],
-            "focus": "both red proofs: declared-name bump reports, internal bump stays quiet"
+            "focus": "Neutral placeholder wording describing the work item in general terms"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-200-1",
-      "title": "Org identity is a canonical lowercase key, everywhere",
-      "description": "LVC-229 part 1. Forgejo canonicalises org names to lower_name. The same org appears in variable case on GitHub. get_repo_config does a case-sensitive dict lookup, so a Forgejo webhook carrying repository.full_name = 'fusionaize/faigrid' misses a config.yml keyed 'fusionAIze', release=None, and the ReleaseHandler never runs.\n\nThe 2026-08-22 fix was a symptom fix: the fusionaize-ops key was lowercased locally. That hides the systemic mismatch, which is present in all layovers.",
+      "title": "Neutral placeholder wording describing the work item",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the wo\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral plac",
       "acceptanceCriteria": [
-        "All internal lookups take a canonical org key equal to the Forgejo lower_name",
-        "The webhook ingress derives the canonical key from lower_name, never from full_name or a display name",
-        "forgejo.display_name and github.login are attributes under the canonical key, never lookup keys"
+        "Neutral placeholder wording describing the work item in general terms without",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, org",
+        "Neutral placeholder wording describing the work item in general terms without naming any projec"
       ],
       "priority": "P0",
       "points": 8,
@@ -319,8 +319,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-1-canonical-key",
-        "branch": "ops/FFR-200-1-canonical-key",
+        "worktree": "Neutral placeholder wording describing th",
+        "branch": "Neutral placeholder wording",
         "modifies": "src/ops_engine/config_loader.py",
         "tests": "tests/test_canonical_org_key.py",
         "reads": [
@@ -335,26 +335,26 @@
               1,
               2
             ],
-            "focus": "canonical key = Forgejo lower_name; ingress derives it from lower_name only"
+            "focus": "Neutral placeholder wording describing the work item in general terms witho"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "display_name and github.login are attributes, never lookup keys"
+            "focus": "Neutral placeholder wording describing the work item in general"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-200-2",
-      "title": "Migrate the existing display-case keys without silent collision",
-      "description": "LVC-229 migration criterion. Old keys must map via .lower() onto canonical, the old key must survive as github.login, and two keys colliding after lowercasing must fail explicitly rather than have one silently win. The mapping measured in LVC-229: fusionaize/fusionAIze/fusionAIze, langevc/'Lange Ventures & Consulting'/LangeVC, capacium/(empty)/Capacium, elementeer/elementeer/elementeer.",
+      "title": "Neutral placeholder wording describing the work item in general",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organizatio",
       "acceptanceCriteria": [
-        "Existing display-case keys are migrated to canonical keys with the old value preserved as github.login",
-        "Two keys that collide after lowercasing fail the load with a named error",
-        "The generic template ships orgs: {} with no hard-coded org name"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, orga",
+        "Neutral placeholder wording describing the work item in general terms wi",
+        "Neutral placeholder wording describing the work item in general"
       ],
       "priority": "P0",
       "points": 5,
@@ -365,8 +365,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-2-key-migration",
-        "branch": "ops/FFR-200-2-key-migration",
+        "worktree": "Neutral placeholder wording describing th",
+        "branch": "Neutral placeholder wording",
         "creates": "scripts/migrate-org-keys.py",
         "tests": "tests/test_org_key_migration.py",
         "reads": [
@@ -381,26 +381,26 @@
               1,
               2
             ],
-            "focus": "lowercase migration preserving old key as github.login; collision fails by name"
+            "focus": "Neutral placeholder wording describing the work item in general terms without n"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "template ships orgs: {} with no org name"
+            "focus": "Neutral placeholder wording describing t"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-200-3",
-      "title": "The same case defect in dependency_triggers, not covered by LVC-229",
-      "description": "New finding, measured 2026-08-23 in fusionaize-ops/config.yml. The org key was lowercased by the 2026-08-22 symptom fix, but the dependency_triggers below it still carry display-case targets: target_repo: 'fusionAIze/faiops-browser', 'fusionAIze/faiops-cli', 'fusionAIze/faios'. Same defect class, different field — a partial fix that looks complete because the failing path moved.\n\nSweep every layover for org names used as identifiers rather than as display data.",
+      "title": "Neutral placeholder wording describing the work item in general ter",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, org\n\nNeutral placeholder wording describing the work item in general terms without nami",
       "acceptanceCriteria": [
-        "Every repo reference in every layover config resolves through the canonical key path",
-        "A configured target that does not resolve to a known canonical org fails the config load, not the dispatch",
-        "All five layover configs are swept and the findings listed per file"
+        "Neutral placeholder wording describing the work item in general terms without naming",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organiza",
+        "Neutral placeholder wording describing the work item in general ter"
       ],
       "priority": "P0",
       "points": 5,
@@ -411,8 +411,8 @@
       "type": "bug",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-3-trigger-case",
-        "branch": "ops/FFR-200-3-trigger-case",
+        "worktree": "Neutral placeholder wording describing t",
+        "branch": "Neutral placeholder wordin",
         "creates": "docs/org-identifier-sweep.md",
         "tests": "tests/test_repo_reference_resolution.py",
         "reads": [
@@ -427,26 +427,26 @@
               1,
               2
             ],
-            "focus": "every repo reference resolves canonically; unknown org fails the load, not the dispatch"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming an"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "sweep all five layover configs, findings listed per file"
+            "focus": "Neutral placeholder wording describing the work item in"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-200-4",
-      "title": "Release naming is a template in the layover, not a string in the engine",
-      "description": "LVC-229 part 2. ReleaseHandler hardcodes name=f\"{repo.split('/')[-1]} {tag_name}\", producing 'faigrid v1.8.0' where the convention is 'fusionAIze Grid v1.8.0'. Historical drift is measured: v1.7.0/v1.6.2/v1.6.1 carry the bare name, v1.6.0 and older the correct prefix. The v1.8.0 name was corrected by hand.\n\nThe prefix is org- and product-specific (faigrid = 'fusionAIze Grid', faigate = 'fusionAIze Gate') and is data for the layover, not interpolation in the generic engine.",
+      "title": "Neutral placeholder wording describing the work item in general terms w",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording",
       "acceptanceCriteria": [
-        "ReleaseHandler takes the release name from a configured name_template with placeholders",
-        "The product prefix lives in the layover; the generic template carries no product name",
-        "One configured convention produces the identical name on Forgejo and on GitHub"
+        "Neutral placeholder wording describing the work item in general terms without naming an",
+        "Neutral placeholder wording describing the work item in general terms without naming",
+        "Neutral placeholder wording describing the work item in general terms without"
       ],
       "priority": "P0",
       "points": 5,
@@ -457,8 +457,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-4-name-template",
-        "branch": "ops/FFR-200-4-name-template",
+        "worktree": "Neutral placeholder wording describing th",
+        "branch": "Neutral placeholder wording",
         "modifies": "src/ops_engine/modules/release.py",
         "tests": "tests/test_release_naming.py",
         "reads": [
@@ -473,26 +473,26 @@
               1,
               2
             ],
-            "focus": "name from configured name_template; product prefix is layover data"
+            "focus": "Neutral placeholder wording describing the work item in general te"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "one convention, identical name on Forgejo and GitHub"
+            "focus": "Neutral placeholder wording describing the work item"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-200-5",
-      "title": "A tag without a release can be reconciled without deleting the tag",
-      "description": "LVC-229 part 3. The engine creates releases only from the tag_push webhook; there is no reconcile path. Proven on faigrid: after the webhook fix the tag v1.8.0 existed with no release, and the only ways forward were deleting and recreating the tag or triggering a webhook test from the GUI.\n\n'Tag exists, release missing' must be a detectable and repairable state. This is also the data the cockpit (LVC-EPIC-001) needs: which release stands where, which mirror sync is outstanding.",
+      "title": "Neutral placeholder wording describing the work item in general te",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral pl\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work it",
       "acceptanceCriteria": [
-        "The state 'tag exists, release missing' is detectable per repo without deleting anything",
-        "A reconcile run creates the missing release with the configured name, idempotently",
-        "Release and mirror state are queryable as a record, not only visible in a log"
+        "Neutral placeholder wording describing the work item in general terms without naming any",
+        "Neutral placeholder wording describing the work item in general terms without nami",
+        "Neutral placeholder wording describing the work item in general terms without"
       ],
       "priority": "P0",
       "points": 13,
@@ -503,8 +503,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-5-reconcile",
-        "branch": "ops/FFR-200-5-reconcile",
+        "worktree": "Neutral placeholder wording describin",
+        "branch": "Neutral placeholder wor",
         "creates": "src/ops_engine/modules/reconcile.py",
         "tests": "tests/test_release_reconcile.py",
         "reads": [
@@ -518,32 +518,32 @@
             "criteria": [
               1
             ],
-            "focus": "detect tag-exists-release-missing without deleting anything"
+            "focus": "Neutral placeholder wording describing the work item in gen"
           },
           {
             "criteria": [
               2
             ],
-            "focus": "idempotent reconcile creates the missing release with the configured name"
+            "focus": "Neutral placeholder wording describing the work item in general terms wit"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "release and mirror state queryable as a record for the cockpit"
+            "focus": "Neutral placeholder wording describing the work item in genera"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-300-1",
-      "title": "The generic template carries a product name in its own release gate",
-      "description": "New finding, measured 2026-08-23. ops-engine/.github/workflows/enforce-release-name.yml hardcodes the regex ^Ops\\ Engine\\ v[0-9]+\\.[0-9]+\\.[0-9]+ — the product name 'Ops Engine' sits inside the OSS template that LVC-229 is simultaneously making configurable for everyone else. Same defect class as the ReleaseHandler interpolation, one layer up, in the repository that defines the rule.\n\nLVC-222 asks this question of the three open templates; this is a measured instance of it.",
+      "title": "Neutral placeholder wording describing the work item in general ter",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organiza\n\nNeutral placeholder wording describing the work item in general terms without naming any p",
       "acceptanceCriteria": [
-        "The naming gate reads its expected pattern from configuration, with the engine's own name as that repo's config",
-        "No org, host or product name remains hard-coded in the generic template's tracked files",
-        "A scan for org/host/product names in the three open templates runs as a check, in both directions"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
+        "Neutral placeholder wording describing the work item in general terms without naming an",
+        "Neutral placeholder wording describing the work item in general terms without naming any project,"
       ],
       "priority": "P0",
       "points": 5,
@@ -551,8 +551,8 @@
       "type": "bug",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-1-template-purity",
-        "branch": "ops/FFR-300-1-template-purity",
+        "worktree": "Neutral placeholder wording describing the",
+        "branch": "Neutral placeholder wording d",
         "modifies": ".github/workflows/enforce-release-name.yml",
         "tests": "tests/test_template_has_no_business_names.sh",
         "reads": [
@@ -567,26 +567,26 @@
               1,
               2
             ],
-            "focus": "pattern from config; no org, host or product name left in tracked template files"
+            "focus": "Neutral placeholder wording describing the work item in general terms without na"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "the scan runs as a check across the three open templates, both directions"
+            "focus": "Neutral placeholder wording describing the work item in general terms wit"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-300-2",
-      "title": "Finish LVC-221: the tool exists in one canonical place only",
-      "description": "LVC-221 is status:doing with parts 1-3 done. Measured 2026-08-23: scripts/version-sync.py is present in ops-engine and the 2.2.0 CHANGELOG documents the move. What remains is the removal from lvc-ops and pointing its documentation at the new home, so the canonical copy is not shadowed by a second one.\n\nThe unresolved half of the ticket is the one that outlives the move: a fetch must prove what it got. A fetch that silently succeeds with the wrong content is the defect; relocating the file only removed today's instance.",
+      "title": "Neutral placeholder wording describing the work item in gen",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wo\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without na",
       "acceptanceCriteria": [
-        "version-sync.py exists in ops-engine and nowhere else; lvc-ops documentation points at the new home",
-        "Any workflow fetching it parses the download as Python before use and names what arrived on failure",
-        "Red proof: the old private URL yields HTML and is rejected; the public URL yields a shebang and is accepted"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, o",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, o",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organizat"
       ],
       "priority": "P0",
       "points": 5,
@@ -594,8 +594,8 @@
       "type": "task",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-2-one-tool-home",
-        "branch": "ops/FFR-300-2-one-tool-home",
+        "worktree": "Neutral placeholder wording describing th",
+        "branch": "Neutral placeholder wording",
         "modifies": "docs/version-sync.md",
         "tests": "tests/test_fetch_proves_content.sh",
         "reads": [
@@ -609,27 +609,27 @@
             "criteria": [
               1
             ],
-            "focus": "remove the lvc-ops copy; documentation points at the canonical home"
+            "focus": "Neutral placeholder wording describing the work item in general ter"
           },
           {
             "criteria": [
               2,
               3
             ],
-            "focus": "a fetch parses as Python before use; red proof HTML rejected, shebang accepted"
+            "focus": "Neutral placeholder wording describing the work item in general terms without"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-400-1",
-      "title": "Every layover pins the current engine, and the pin is verified",
-      "description": "Measured 2026-08-23, wider than the 2026-08-22 evidence recorded. That artifact named three layovers; there are five, and elementeer-ops and skillweave-ops were not in it:\n\n  lvc-ops          v2.0.0\n  elementeer-ops   v2.0.0\n  fusionaize-ops   v2.0.0\n  skillweave-ops   v2.0.0\n  capacium-ops     v2.1.2 [postgres]\n  template         2.2.0\n\nFour of five are five releases behind. Upgrading must be a decision with evidence: the drift check from FFR-100-4 names which consumed call sites changed, so the answer is 'these three call sites' rather than 'five versions, who knows'.",
+      "title": "Neutral placeholder wording describing the work item in genera",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording des\n\nNeutral placeholder wordi\nNeutral placeholder wordi\nNeutral placeholder wordi\nNeutral placeholder wordi\nNeutral placeholder wording describi\nNeutral placeholder word\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project",
       "acceptanceCriteria": [
-        "All five layovers pin the current engine release, each with the drift check green",
-        "The capacium-ops [postgres] extra is preserved and documented as intended, not treated as drift",
-        "The deployed bot runs the pinned version, verified against the running service, not against the file"
+        "Neutral placeholder wording describing the work item in general terms without nam",
+        "Neutral placeholder wording describing the work item in general terms without naming any projec",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, or"
       ],
       "priority": "P0",
       "points": 8,
@@ -641,8 +641,8 @@
       "type": "task",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-1-repin",
-        "branch": "ops/FFR-400-1-repin",
+        "worktree": "Neutral placeholder wording descr",
+        "branch": "Neutral placeholder",
         "creates": "docs/layover-repin-log.md",
         "tests": "tests/test_pins_current.sh",
         "reads": [
@@ -658,26 +658,26 @@
               1,
               2
             ],
-            "focus": "all five layovers on the current release, drift check green, [postgres] preserved"
+            "focus": "Neutral placeholder wording describing the work item in general terms without nam"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "the running service is verified, not the file"
+            "focus": "Neutral placeholder wording describing the wo"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-400-2",
-      "title": "Layovers consume the engine from the Forgejo canonical, not from GitHub",
-      "description": "Measured 2026-08-23: all five layovers consume git+https://github.com/LangeVC/ops-engine.git. That is the inverse of the Forgejo-first rule the same repositories' own AGENTS.md mandates for themselves — the canonical source is git.langevc.com/langevc/ops-engine, and GitHub is the distribution mirror.\n\nThis matters beyond principle: consuming from the mirror means a mirror outage becomes a build outage, and the langevc mirror was measurably dead for eleven days (LVC-225). It also means a fix applied to canonical does not reach a consumer until the mirror runs.",
+      "title": "Neutral placeholder wording describing the work item in general terms w",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder w\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or",
       "acceptanceCriteria": [
-        "Every layover resolves ops-engine from the Forgejo canonical URL",
-        "Runner and deploy-host reachability of the canonical host is proven, not assumed, for each consuming environment",
-        "Where an environment genuinely cannot reach canonical, the exception is named per environment with its reason"
+        "Neutral placeholder wording describing the work item in general",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organizatio"
       ],
       "priority": "P0",
       "points": 8,
@@ -688,8 +688,8 @@
       "type": "task",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-2-forgejo-source",
-        "branch": "ops/FFR-400-2-forgejo-source",
+        "worktree": "Neutral placeholder wording describing the",
+        "branch": "Neutral placeholder wording",
         "creates": "docs/canonical-source-migration.md",
         "tests": "tests/test_canonical_source.sh",
         "reads": [
@@ -704,26 +704,26 @@
               1,
               2
             ],
-            "focus": "every layover resolves from the Forgejo canonical; reachability proven per environment"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming a"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "any environment that cannot reach canonical is named with its reason"
+            "focus": "Neutral placeholder wording describing the work item in general term"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-500-1",
-      "title": "The langevc mirror token authenticates again, and all five orgs are checked",
-      "description": "LVC-225, P0, open. GH_MIRROR_TOKEN in the langevc org stopped authenticating between 2026-08-05 and 2026-08-16; ops-engine and lvc-ops stopped mirroring and nobody saw it for eleven days. Mirroring is also the backup path, so a canonical repository whose mirror stopped is a repository with one copy.\n\nThe runbook already carries the fingerprint comparison that settles token questions in one measurement instead of nine guesses: compare sha256 of the token arriving in the job against the one on the server.",
+      "title": "Neutral placeholder wording describing the work item in general terms witho",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general te",
       "acceptanceCriteria": [
-        "GH_MIRROR_TOKEN authenticates against LangeVC/* again, with its credential kind and expiry behaviour written down",
-        "Forgejo and GitHub are verified to agree per repository, not assumed, across all five orgs",
-        "The other four orgs are checked the same way and the result recorded per org"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, p",
+        "Neutral placeholder wording describing the work item in general terms without naming any p",
+        "Neutral placeholder wording describing the work item in general terms withou"
       ],
       "priority": "P0",
       "points": 8,
@@ -731,8 +731,8 @@
       "type": "bug",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-1-mirror-token",
-        "branch": "ops/FFR-500-1-mirror-token",
+        "worktree": "Neutral placeholder wording describin",
+        "branch": "Neutral placeholder wordin",
         "creates": "docs/mirror-credential-inventory.md",
         "tests": "tests/test_mirror_parity_all_orgs.sh",
         "reads": [
@@ -746,27 +746,27 @@
             "criteria": [
               1
             ],
-            "focus": "token authenticates again; credential kind and expiry written down"
+            "focus": "Neutral placeholder wording describing the work item in general te"
           },
           {
             "criteria": [
               2,
               3
             ],
-            "focus": "per-repository parity verified across all five orgs, recorded per org"
+            "focus": "Neutral placeholder wording describing the work item in general terms"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-500-2",
-      "title": "A failed mirror reaches the operator the day it fails",
-      "description": "The eleven quiet days are the criterion. Nothing reports a mirror failure today, and ops-engine has two workflow runs in its entire history, so rare pushes hide the outage. Wire the signal into whatever already carries operational signal rather than inventing a channel.\n\nA check that only reports success is what produced the silence, so the red proof is deliberate: revoke access in a test repository, push, and confirm the operator is told.",
+      "title": "Neutral placeholder wording describing the work item",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strateg\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording des",
       "acceptanceCriteria": [
-        "A failed mirror run reaches the operator without anyone opening an Actions page",
-        "Red proof: access is revoked deliberately in a test repository and the operator is notified",
-        "The signal distinguishes 'mirror failed' from 'mirror did not run'"
+        "Neutral placeholder wording describing the work item in general terms without n",
+        "Neutral placeholder wording describing the work item in general terms without naming any pr",
+        "Neutral placeholder wording describing the work item in general te"
       ],
       "priority": "P0",
       "points": 8,
@@ -777,10 +777,10 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-2-mirror-signal",
-        "branch": "ops/FFR-500-2-mirror-signal",
-        "creates": "server/langevc-prod-01/scripts/mirror-alert.sh",
-        "tests": "server/langevc-prod-01/tests/test_mirror_alert.sh",
+        "worktree": "Neutral placeholder wording describing",
+        "branch": "Neutral placeholder wording",
+        "creates": "Neutral placeholder wording describing the wor",
+        "tests": "Neutral placeholder wording describing the work i",
         "reads": [
           "docs/mirror-credential-inventory.md"
         ],
@@ -793,26 +793,26 @@
               1,
               3
             ],
-            "focus": "failure reaches the operator without opening Actions; distinguishes failed from did-not-run"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any pr"
           },
           {
             "criteria": [
               2
             ],
-            "focus": "red proof by deliberately revoking access in a test repository"
+            "focus": "Neutral placeholder wording describing the work item in genera"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-500-3",
-      "title": "The repositories without a visibility gate get the canonical mirror workflow",
-      "description": "Measured 2026-08-23 across 59 repositories in five orgs. Exactly two carry the canonical 385-line mirror.yml: fusionaize/faigate and fusionaize/faigrid. The rest carry 19-44 line variants with zero occurrences of visibility-gate, of the LVC-216 per-ref full-state gate, and of the LVC-214b in-shell remote assembly. Eleven fusionaize repos share one older hash, so these are waves, not accidents.\n\nThis is the OPS-002 rollout, and it is not merely cosmetic drift: 57 repositories mirror to GitHub with no path gate at all. Reconcile with LVC-223 BEFORE the rollout reaches the remaining repos — distributing the wrong home is expensive to reverse. skillweave keeps its documented exception: its tags reach GitHub through validate-release-tag.yml whose mirror job needs the gate, so an unconditional tags trigger would bypass the release gate.",
+      "title": "Neutral placeholder wording describing the work item in general terms withou",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, prod\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder word",
       "acceptanceCriteria": [
-        "Every mirrored repository runs the canonical workflow or carries a written, reasoned exception",
-        "The gate is proven live on at least one repository per org, not only diffed as a file",
-        "Repository-specific values stay in repository variables so the workflow file is byte-identical everywhere"
+        "Neutral placeholder wording describing the work item in general terms without naming any proje",
+        "Neutral placeholder wording describing the work item in general terms without naming",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organiz"
       ],
       "priority": "P0",
       "points": 13,
@@ -824,8 +824,8 @@
       "type": "task",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-3-mirror-rollout",
-        "branch": "ops/FFR-500-3-mirror-rollout",
+        "worktree": "Neutral placeholder wording describing",
+        "branch": "Neutral placeholder wording",
         "creates": "docs/ffr-mirror-rollout-log.md",
         "tests": "tests/test_mirror_workflow_parity.sh",
         "reads": [
@@ -840,34 +840,34 @@
             "criteria": [
               1
             ],
-            "focus": "every mirrored repo runs the canonical workflow or carries a reasoned exception"
+            "focus": "Neutral placeholder wording describing the work item in general terms without n"
           },
           {
             "criteria": [
               2
             ],
-            "focus": "the gate proven live on one repository per org, not only diffed"
+            "focus": "Neutral placeholder wording describing the work item in general"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "repo-specific values in repository variables; the file stays byte-identical"
+            "focus": "Neutral placeholder wording describing the work item in general terms witho"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-600-1",
-      "title": "Write down which part of a release flow lives where",
-      "description": "LVC-223, P1 but scheduled here because FFR-500-3 depends on it. Three candidate homes: ops-engine (the generic half), <org>-ops (the org-specific half, next to the running service), and the product repo (what is repo-specific anyway). The division already exists in part — .version.yaml lives with the product, the tool does not — and every unassigned piece is rediscovered the next time a release stalls.\n\nThe 2026-08-22 decision recorded in FAI-211 settles the spine and is not reopened here: release creation is the ops-engine on Forgejo; GitHub after the mirror runs distribution only (Homebrew, PyPI, GHCR, Windows). What this task assigns is the remaining parts.\n\nDEFAULT-BRANCH INCONSISTENCY, measured 2026-08-23: ops-engine sits on `master` while every other repository measured sits on `main`. The division must say whether the default branch name is part of the release-flow contract or free per repo — the mirror workflow already hard-codes `refs/heads/main|master|dev` in its prune exclusions, which is what an unstated convention looks like once it reaches code.",
+      "title": "Neutral placeholder wording describing the work ite",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or st\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product o\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or st",
       "acceptanceCriteria": [
-        "Each part is assigned a home: version declaration, version tooling, tag gate, mirror workflow, release-object creation, changelog convention, naming convention",
-        "Each assignment follows the generic-versus-business rule and says so per part",
-        "The mirror workflow's business-logic references are accounted for: they stay out of the open base and where they live is stated",
-        "A new org can be set up from the written division without asking anyone",
-        "The division states whether the default branch name is contract or free, and ops-engine's `master` is either renamed or recorded as a named exception"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder",
+        "Neutral placeholder wording describing the work item in general terms without",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or stra",
+        "Neutral placeholder wording describing the work item in general terms w",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral p"
       ],
       "priority": "P0",
       "points": 8,
@@ -878,8 +878,8 @@
       "type": "task",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-1-release-division",
-        "branch": "ops/FFR-600-1-release-division",
+        "worktree": "Neutral placeholder wording describing th",
+        "branch": "Neutral placeholder wording de",
         "creates": "docs/release-flow-division.md",
         "tests": "tests/test_division_covers_every_part.sh",
         "reads": [
@@ -894,34 +894,34 @@
               1,
               2
             ],
-            "focus": "assign all seven parts a home, each justified by the generic-vs-business rule"
+            "focus": "Neutral placeholder wording describing the work item in general terms without"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "account for the mirror workflow's business references; a new org needs only a lookup"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming"
           },
           {
             "criteria": [
               5
             ],
-            "focus": "decide whether the default branch name is contract; ops-engine master renamed or named as exception"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, o"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-600-2",
-      "title": "Reconcile faigrid's release-please with the decided Forgejo-first path",
-      "description": "faigrid is the benchmark for the mirror flow and carries the canonical mirror.yml. Its release path is not settled in the same way. Measured 2026-08-23: .github/workflows/release-please.yml runs on push to main gated to github.com and produces release_created plus the Homebrew tap dispatch, while the ops-engine ReleaseHandler created the v1.8.0 release on Forgejo from tag_push. Two release producers for one repository.\n\nNot asserted, to be established: both 'chore: release 1.8.0' commits (3520451, ba1a831) are authored by the operator rather than a release-please bot, and there are two of them. Whether release-please is running, half-running, or effectively manual decides whether this is a conflict or a leftover. Establish that first, then align with FFR-600-1. The tap dispatch is distribution and stays either way.",
+      "title": "Neutral placeholder wording describing the work item in general terms",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Ne\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or",
       "acceptanceCriteria": [
-        "Whether release-please actually runs on the mirror is established by evidence, not inference",
-        "faigrid has exactly one release producer, matching the written division from FFR-600-1",
-        "The Homebrew tap dispatch keeps working as post-mirror distribution",
-        "If release-please writes commits or PRs onto the read-only mirror, that is resolved rather than tolerated"
+        "Neutral placeholder wording describing the work item in general terms without naming any pro",
+        "Neutral placeholder wording describing the work item in general terms without naming a",
+        "Neutral placeholder wording describing the work item in general ter",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organiz"
       ],
       "priority": "P0",
       "points": 5,
@@ -932,8 +932,8 @@
       "type": "task",
       "passes": false,
       "lane": {
-        "worktree": "fusionaize/wt-ffr-faigrid-2-faigrid-release",
-        "branch": "ops/FFR-600-2-faigrid-release",
+        "worktree": "Neutral placeholder wording describing the",
+        "branch": "Neutral placeholder wording d",
         "creates": "docs/release-path.md",
         "tests": "tests/test_single_release_producer.sh",
         "reads": [
@@ -948,7 +948,7 @@
             "criteria": [
               1
             ],
-            "focus": "establish by evidence whether release-please actually runs on the mirror"
+            "focus": "Neutral placeholder wording describing the work item in general terms wi"
           },
           {
             "criteria": [
@@ -956,21 +956,21 @@
               3,
               4
             ],
-            "focus": "one release producer matching the division; tap keeps working; no writes onto the read-only mirror"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project,"
           }
         ]
       },
-      "repo": "fusionaize/faigrid"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-600-3",
-      "title": "Every repo declares where its versions live",
-      "description": "LVC-209, P0. At the 2.4.0 bump two of four version locations were hit; the gate found them, the bump did not. A scan over the usual patterns misses a PHP constant and a YAML key, both valid but untypical forms. version-sync.py plus a .version.yaml declaration is the mechanism and now sits in ops-engine (FFR-300-2).\n\nMeasured 2026-08-23: faigrid, the benchmark, has a VERSION file and a release-please manifest but no .version.yaml — so even the reference repo cannot state its own version locations.",
+      "title": "Neutral placeholder wording describing the",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describi\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the",
       "acceptanceCriteria": [
-        "Each repo carries a machine-readable declaration: file, pattern, binding or informative",
-        "The bump tool and the release gate read the SAME declaration, so it cannot drift against its own gate",
-        "Proven: the next bump hits every location on the first attempt",
-        "elementeer-mcp readme.txt Stable tag is decided — binding and corrected, or declared informative"
+        "Neutral placeholder wording describing the work item in general terms without naming an",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, org",
+        "Neutral placeholder wording describing the work item in genera",
+        "Neutral placeholder wording describing the work item in general terms without naming any project"
       ],
       "priority": "P0",
       "points": 8,
@@ -981,8 +981,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-3-version-locations",
-        "branch": "ops/FFR-600-3-version-locations",
+        "worktree": "Neutral placeholder wording describing the",
+        "branch": "Neutral placeholder wording des",
         "creates": "docs/version-declaration-rollout.md",
         "tests": "tests/test_version_declarations.sh",
         "reads": [
@@ -997,27 +997,27 @@
               1,
               2
             ],
-            "focus": "per-repo .version.yaml; bump tool and gate read the same declaration"
+            "focus": "Neutral placeholder wording describing the work item in general term"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "next bump hits every location first try; elementeer-mcp readme.txt decided"
+            "focus": "Neutral placeholder wording describing the work item in general terms with"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-600-4",
-      "title": "A workflow that calls a missing file turns red on push, not at release",
-      "description": "LVC-210, P1, and one of the five findings from LVC-EPIC-003. release-gate.yml called scripts/prepare-plugin-mirror.mjs after the script was removed in e65d3da, and the call stood. Another called apk add on an ubuntu-latest runner after the move off the Alpine container changed runs-on but not the install step. Both were visible only in CI, and only at release time.\n\nThe proof must run under the runner's shell: bash -eo pipefail, not the checker's login shell. LVC-214 was confirmed by an independent review and a runner-like clone and still died one second into the first live run, because both checks ran without -e.",
+      "title": "Neutral placeholder wording describing the work item in general terms",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming an\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
       "acceptanceCriteria": [
-        "A workflow referencing a path that does not exist fails on push",
-        "The check runs under bash -eo pipefail, the same shell and flags as the runner",
-        "Red proof: removing a referenced script turns the next push red before any release"
+        "Neutral placeholder wording describing the work item in general",
+        "Neutral placeholder wording describing the work item in general terms without",
+        "Neutral placeholder wording describing the work item in general terms without nami"
       ],
       "priority": "P0",
       "points": 5,
@@ -1025,8 +1025,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-4-missing-file-gate",
-        "branch": "ops/FFR-600-4-missing-file-gate",
+        "worktree": "Neutral placeholder wording describing the wo",
+        "branch": "Neutral placeholder wording des",
         "creates": "scripts/workflow-reference-check.sh",
         "tests": "tests/test_workflow_reference_check.sh",
         "reads": [
@@ -1041,28 +1041,28 @@
               1,
               2
             ],
-            "focus": "missing referenced path fails on push, under bash -eo pipefail"
+            "focus": "Neutral placeholder wording describing the work item in genera"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "red proof: removing a referenced script turns the next push red"
+            "focus": "Neutral placeholder wording describing the work item in general"
           }
         ]
       },
-      "repo": "langevc/ops-engine"
+      "repo": "Neutral placeholde"
     },
     {
       "id": "FFR-600-5",
-      "title": "dev produces a release candidate through the same gate code as main",
-      "description": "LVC-208, P0, 13 points, the operational half of LVC-EPIC-003. Today the gate code runs only at a real release, weeks apart, under time pressure. The RC run must call the SAME gate code, not a simplified variant — otherwise the rehearsal exercises something other than what later runs.\n\nThe open question from the ticket is answered here rather than five times separately: per repo or per repo class. A WordPress plugin, an npm package and a Python package have different artifacts and the same question.\n\nBRANCH PRECONDITION, measured 2026-08-23: `dev` exists in 2 of 7 sampled repositories (elementeer, skillweave). lvc-ops, lvc-planning, ops-engine, capacium and faigrid have no `dev`. The RC channel cannot be put on a branch that does not exist, so creating `dev` per repo — or deciding per repo class that it does not get one — is part of this task, not a precondition someone else supplies.",
+      "title": "Neutral placeholder wording describing the work item in general ter",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neut\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
       "acceptanceCriteria": [
-        "dev produces vX.Y.Z-rc.N and a prerelease object on Forgejo",
-        "The RC run invokes the same gate code as main, demonstrably the same code path",
-        "RC tags are not mirrored to GitHub, or only as prerelease, with the reason recorded — deletions do not propagate (OPS-005)",
-        "Proven on a real case: a version error planted on dev is caught by the RC run and blocks the merge to main",
-        "Every repository in scope either has a `dev` branch created from its default branch, or is recorded as deliberately without one, with the reason"
+        "Neutral placeholder wording describing the work item in gen",
+        "Neutral placeholder wording describing the work item in general terms without",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organiza",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neut"
       ],
       "priority": "P0",
       "points": 13,
@@ -1074,8 +1074,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-5-rc-channel",
-        "branch": "ops/FFR-600-5-rc-channel",
+        "worktree": "Neutral placeholder wording describ",
+        "branch": "Neutral placeholder word",
         "creates": "docs/rc-channel.md",
         "tests": "tests/test_rc_gate_parity.sh",
         "reads": [
@@ -1091,34 +1091,34 @@
               1,
               2
             ],
-            "focus": "dev produces rc.N and a Forgejo prerelease through demonstrably the same gate code"
+            "focus": "Neutral placeholder wording describing the work item in general terms without nami"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "RC mirroring decided with reason; planted version error caught and blocks the merge"
+            "focus": "Neutral placeholder wording describing the work item in general terms without namin"
           },
           {
             "criteria": [
               5
             ],
-            "focus": "dev exists per repo in scope, or is recorded as deliberately absent with a reason"
+            "focus": "Neutral placeholder wording describing the work item in general terms without nam"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-700-1",
-      "title": "The English-only rule reaches every org and has an instrument",
-      "description": "LVC-217, P0. The rule exists and predates the ticket — lvc-ops/AGENTS.md line 5 — but says 'LangeVC Ops content', so four of five orgs are outside the sentence, and that is where the 29 German commit subjects are. Measured 2026-08-16 across five orgs: 29 German commit subjects in 10 repos, 39 German tracked .md files in 8 repos, 28 German comments in code and CI in 9 repos. skillweave/skillweave is public Open-Core and carries 11 of those .md files.\n\nNothing checks it. Writing the rule a second time in a second place repeats the mistake instead of fixing it. Work exists on ops/LVC-217-ableiten and ops/LVC-217-sprachregel and is reachable on origin.",
+      "title": "Neutral placeholder wording describing the work item in gener",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording descr\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in gener",
       "acceptanceCriteria": [
-        "The rule is reachable from every org's engine by reference, not copied into five places that then drift",
-        "The scope table is stated verbatim, including what stays German (chat, NOTES, reports under workspaces/*-temp/)",
-        "A check reports violations, so the rule stops depending on who remembers it",
-        "The rule names its own reason in one sentence"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organ",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
+        "Neutral placeholder wording describing the work item in general terms witho",
+        "Neutral placeholder wording describing the wo"
       ],
       "priority": "P0",
       "points": 8,
@@ -1126,8 +1126,8 @@
       "type": "task",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-1-language-reach",
-        "branch": "ops/FFR-700-1-language-reach",
+        "worktree": "Neutral placeholder wording describing",
+        "branch": "Neutral placeholder wording",
         "modifies": "AGENTS.md",
         "tests": "tests/test_language_scan.sh",
         "reads": [
@@ -1142,28 +1142,28 @@
               1,
               2
             ],
-            "focus": "one rule reachable by reference from every org engine; scope table verbatim"
+            "focus": "Neutral placeholder wording describing the work item in general terms witho"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "a check reports violations; the rule names its own reason in one sentence"
+            "focus": "Neutral placeholder wording describing the work item in general terms wit"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-700-2",
-      "title": "A batch is the session boundary, and parallel lanes are actually fanned out",
-      "description": "LVC-219, P0. The SW-135 session ran a 13-task, 5-batch sequence in one context, hit repeated compression and lost its own findings between rounds. The sequence format already carries the structure that would have prevented it — batches and parallel_lanes — but nothing says a batch is where one session ends.\n\nTwo mechanisms, not one, and they need different fixes: context exhaustion is fixed by fewer acceptance criteria per dispatch; HTTP 413 (Request Entity Too Large) is fixed by smaller individual requests — read the part of the file you need, pipe long output through tail, split work inside the dispatch into steps.",
+      "title": "Neutral placeholder wording describing the work item in general terms witho",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording descri",
       "acceptanceCriteria": [
-        "sequences/*.yaml carries an explicit session_boundary: batch, and promptchain-execute refuses a sequence without one",
-        "Lanes marked parallel_lanes are dispatched as subagents rather than executed inline",
-        "Demonstrated, not asserted: one batch is executed by a session that receives the state file and nothing else",
-        "Red proof: a sequence without session_boundary is rejected; a second batch in the same session is refused"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, prod",
+        "Neutral placeholder wording describing the work item in general terms without namin",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organizati",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organiz"
       ],
       "priority": "P0",
       "points": 8,
@@ -1174,8 +1174,8 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "skillweave/wt-ffr-skillweave-2-session-boundary",
-        "branch": "ops/FFR-700-2-session-boundary",
+        "worktree": "Neutral placeholder wording describing the work",
+        "branch": "Neutral placeholder wording de",
         "modifies": "src/skillweave/promptchain/execute.py",
         "tests": "tests/test_session_boundary.py",
         "reads": [
@@ -1190,27 +1190,27 @@
               1,
               2
             ],
-            "focus": "session_boundary: batch required; parallel_lanes dispatched as subagents"
+            "focus": "Neutral placeholder wording describing the work item in general terms wi"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "cold session resumes from the state file alone; both red proofs"
+            "focus": "Neutral placeholder wording describing the work item in general"
           }
         ]
       },
-      "repo": "skillweave/skillweave"
+      "repo": "Neutral placeholder w"
     },
     {
       "id": "FFR-700-3",
-      "title": "Backup failure and freshness are alerted, on the same channel as mirror failure",
-      "description": "LVC-111, P0, open since 2026-08-05. It belongs in this PRD rather than beside it: mirroring IS the backup path (LVC-225), so a repository whose mirror silently stopped is a repository with one copy. The same silence produced both findings, and the operator signal built in FFR-500-2 is the channel this one needs.\n\nFreshness is the half that a success-only check misses: a backup that runs and writes nothing reports green.",
+      "title": "Neutral placeholder wording describing the work item in general terms without n",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording descr\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organizati",
       "acceptanceCriteria": [
-        "A failed backup reaches the operator on the same channel as a failed mirror",
-        "Staleness is alerted, not only failure: a backup that has not advanced is reported",
-        "Red proof: a deliberately broken backup and a deliberately stalled one each produce an alert"
+        "Neutral placeholder wording describing the work item in general terms witho",
+        "Neutral placeholder wording describing the work item in general terms without nami",
+        "Neutral placeholder wording describing the work item in general terms without naming any pro"
       ],
       "priority": "P0",
       "points": 8,
@@ -1221,15 +1221,15 @@
       "type": "feature",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-3-backup-alerting",
-        "branch": "ops/FFR-700-3-backup-alerting",
-        "creates": "server/langevc-prod-01/scripts/backup-alert.sh",
-        "tests": "server/langevc-prod-01/tests/test_backup_alert.sh",
+        "worktree": "Neutral placeholder wording describing t",
+        "branch": "Neutral placeholder wording d",
+        "creates": "Neutral placeholder wording describing the wor",
+        "tests": "Neutral placeholder wording describing the work i",
         "reads": [
-          "server/langevc-prod-01/scripts/mirror-alert.sh"
+          "Neutral placeholder wording describing the wor"
         ],
         "must_not_touch": [
-          "server/langevc-prod-01/scripts/mirror-alert.sh"
+          "Neutral placeholder wording describing the wor"
         ],
         "dispatch_order": [
           {
@@ -1237,26 +1237,26 @@
               1,
               2
             ],
-            "focus": "failure on the mirror channel; staleness alerted, not only failure"
+            "focus": "Neutral placeholder wording describing the work item in general te"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "red proof: one broken and one stalled backup each alert"
+            "focus": "Neutral placeholder wording describing the work item in"
           }
         ]
       },
-      "repo": "langevc/lvc-ops"
+      "repo": "Neutral placeho"
     },
     {
       "id": "FFR-R0",
-      "title": "Review gate — phase 0: secure and the open contract surface",
-      "description": "Independent review of phase 0 (9 lanes: FFR-000-1, FFR-000-2, FFR-100-1, FFR-100-2, FFR-300-1, FFR-300-2, FFR-500-1, FFR-600-4, FFR-700-1). The reviewer holds a separate role from ops: it does not repair, it does not merge, and it does not accept a lane's own test run as evidence. It refetches every branch tip and names the SHA, re-runs each red proof against the base itself, and picks its own spot-checks rather than following the lane's.\n\nThis gate exists because a lane's green test cannot see the gap it was constructed around — measured on SW-135, where four lanes passed while dispatch.py was never exported from routing/__init__.py, and each lane's own test imported the module directly.\n\nWHERE THE REVIEWER WORKS. The lanes under review sit in 3 different repositories (langevc/lvc-ops, langevc/lvc-planning, langevc/ops-engine), so one worktree cannot hold them: a git worktree belongs to exactly one repository. The declared worktree is a BASE CAMP in lvc-planning where the verdict is written. The checks themselves run in EPHEMERAL DETACHED CHECKOUTS the reviewer creates per branch it verifies, at the candidate SHA, and removes afterwards. The reviewer never points at a mutable ops worktree — that tree can move under the check.\n\nThe branches to verify are listed in `reads`. Refetch each tip before judging it and name the SHA you judged in the verdict.",
+      "title": "Neutral placeholder wording describing the work item in gen",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wo\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, p\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or stra\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or s",
       "acceptanceCriteria": [
-        "Branch tips of all nine lanes are refetched and each SHA is named in the verdict",
-        "Every red proof is re-run by the reviewer against the base and exits non-zero there",
-        "The reviewer picks two lanes itself and re-measures their central claim; nothing is repaired"
+        "Neutral placeholder wording describing the work item in general terms without na",
+        "Neutral placeholder wording describing the work item in general terms without namin",
+        "Neutral placeholder wording describing the work item in general terms without naming any pro"
       ],
       "priority": "P0",
       "points": 3,
@@ -1273,10 +1273,10 @@
       ],
       "type": "review",
       "passes": false,
-      "repo": "langevc/lvc-planning",
+      "repo": "Neutral placeholder",
       "lane": {
-        "worktree": "langevc/wt-ffr-review-p0",
-        "branch": "review/FFR-R0",
+        "worktree": "Neutral placeholder word",
+        "branch": "Neutral place",
         "reads": [
           "ops/FFR-000-1-secure",
           "ops/FFR-000-2-unsecured-check",
@@ -1305,13 +1305,13 @@
               1,
               2
             ],
-            "focus": "per branch: refetch tip, name SHA, ephemeral detached checkout, re-run the red proof yourself against the base"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organization"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "reviewer-picked spot-check in its own checkout; findings recorded in the verdict, nothing repaired, checkouts removed"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, produ"
           }
         ],
         "creates": "evidence/2026-08-23-ffr-wave-0/verdict.md"
@@ -1319,13 +1319,13 @@
     },
     {
       "id": "FFR-R1",
-      "title": "Review gate — phase 1: identity, consumption and the written division",
-      "description": "Independent review of phase 1 (6 lanes: FFR-100-3, FFR-200-1, FFR-500-2, FFR-600-1, FFR-600-3, FFR-700-2). The reviewer holds a separate role from ops: it does not repair, it does not merge, and it does not accept a lane's own test run as evidence. It refetches every branch tip and names the SHA, re-runs each red proof against the base itself, and picks its own spot-checks rather than following the lane's.\n\nThis gate exists because a lane's green test cannot see the gap it was constructed around — measured on SW-135, where four lanes passed while dispatch.py was never exported from routing/__init__.py, and each lane's own test imported the module directly.\n\nWHERE THE REVIEWER WORKS. The lanes under review sit in 3 different repositories (langevc/lvc-ops, langevc/ops-engine, skillweave/skillweave), so one worktree cannot hold them: a git worktree belongs to exactly one repository. The declared worktree is a BASE CAMP in lvc-planning where the verdict is written. The checks themselves run in EPHEMERAL DETACHED CHECKOUTS the reviewer creates per branch it verifies, at the candidate SHA, and removes afterwards. The reviewer never points at a mutable ops worktree — that tree can move under the check.\n\nThe branches to verify are listed in `reads`. Refetch each tip before judging it and name the SHA you judged in the verdict.\n\nCHAIN CHECK (added 2026-08-23 after wave 1 was dispatched). Four wave-1 lanes were branched off their predecessor's tip rather than off the default branch, because they inherit a write surface that is not merged: FFR-100-3 off FFR-100-1 (47b3c43), FFR-200-1 off FFR-100-2 (665bc85), FFR-500-2 off FFR-500-1 (745bc6e). FFR-600-1 and FFR-600-3 sit on lvc-ops main c61ccb8, FFR-700-2 on skillweave main 949967a.\n\nA gate accepts lanes; a merge moves chains. Merging FFR-500-2 also merges FFR-500-1, whose own acceptance happened at R0 — that one is covered. The reviewer must state, per chain, which inherited commits carry an earlier verdict and which do not.",
+      "title": "Neutral placeholder wording describing the work item in general terms",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strate\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, p\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strat\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or s\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strat\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organiza",
       "acceptanceCriteria": [
-        "Branch tips refetched and named; the canonical-key change is checked against a real Forgejo webhook payload",
-        "The division document is checked for a part left unassigned, and every assignment is checked against the generic-vs-business rule",
-        "The reviewer re-runs the drift and language checks itself; nothing is repaired",
-        "Each lane branched off a predecessor is checked as a CHAIN, not only at its tip: the inherited commits are named, and it is stated whether they were accepted by an earlier gate or would ride along unaccepted on a merge of the later branch"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organizat",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strate",
+        "Neutral placeholder wording describing the work item in general terms without",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project,"
       ],
       "priority": "P0",
       "points": 3,
@@ -1339,10 +1339,10 @@
       ],
       "type": "review",
       "passes": false,
-      "repo": "langevc/lvc-planning",
+      "repo": "Neutral placeholder",
       "lane": {
-        "worktree": "langevc/wt-ffr-review-p1",
-        "branch": "review/FFR-R1",
+        "worktree": "Neutral placeholder word",
+        "branch": "Neutral place",
         "reads": [
           "ops/FFR-100-3-consumption",
           "ops/FFR-200-1-canonical-key",
@@ -1365,19 +1365,19 @@
               1,
               2
             ],
-            "focus": "per branch: refetch tip, name SHA, ephemeral detached checkout, re-run the red proof yourself against the base"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organization"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "reviewer-picked spot-check in its own checkout; findings recorded, nothing repaired, checkouts removed"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, orga"
           },
           {
             "criteria": [
               4
             ],
-            "focus": "chain check: name inherited commits per stacked branch and whether an earlier gate accepted them"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project"
           }
         ],
         "creates": "evidence/2026-08-23-ffr-wave-1/verdict.md"
@@ -1385,14 +1385,14 @@
     },
     {
       "id": "FFR-R2",
-      "title": "Review gate — phase 2: naming, reconcile, rollout and the RC channel",
-      "description": "Independent review of phase 2 (8 lanes: FFR-100-4, FFR-200-2, FFR-200-3, FFR-200-4, FFR-500-3, FFR-600-2, FFR-600-5, FFR-700-3). The reviewer holds a separate role from ops: it does not repair, it does not merge, and it does not accept a lane's own test run as evidence. It refetches every branch tip and names the SHA, re-runs each red proof against the base itself, and picks its own spot-checks rather than following the lane's.\n\nThis gate exists because a lane's green test cannot see the gap it was constructed around — measured on SW-135, where four lanes passed while dispatch.py was never exported from routing/__init__.py, and each lane's own test imported the module directly.\n\nWHERE THE REVIEWER WORKS. The lanes under review sit in 3 different repositories (fusionaize/faigrid, langevc/lvc-ops, langevc/ops-engine), so one worktree cannot hold them: a git worktree belongs to exactly one repository. The declared worktree is a BASE CAMP in lvc-planning where the verdict is written. The checks themselves run in EPHEMERAL DETACHED CHECKOUTS the reviewer creates per branch it verifies, at the candidate SHA, and removes afterwards. The reviewer never points at a mutable ops worktree — that tree can move under the check.\n\nThe branches to verify are listed in `reads`. Refetch each tip before judging it and name the SHA you judged in the verdict.\n\nSHARPENED 2026-08-23 after inspecting FFR-500-3. That lane changed exactly two files in its own worktree — docs/ffr-mirror-rollout-log.md and tests/test_mirror_workflow_parity.sh — and pushed nothing to any other repository. Verified: the `git push -u origin \"$BR\"` seen in its log is a line INSIDE server/langevc-prod-01/scripts/mirror-rollout.sh that the lane read, never a command it ran, and the one rollout branch found by spot-check (capacium ops/ops-002-unify-mirror, ab61d1a) dates from 2026-08-17 by dev.bot_capacium — the earlier OPS-002 wave, not this run.\n\nSo the lane documented and tested a rollout. Whether the repositories actually carry the canonical file on their DEFAULT BRANCH is a different question, and the controller's own 2026-08-23 count (2 of 59) was taken on local clones of varying freshness, some weeks old. Neither number may be carried forward without measurement.\n\nMeasure it live. If the answer is that the rollout exists as unmerged branches, say so plainly: an unmerged branch is not a rollout, and a document describing one is not one either.",
+      "title": "Neutral placeholder wording describing the work item in general term",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral pla\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, p\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or st\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or s\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing th",
       "acceptanceCriteria": [
-        "Branch tips of every wave-2 lane refetched and each SHA named; the release name is verified identical on Forgejo and GitHub for one real tag",
-        "THE ROLLOUT IS MEASURED, NOT READ: count repositories whose DEFAULT BRANCH actually carries the canonical mirror.yml, live against the forge, and state the number against the 59 measured on 2026-08-23. A rollout that exists only as unmerged branches or as a document is reported as not done",
-        "The RC run is confirmed to invoke the same gate code as main, by code path and not by claim",
-        "faigrid produces no release object on the GitHub side any more, and the release-flow division states the standard model with its two exceptions and contradicts it nowhere",
-        "Chain check: inherited commits named per stacked branch, and whether an earlier gate accepted them"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail.",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral pl",
+        "Neutral placeholder wording describing the work item in general terms without naming any pr",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording de",
+        "Neutral placeholder wording describing the work item in general terms without naming any project,"
       ],
       "priority": "P0",
       "points": 3,
@@ -1408,17 +1408,17 @@
       ],
       "type": "review",
       "passes": false,
-      "repo": "langevc/lvc-planning",
+      "repo": "Neutral placeholder",
       "lane": {
-        "worktree": "langevc/wt-ffr-review-p2",
-        "branch": "review/FFR-R2",
+        "worktree": "Neutral placeholder word",
+        "branch": "Neutral place",
         "reads": [
           "ops/FFR-100-4-drift-check",
           "ops/FFR-200-2-key-migration",
           "ops/FFR-200-3-trigger-case",
           "ops/FFR-200-4-name-template",
           "ops/FFR-500-3-mirror-rollout",
-          "ops/FFR-600-2-faigrid-release",
+          "Neutral placeholder wording d",
           "ops/FFR-600-5-rc-channel",
           "ops/FFR-700-3-backup-alerting"
         ],
@@ -1428,7 +1428,7 @@
           "ops/FFR-200-3-trigger-case",
           "ops/FFR-200-4-name-template",
           "ops/FFR-500-3-mirror-rollout",
-          "ops/FFR-600-2-faigrid-release",
+          "Neutral placeholder wording d",
           "ops/FFR-600-5-rc-channel",
           "ops/FFR-700-3-backup-alerting"
         ],
@@ -1437,26 +1437,26 @@
             "criteria": [
               1
             ],
-            "focus": "refetch every wave-2 tip, name SHAs, verify one real release name on both sides"
+            "focus": "Neutral placeholder wording describing the work item in general terms without n"
           },
           {
             "criteria": [
               2
             ],
-            "focus": "count repos whose DEFAULT BRANCH carries the canonical mirror.yml, live against the forge; unmerged is not rolled out"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, produ"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "RC gate identity by code path; faigrid has no GitHub-side producer; division states the model without contradiction"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, pro"
           },
           {
             "criteria": [
               5
             ],
-            "focus": "chain check across stacked branches"
+            "focus": "Neutral placeholder wording describ"
           }
         ],
         "creates": "evidence/2026-08-23-ffr-wave-2/verdict.md"
@@ -1464,12 +1464,12 @@
     },
     {
       "id": "FFR-R3",
-      "title": "Review gate — phase 3: reconcile and the repin",
-      "description": "Independent review of phase 3 (2 lanes: FFR-200-5, FFR-400-1). The reviewer holds a separate role from ops: it does not repair, it does not merge, and it does not accept a lane's own test run as evidence. It refetches every branch tip and names the SHA, re-runs each red proof against the base itself, and picks its own spot-checks rather than following the lane's.\n\nThis gate exists because a lane's green test cannot see the gap it was constructed around — measured on SW-135, where four lanes passed while dispatch.py was never exported from routing/__init__.py, and each lane's own test imported the module directly.\n\nWHERE THE REVIEWER WORKS. The lanes under review sit in 1 different repositories (langevc/ops-engine), so one worktree cannot hold them: a git worktree belongs to exactly one repository. The declared worktree is a BASE CAMP in lvc-planning where the verdict is written. The checks themselves run in EPHEMERAL DETACHED CHECKOUTS the reviewer creates per branch it verifies, at the candidate SHA, and removes afterwards. The reviewer never points at a mutable ops worktree — that tree can move under the check.\n\nThe branches to verify are listed in `reads`. Refetch each tip before judging it and name the SHA you judged in the verdict.",
+      "title": "Neutral placeholder wording describing the wor",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, p\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or s",
       "acceptanceCriteria": [
-        "Branch tips refetched and named; the repin is verified against the RUNNING service, not the file",
-        "The reconcile path is exercised on a tag without a release, and proven not to delete or recreate the tag",
-        "The [postgres] extra on capacium-ops survived and is documented as intended"
+        "Neutral placeholder wording describing the work item in general terms without naming any project",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organi",
+        "Neutral placeholder wording describing the work item in general terms witho"
       ],
       "priority": "P0",
       "points": 3,
@@ -1479,10 +1479,10 @@
       ],
       "type": "review",
       "passes": false,
-      "repo": "langevc/lvc-planning",
+      "repo": "Neutral placeholder",
       "lane": {
-        "worktree": "langevc/wt-ffr-review-p3",
-        "branch": "review/FFR-R3",
+        "worktree": "Neutral placeholder word",
+        "branch": "Neutral place",
         "reads": [
           "ops/FFR-200-5-reconcile",
           "ops/FFR-400-1-repin"
@@ -1497,13 +1497,13 @@
               1,
               2
             ],
-            "focus": "per branch: refetch tip, name SHA, ephemeral detached checkout, re-run the red proof yourself against the base"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organization"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "reviewer-picked spot-check in its own checkout; findings recorded in the verdict, nothing repaired, checkouts removed"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, produ"
           }
         ],
         "creates": "evidence/2026-08-23-ffr-wave-3/verdict.md"
@@ -1511,14 +1511,14 @@
     },
     {
       "id": "FFR-R4",
-      "title": "Review gate — phase 4: the canonical source migration",
-      "description": "Independent review of phase 4 (1 lanes: FFR-400-2). The reviewer holds a separate role from ops: it does not repair, it does not merge, and it does not accept a lane's own test run as evidence. It refetches every branch tip and names the SHA, re-runs each red proof against the base itself, and picks its own spot-checks rather than following the lane's.\n\nThis gate exists because a lane's green test cannot see the gap it was constructed around — measured on SW-135, where four lanes passed while dispatch.py was never exported from routing/__init__.py, and each lane's own test imported the module directly.\n\nWHERE THE REVIEWER WORKS. The lanes under review sit in 1 different repositories (langevc/ops-engine), so one worktree cannot hold them: a git worktree belongs to exactly one repository. The declared worktree is a BASE CAMP in lvc-planning where the verdict is written. The checks themselves run in EPHEMERAL DETACHED CHECKOUTS the reviewer creates per branch it verifies, at the candidate SHA, and removes afterwards. The reviewer never points at a mutable ops worktree — that tree can move under the check.\n\nThe branches to verify are listed in `reads`. Refetch each tip before judging it and name the SHA you judged in the verdict.\n\nWIDENED 2026-08-23. FFR-600-9 (wiring the release gate into a workflow) landed after this gate was cut and would otherwise go unreviewed. It is the sharpest finding R2 produced: zero workflows referenced version-sync or check-tag, so LVC-EPIC-003's 'the release path is rehearsed, not hoped for' had no instrument at all.\n\nThis is the closing gate of the sequence. It therefore carries a measurement obligation the earlier gates did not: state the landscape numbers live against the forge. The controller's own rollout figure was wrong once already (2 of 59 from stale local clones; R2 measured 45 of 59 against the API), and the model checks read a local working directory. A closing number taken from a workstation is worth nothing.",
+      "title": "Neutral placeholder wording describing the work item",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms with\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, p\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or s\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing th\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy",
       "acceptanceCriteria": [
-        "Branch tips refetched and named; every layover resolves ops-engine from the Forgejo canonical, and reachability is proven per consuming environment rather than assumed from one",
-        "The release gate is wired by CODE PATH: name the workflow that invokes check-tag, and prove a mismatched version turns a run red before any release object exists. A gate referenced only in prose is reported as not wired",
-        "Any environment that cannot reach the canonical carries a named exception with its reason",
-        "CLOSING MEASUREMENT, live against the forge and not against local checkouts: how many of the five layovers pin v3.0.0 with a canonical org key, how many repositories carry the canonical mirror.yml on their default branch, and how many produce a release object outside the ops-engine. State each number with the command that produced it",
-        "The two model checks are judged for runner-reachability once more: release-object-check.sh exits 0 after scanning nothing, which is a false green and the most dangerous of the open findings. State whether it still does"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describi",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without n",
+        "Neutral placeholder wording describing the work item in general terms without naming any",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without"
       ],
       "priority": "P0",
       "points": 3,
@@ -1528,10 +1528,10 @@
       ],
       "type": "review",
       "passes": false,
-      "repo": "langevc/lvc-planning",
+      "repo": "Neutral placeholder",
       "lane": {
-        "worktree": "langevc/wt-ffr-review-p4",
-        "branch": "review/FFR-R4",
+        "worktree": "Neutral placeholder word",
+        "branch": "Neutral place",
         "reads": [
           "ops/FFR-400-2-forgejo-source"
         ],
@@ -1544,20 +1544,20 @@
               1,
               2
             ],
-            "focus": "canonical source per environment; the gate proven by code path, not prose"
+            "focus": "Neutral placeholder wording describing the work item in general terms wit"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "named exceptions; the three closing numbers measured live with their commands"
+            "focus": "Neutral placeholder wording describing the work item in general terms without"
           },
           {
             "criteria": [
               5
             ],
-            "focus": "re-judge both model checks for runner-reachability, especially the object-check false green"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any pr"
           }
         ],
         "creates": "evidence/2026-08-23-ffr-wave-4/verdict.md"
@@ -1565,13 +1565,13 @@
     },
     {
       "id": "FFR-600-6",
-      "title": "fusionaize-ops produces the faigrid release on Forgejo",
-      "description": "Operator decision 2026-08-23: faigrid follows the standard model — local -> Forgejo (canonical) -> mirror -> GitHub does distribution only. FFR-600-2 establishes by evidence that today the opposite holds: release-please produces faigrid's releases on the GitHub mirror (1.6.1, 1.6.2, 1.7.0 by github-actions[bot]), there is no Forgejo producer, and the read-only mirror is being written to (open PR #22, branch release-please--branches--main).\n\nFFR-600-2 dispatch 4 removes the GitHub-side production. This task supplies the other half, which lives in a different repository: fusionaize-ops must configure faigrid so the ops-engine ReleaseHandler produces the release on tag_push. Without it there is a window in which no release is produced at all.\n\nIt depends on FFR-200-4 because the release name must come from the configured name_template rather than repo.split() — the convention is 'fusionAIze Grid vX.Y.Z', and getting it from code is the defect LVC-229 records. It depends on FFR-200-1 because the org key must resolve canonically: fusionaize-ops was the repository where the case-mismatch was first measured.\n\nSame shape as FAI-211 for faigate. Once both are done, no fusionaize repo produces releases outside the ops-engine.",
+      "title": "Neutral placeholder wording describing the work item i",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wor\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder word\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming an\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, pro",
       "acceptanceCriteria": [
-        "fusionaize-ops configures faigrid with release.enabled and a name_template producing 'fusionAIze Grid vX.Y.Z', identical on Forgejo and GitHub",
-        "A real tag on faigrid produces the release on Forgejo through the ops-engine ReleaseHandler, verified on the running bot rather than in config alone",
-        "The Homebrew tap still fires after the mirror, driven by the ops-engine release",
-        "No fusionaize repository produces a release outside the ops-engine; faigate's remaining exception is named with its ticket (FAI-211)"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Ne",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral",
+        "Neutral placeholder wording describing the work item in general terms without n",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy"
       ],
       "priority": "P0",
       "points": 8,
@@ -1582,12 +1582,12 @@
       ],
       "type": "task",
       "passes": false,
-      "repo": "fusionaize/fusionaize-ops",
+      "repo": "Neutral placeholder wordi",
       "lane": {
-        "worktree": "fusionaize/wt-ffr-fusionaize-ops-6-faigrid-release",
-        "branch": "ops/FFR-600-6-faigrid-release",
+        "worktree": "Neutral placeholder wording describing the work it",
+        "branch": "Neutral placeholder wording d",
         "modifies": "config.yml",
-        "tests": "tests/test_faigrid_release_config.sh",
+        "tests": "Neutral placeholder wording describi",
         "reads": [
           "config.yml"
         ],
@@ -1600,27 +1600,27 @@
               1,
               2
             ],
-            "focus": "configure release.enabled + name_template; prove on a real tag through the running bot"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming a"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "tap fires post-mirror off the ops-engine release; no fusionaize repo produces outside the engine"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project"
           }
         ]
       }
     },
     {
       "id": "FFR-600-7",
-      "title": "The release model reaches every org by reference, and a check enforces it",
-      "description": "Operator, 2026-08-23: 'das muss irgendwo festgeschrieben sein, ueberall dort wo es relevant ist, sonst darf ich als operator die diskussion noch unzaehlige male fuehren.'\n\nThat is precisely the LVC-217 finding, one domain over. There the rule existed and was ignored for months for two reasons: REACH (it said 'LangeVC Ops content', so four of five orgs were outside the sentence) and ENFORCEMENT (nothing checked it). Writing it a second time in a second place repeated the mistake rather than fixing it.\n\nLVC-217 is now the working blueprint, verified independently by gate FFR-R1: the rule lives once in lvc-ops AGENTS.md#language, all four other org engines reference it and never restate it (capacium-ops 9d6f54a, elementeer-ops c1b7887, fusionaize-ops 7e6d9ea, skillweave-ops cad3d21), and language-scan.sh --gate reports real violations. Copy that shape exactly for the release model.\n\nMeasured 2026-08-23: docs/release-flow-division.md is referenced by 0 of the 4 other org engines. FFR-600-1 dispatch 4 fixes the document's content; this task gives it reach and an instrument, so the model stops depending on whoever remembers it.\n\nThe governing statement, verbatim, is: local -> Forgejo (canonical) -> mirror -> GitHub distribution only. Its two exceptions are GitHub-only repositories with no Forgejo canonical, and distribution artefacts the Linux host cannot build (Windows installers, Homebrew/macOS artefacts) which are produced on the GitHub side AFTER the mirror — an exception about the build environment, never about where the release object is created.",
+      "title": "Neutral placeholder wording describing the work item in general terms wit",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording de\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organi\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organiza\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral pla",
       "acceptanceCriteria": [
-        "Each of the four other org engines references the release model by pointer and never restates it, in the same shape LVC-217 uses for the language rule",
-        "The rule names its own reason in one sentence, so a session tempted to deviate reads why rather than only that",
-        "A check reports any repository producing a release object outside the ops-engine, runs unattended, and exits non-zero on a violation that is not listed with its ticket",
-        "Red proof: a repo given a GitHub-side release-creating workflow is reported; removing it makes the check quiet again"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral pl",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, prod"
       ],
       "priority": "P0",
       "points": 8,
@@ -1630,10 +1630,10 @@
       ],
       "type": "task",
       "passes": false,
-      "repo": "langevc/lvc-ops",
+      "repo": "Neutral placeho",
       "lane": {
-        "worktree": "langevc/wt-ffr-lvc-ops-7-model-reach",
-        "branch": "ops/FFR-600-7-model-reach",
+        "worktree": "Neutral placeholder wording describi",
+        "branch": "Neutral placeholder wordi",
         "creates": "scripts/release-model-check.sh",
         "tests": "tests/test_release_model_check.sh",
         "reads": [
@@ -1649,26 +1649,26 @@
               1,
               2
             ],
-            "focus": "reach by reference from all four org engines, LVC-217 shape; the rule names its reason"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming a"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "unattended check with listed exceptions; both red proofs"
+            "focus": "Neutral placeholder wording describing the work item in"
           }
         ]
       }
     },
     {
       "id": "FFR-600-8",
-      "title": "check-tag means what its docstring says, and can gate a release candidate",
-      "description": "Gate FFR-R2 measured this empirically against the real script under bash -eo pipefail:\n\n  check-tag v2.4.3       (sot 2.4.3)      -> exit 1  tag 'v2.4.3' != source_of_truth '2.4.3'\n  check-tag v2.4.3-rc.1  (sot 2.4.3-rc.1) -> exit 2  value '2.4.3-rc.1' is not semver\n  check-tag 2.4.3        (sot 2.4.3)      -> exit 0\n\nTwo defects in the generic tool, both in ops-engine/scripts/version-sync.py:\n\n1. The docstring at line 218 states 'v-prefix stripped'. Line 231 compares `if val != tag:` with no strip. A tag `v2.4.3` therefore fails against a source of truth of `2.4.3` — which is how every repo in the landscape actually writes it. The tool documents behaviour it does not have.\n\n2. SEMVER_RE at line 27 is `^\\\\d+\\\\.\\\\d+\\\\.\\\\d+$` and line 136 rejects anything else before the tag is ever compared. A release candidate cannot pass, so LVC-208's RC channel cannot use the same gate as main — which is the one thing LVC-208 says it must do.\n\nThis is the open base, so the fix is generic: no org, product or channel name enters the tool. Whether a prerelease suffix is acceptable is the caller's decision, expressed as an option, not a hardcoded policy.",
+      "title": "Neutral placeholder wording describing the work item in general terms wit",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming a\n\nNeutral placeholder wording describing the work item in general terms without naming any pro\nNeutral placeholder wording describing the work item in general terms without naming\nNeutral placeholder wording describing the work ite\n\nNeutral placeholder wording describing the work item in general terms withou\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neut\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produ\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms",
       "acceptanceCriteria": [
-        "The v-prefix behaviour is one behaviour: the docstring and the comparison agree, and `check-tag v2.4.3` against source of truth `2.4.3` passes",
-        "A prerelease tag can be gated: `check-tag v2.4.3-rc.1` succeeds when the caller allows prereleases and fails when it does not, with a named error rather than 'is not semver'",
-        "Red proof: the three invocations R2 measured are re-run and produce the corrected exits; the pre-fix script is shown to produce the old ones"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Ne",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording descr",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail."
       ],
       "priority": "P0",
       "points": 5,
@@ -1677,10 +1677,10 @@
       ],
       "type": "bug",
       "passes": false,
-      "repo": "langevc/ops-engine",
+      "repo": "Neutral placeholde",
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-8-check-tag",
-        "branch": "ops/FFR-600-8-check-tag",
+        "worktree": "Neutral placeholder wording describin",
+        "branch": "Neutral placeholder wor",
         "modifies": "scripts/version-sync.py",
         "tests": "tests/test_check_tag.py",
         "reads": [
@@ -1695,26 +1695,26 @@
               1,
               2
             ],
-            "focus": "docstring and code agree on the v prefix; prerelease gating is an option with a named error"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any pr"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "re-run R2's three invocations as the red proof, before and after"
+            "focus": "Neutral placeholder wording describing the work item in general"
           }
         ]
       }
     },
     {
       "id": "FFR-600-9",
-      "title": "The release gate is wired into a workflow, on main and on dev",
-      "description": "The sharpest finding of gate FFR-R2, and it undoes an assumption the whole epic rests on. A sweep of every .yml/.yaml in lvc-ops and ops-engine finds ZERO references to `version-sync` or `check-tag`. No workflow calls the gate. Neither a main release nor a dev rc run traverses it. The release object is produced by ops_engine/modules/release.py (ReleaseHandler), which never calls check-tag.\n\nSo the gate exists as a tool and is enforced nowhere. LVC-EPIC-003 is titled 'the release path is rehearsed, not hoped for'; a gate that no workflow invokes is the purest form of the hope it names. LVC-208's 'the RC run calls the SAME gate code as main' is not a comparison between two wirings — there is no wiring on either side.\n\nThis is why FFR-600-5's parity test could pass 33/33 against a fixture: there was no real invocation to compare against.\n\nWhere the wiring belongs follows the division from FFR-600-1: the gate is generic and lives in ops-engine; invoking it is per-repo release flow. Depends on FFR-600-8, because wiring a gate that rejects every v-prefixed tag would turn every release red on the first run.",
+      "title": "Neutral placeholder wording describing the work item in gener",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization,\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work it\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strate",
       "acceptanceCriteria": [
-        "A release on main traverses the gate: a workflow invokes check-tag and a mismatched version turns the run red before any release object exists",
-        "The dev rc run invokes the SAME gate, demonstrably the same code path and not a copy",
-        "Proven on a real case: a deliberately mismatched version is caught by the wired gate, and the same tag passes once corrected",
-        "Where the ReleaseHandler produces the release object, it is stated whether the gate runs before it and what happens if the gate is absent"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Ne",
+        "Neutral placeholder wording describing the work item in general terms without naming",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or s",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detai"
       ],
       "priority": "P0",
       "points": 13,
@@ -1723,10 +1723,10 @@
       ],
       "type": "feature",
       "passes": false,
-      "repo": "langevc/ops-engine",
+      "repo": "Neutral placeholde",
       "lane": {
-        "worktree": "langevc/wt-ffr-ops-engine-9-gate-wiring",
-        "branch": "ops/FFR-600-9-gate-wiring",
+        "worktree": "Neutral placeholder wording describing",
+        "branch": "Neutral placeholder wordi",
         "creates": ".forgejo/workflows/release-gate.yml",
         "tests": "tests/test_gate_wired.sh",
         "reads": [
@@ -1742,14 +1742,14 @@
               1,
               2
             ],
-            "focus": "wire the gate on main and on dev through one code path, not a copy"
+            "focus": "Neutral placeholder wording describing the work item in general te"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "real mismatched-version proof; state the ReleaseHandler's relation to the gate"
+            "focus": "Neutral placeholder wording describing the work item in general terms without"
           }
         ]
       }
@@ -1758,7 +1758,7 @@
   "execution_recommendation": {
     "mode": "complex",
     "suggested_workflow": "ralph-loop-attended",
-    "reason": "26 tasks, 191 points, 8 phases across 5 orgs and 59 repos; every task <= 21 points",
+    "reason": "Neutral placeholder wording describing the work item in general terms without nami",
     "parallel_opportunities": 3
   },
   "totals": {
@@ -1767,95 +1767,44 @@
   },
   "coverage": {
     "decided_and_not_reopened": {
-      "release_model": "FAI-211, 2026-08-22: local -> Forgejo (canonical) -> mirror to GitHub -> GitHub runs distribution only (Homebrew, PyPI, GHCR, Windows). Release creation is the ops-engine ReleaseHandler on Forgejo via tag_push.",
-      "three_layer_boundary": "LVC-206/LVC-221: generic mechanics in the open templates (ops-engine, agent-test-env, wp-test-env); business logic in the <org>-ops layover; configuration optionally per repository.",
-      "effort_unit": "complexity points in Fibonacci, no time estimates. The blueprint asset's estimated_minutes field is stale against practice; practice wins.",
-      "faigrid_release_path": "Operator decision 2026-08-23: faigrid follows the standard model without exception. The measured state (release-please producing on the GitHub mirror, no Forgejo producer, mirror being written to) is a divergence to be corrected, not a benchmark to copy. FFR-600-2 dispatch 4 removes GitHub-side production; FFR-600-6 supplies the ops-engine configuration in fusionaize-ops.",
-      "release_pipeline_model": "Operator, 2026-08-23: the model 'local -> Forgejo (canonical) -> mirror -> GitHub distribution only' applies to effectively every repository. Exactly two exceptions: GitHub-only repositories with no Forgejo canonical (e.g. a .github profile repo), and distribution artefacts the Linux Forgejo host cannot build (Windows installers, Homebrew/macOS artefacts), produced on the GitHub side AFTER the mirror. The second is an exception about the build environment, never about where the release object is created. Written down in docs/release-flow-division.md (FFR-600-1 d4), given reach and an instrument by FFR-600-7. Not to be re-litigated per repo."
+      "Neutral place": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms",
+      "Neutral placeholder": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any proje",
+      "Neutral pla": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail",
+      "Neutral placeholder wo": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any"
     },
     "tickets_covered": {
-      "LVC-224": [
-        "FFR-100-1",
-        "FFR-100-2",
-        "FFR-100-3",
-        "FFR-100-4"
+      "Neutral": [
+        "FFR-600-2"
       ],
-      "LVC-229": [
-        "FFR-200-1",
-        "FFR-200-2",
-        "FFR-200-3",
-        "FFR-200-4",
-        "FFR-200-5"
-      ],
-      "LVC-221": [
-        "FFR-300-2"
-      ],
-      "LVC-222": [
-        "FFR-300-1"
-      ],
-      "LVC-223": [
-        "FFR-600-1"
-      ],
-      "LVC-101/LVC-102": [
+      "Neutral placeho": [
         "FFR-400-1",
         "FFR-400-2"
       ],
-      "LVC-225": [
-        "FFR-500-1",
-        "FFR-500-2"
-      ],
-      "OPS-002": [
-        "FFR-500-3"
-      ],
-      "LVC-209": [
-        "FFR-600-3"
-      ],
-      "LVC-210": [
-        "FFR-600-4"
-      ],
-      "LVC-208": [
-        "FFR-600-5"
-      ],
-      "LVC-217": [
-        "FFR-700-1"
-      ],
-      "LVC-219": [
-        "FFR-700-2"
-      ],
-      "LVC-111": [
-        "FFR-700-3"
-      ],
-      "LVC-207/226/227/228": [
+      "Neutral placeholder": [
         "FFR-000-2"
-      ],
-      "FAI-211": [
-        "FFR-600-2"
       ]
     },
     "deliberately_out_of_scope": {
-      "LVC-211": "P1 runner contract — an EPIC-003 child, not on the Forgejo-first spine. Schedule after FFR-600-5.",
-      "LVC-212": "P2 job isolation — same.",
-      "LVC-201/202/204/205": "P1 planning visibility and planning-repo backup. Related through the mirror-as-backup path but a separate cut.",
-      "LVC-213/215/218/220": "P1/P2 follow-ups; LVC-218 must not start before FFR-700-1 lands, per its own handoff.",
-      "LVC-106/103/104/105/107/109/110": "P1/P2/P3, unrelated to release and mirror.",
-      "LVC-EPIC-001": "The cockpit. FFR-200-5 produces the release/mirror record it needs; the cockpit itself is not built here.",
-      "LVC-EPIC-003": "The framing epic. Its children 208/209/210 are in scope; 211/212 are not, so the epic is advanced, not closed."
+      "Neutral": "Neutral placeholder word",
+      "Neutral placeholder": "Neutral placeholder wording describing the work item in general terms without naming",
+      "Neutral placeholder wording des": "Neutral placeholder wording describing the",
+      "Neutral plac": "Neutral placeholder wording describing the work item in general terms without naming any project, organization"
     },
     "new_findings_not_in_any_ticket": [
-      "FFR-200-3: dependency_triggers in fusionaize-ops still carry display-case org names after the 2026-08-22 key fix — the same case defect in a field LVC-229 does not name.",
-      "FFR-300-1: ops-engine's own enforce-release-name.yml hard-codes the product name 'Ops Engine' inside the generic OSS template.",
-      "FFR-400-1: elementeer-ops and skillweave-ops also pin v2.0.0 — the 2026-08-22 drift evidence measured only three layovers; there are five.",
-      "FFR-500-3: measured 2026-08-23, only 2 of 59 repositories carry the canonical mirror.yml; 57 mirror with no visibility gate at all.",
-      "FFR-600-2: faigrid runs release-please on the GitHub mirror alongside the ops-engine ReleaseHandler on Forgejo — two release producers for one repository.",
-      "FFR-000-1: LVC-229 and the 2026-08-22 drift evidence are untracked in lvc-planning.",
-      "Measured 2026-08-23 while creating worktrees: langevc/ops-engine is the only repository in the landscape on `master`; lvc-ops, lvc-planning, capacium, elementeer, faigrid and skillweave are all on `main`. The generic template that every layover consumes is the one repo whose default branch differs.",
-      "Measured the same way: `dev` exists in 2 of 7 sampled repositories (elementeer, skillweave). LVC-208 / FFR-600-5 puts the RC channel on `dev` and presumes it everywhere; in five of seven it would have to be created first. The 2026-08-11 runbook recorded the same gap for elementeer-bridge and it was never generalised.",
-      "FFR-600-2, measured 2026-08-23: faigrid's releases 1.6.1/1.6.2/1.7.0 were produced by release-please on the GitHub mirror under github-actions[bot], with no Forgejo producer at all — the inverse of what FAI-211 records faigrid as doing. The read-only mirror also carries release-please writes: open PR #22 and branch release-please--branches--main.",
-      "FFR-600-1's first draft assigned release-object creation to a per-repo .github/workflows/release.yml — GitHub-side creation written down as the rule, the inverse of FAI-211. Measured 2026-08-23 at line 26. Also: the division is referenced by 0 of the 4 other org engines, so it had neither correctness nor reach.",
-      "FFR-R2, measured 2026-08-23: zero workflows in lvc-ops or ops-engine reference version-sync or check-tag. The release gate is enforced nowhere — neither a main release nor a dev rc traverses it. LVC-208's 'same gate as main' compares two wirings that both do not exist.",
-      "FFR-R2: version-sync.py's docstring (line 218) claims the v prefix is stripped; line 231 compares without stripping, so check-tag v2.4.3 fails against source of truth 2.4.3. And SEMVER_RE rejects any prerelease before comparison, so an rc tag cannot be gated at all.",
-      "FFR-R2 corrected the controller's own rollout figure: 45 of 59 repositories carry the canonical mirror.yml on their DEFAULT BRANCH, measured live against the forge API. The earlier 2-of-59 came from local clones of varying freshness. Of the 14 remaining, 7 are in langevc, where the rollout exists only as the unmerged ops/OPS-002-rollout branch."
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording d",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or str",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeh",
+      "Neutral placeholder wording describing the work item in general terms without namin",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general term",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording desc",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strate",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or str",
+      "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general te"
     ],
-    "measurement_note": "All counts above were measured on local clones on 2026-08-23. Clone freshness varies (ops-engine last fetched 2026-08-17, elementeer 2026-08-16). Every verdict re-fetches the branch tip and names the SHA, per the standing rule."
+    "measurement_note": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming an"
   }
 }
