@@ -332,13 +332,13 @@ The **`skillweave.config/`** directory is the single durable *input* tier. It is
 
 | Tier | Path | Kind | Git treatment | Purpose |
 |------|------|------|---------------|---------|
-| Tier 1 (shipped default) | `config/catalogue.yaml` | Shipped deliverable | tracked in this repo | The default catalogue that ships with SkillWeave. |
+| Tier 1 (shipped default) | `skillweave/assets/catalogue.yaml` | Shipped deliverable | tracked in this repo | The default catalogue that ships with SkillWeave. |
 | Tier 2 (durable override) | `skillweave.config/catalogue.yaml` | Durable input | tracked in consumer repo, never git-excluded | A team's tuned model roster. Preflight seeds it from the tier-1 deliverable on first run and never overwrites it afterwards. |
 
 - **Owner**: Core Runtime / Model & Harness Catalogue Subsystem + preflight (`SkillWeavePersistence`).
 - **Lifecycle**: Global / Setup.
-- **Seed semantics**: `SkillWeavePersistence.ensure_folder_structure()` copies `config/catalogue.yaml` into `skillweave.config/catalogue.yaml` only when the target does not already exist — a fresh clone starts from the shipped default, and a tuned roster is preserved across preflights and clones.
-- **Read semantics**: `core.catalogue._default_path()` prefers `skillweave.config/catalogue.yaml` when present, falling back to the shipped `config/catalogue.yaml`. It must never read a catalogue from `.skillweave/`.
+- **Seed semantics**: `SkillWeavePersistence.ensure_folder_structure()` copies `skillweave/assets/catalogue.yaml` into `skillweave.config/catalogue.yaml` only when the target does not already exist — a fresh clone starts from the shipped default, and a tuned roster is preserved across preflights and clones.
+- **Read semantics**: `core.catalogue._default_path()` prefers `skillweave.config/catalogue.yaml` when present, falling back to the shipped `skillweave/assets/catalogue.yaml`. It must never read a catalogue from `.skillweave/`.
 - **Key Artifacts**: `catalogue.yaml`.
 
 ---
