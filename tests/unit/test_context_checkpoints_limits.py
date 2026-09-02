@@ -199,10 +199,7 @@ class TestProfileRegistryAndLoading:
         assert profile.stop_limit == 130_000
 
     def test_load_profiles_from_yaml_file(self):
-        profiles_file = Path("config/profiles/context.yaml")
-        if not profiles_file.exists():
-            # Check relative to repo root
-            profiles_file = Path(__file__).resolve().parent.parent.parent / "config" / "profiles" / "context.yaml"
+        profiles_file = Path(__file__).resolve().parent.parent.parent / "src" / "skillweave" / "assets" / "profiles" / "context.yaml"
 
         loaded = load_profiles_from_yaml_file(profiles_file)
         assert "default" in loaded

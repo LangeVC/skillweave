@@ -1,0 +1,130 @@
+# Design Thinking Lens — SkillWeave Discovery & Research
+# Operationalizes workshop rules and UX principles across skills.
+# Lens is opt-in: enabled via config.yaml lens.design_thinking.enabled
+
+lens:
+  id: design-thinking
+  version: 1.0.0
+  name: "Design Thinking Lens"
+  description: >
+    Applies design thinking workshop rules as prompt behaviors and
+    UX principles as output formatting rules across all skills.
+  enabled: false
+
+  # === Workshop Rules ===
+  # These shape prompt behavior and agent-side reasoning.
+  workshop_rules:
+    - id: empathy_first
+      name: "Empathy First"
+      description: "Prompts start with user context. Every prompt must reference a persona, scenario, or user need before requesting output."
+      type: prompt_behavior
+      applies_to: ["discovery", "blueprint", "promptchain"]
+      strictness: high
+      enforcement: "Prepend user-context section to prompt template"
+
+    - id: quantity_before_quality
+      name: "Quantity Before Quality"
+      description: "Ideation phase enforces quantity-first. Generate minimum N options before any evaluation. Evaluation is a separate phase."
+      type: prompt_behavior
+      applies_to: ["discovery", "promptchain"]
+      strictness: high
+      enforcement: "Separate generate() and evaluate() calls; enforce minimum count"
+
+    - id: deferred_judgment
+      name: "Deferred Judgment"
+      description: "Evaluation is a separate phase from generation. No critical or selective language during ideation."
+      type: prompt_behavior
+      applies_to: ["discovery", "promptchain"]
+      strictness: high
+      enforcement: "Block critical language during generate phase; only allow during evaluate"
+
+    - id: show_dont_tell
+      name: "Show, Don't Tell"
+      description: "Outputs must include concrete examples, not abstract descriptions. Every claim needs an example."
+      type: prompt_behavior
+      applies_to: ["discovery", "blueprint"]
+      strictness: medium
+      enforcement: "Append 'Include concrete example(s)' to prompt instructions"
+
+    - id: yes_and
+      name: "Yes, And"
+      description: "Iteration mode builds on prior ideas. Always extend or reframe; never discard without documented reason."
+      type: prompt_behavior
+      applies_to: ["discovery", "promptchain"]
+      strictness: medium
+      enforcement: "Iteration prompts reference prior output by ID; require build-on rationale"
+
+    - id: bias_toward_action
+      name: "Bias Toward Action"
+      description: "Each prompt ends with a next-action. Every artifact has a recommended next step."
+      type: prompt_behavior
+      applies_to: ["discovery", "blueprint", "releasechain"]
+      strictness: medium
+      enforcement: "Append 'Next action: ...' section to all discovery outputs"
+
+  # === UX Principles ===
+  # These shape output formatting and artifact structure.
+  ux_principles:
+    - id: value_over_noise
+      name: "Value ≥ Noise"
+      description: "Every output section provides clear value. Remove decorative or redundant sections without analytical contribution."
+      type: output_rule
+      strictness: high
+      validation: "Check each section for analytical content; flag purely decorative sections"
+
+    - id: scan_before_read
+      name: "Scan Before Read"
+      description: "Structure for quick scanning. Use headers, bullet lists, tables, and bold key terms. Keep paragraphs under 5 lines."
+      type: output_rule
+      strictness: high
+      validation: "Enforce header density, bullet usage, max paragraph length"
+
+    - id: hierarchy_of_needs
+      name: "Hierarchy of Needs"
+      description: "Present functional needs before advanced features. Structure artifacts from core to nice-to-have."
+      type: output_rule
+      strictness: medium
+      validation: "Check section ordering; core functional needs first, advanced after"
+
+    - id: progressive_disclosure
+      name: "Progressive Disclosure"
+      description: "Reveal complexity gradually. Start with overview, provide details on request or in expandable sections."
+      type: output_rule
+      strictness: medium
+      validation: "Overview section present; detailed sections follow structure"
+
+    - id: recognition_over_recall
+      name: "Recognition Over Recall"
+      description: "Use consistent formats across artifacts. Same fields appear in same order. Templates reuse consistent structure."
+      type: output_rule
+      strictness: medium
+      validation: "Verify field ordering consistency across template family"
+
+  # === Activation ===
+  activation:
+    mechanism: opt-in
+    config_key: "lens.design_thinking.enabled"
+    scope: "Applies to discovery, blueprint, and promptchain skills when enabled"
+    override_policy: "Per-skill override via lens.design_thinking.overrides.<skill_name>"
+
+  # === Integration Bindings ===
+  integration:
+    discovery:
+      - skill: skillweave-blueprint
+        interface: "prompt-io"
+        description: "Discovery outputs (personas, assumptions, opportunity canvases) feed into Blueprint PRD inputs"
+      - skill: skillweave-promptchain-generate
+        interface: "behavior-override"
+        description: "Workshop rules override prompt generation behavior when enabled"
+      - skill: skillweave-promptchain-validate
+        interface: "output-filter"
+        description: "UX principles validate prompt output formatting"
+
+    artifacts:
+      discovery_outputs:
+        - ".skillweave/prompts/discovery/*.md"
+        - ".skillweave/templates/discovery/*.md"
+        - ".skillweave/templates/discovery/*.yaml"
+      blueprint_inputs:
+        - ".skillweave/lenses/design-thinking.yaml"
+        - ".skillweave/tracking-log/assumptions.yaml"

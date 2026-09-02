@@ -259,10 +259,10 @@ class TestUtilities:
 
 class TestRealCatalogueFile:
     REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-    REAL = REPO_ROOT / "config" / "catalogue.yaml"
+    REAL = REPO_ROOT / "src" / "skillweave" / "assets" / "catalogue.yaml"
 
     def test_exists(self):
-        assert self.REAL.exists(), "Missing config/catalogue.yaml (tracked deliverable)"
+        assert self.REAL.exists(), "Missing src/skillweave/assets/catalogue.yaml (tracked deliverable)"
 
     def test_parseable_with_all_sections(self):
         data = cat.load_catalogue(self.REAL)
@@ -281,7 +281,7 @@ class TestDefaultResolution:
     def test_fallback_to_tracked_deliverable(self, monkeypatch, tmp_path):
         # chdir to a directory that has no .skillweave/catalogue.yaml anywhere
         # up its parent chain, so _default_path() must fall back to the
-        # module-anchored config/catalogue.yaml deliverable.
+        # module-anchored packaged assets/catalogue.yaml deliverable.
         monkeypatch.chdir(tmp_path)
         default = cat._default_path()
         assert default.exists(), f"default path missing: {default}"
