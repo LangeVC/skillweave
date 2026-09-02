@@ -27,6 +27,15 @@ from .checkpoint import (
     EnvironmentFingerprint, Checkpoint, ResumeRevalidationRequired,
     capture_environment, create_checkpoint, validate_resume,
 )
+from .planning_sync import (
+    PlanningSyncBackingStore,
+    SyncReport,
+    discover_planning_repo,
+    discover_planning_root,
+    runtime_has_git,
+    resolve_runtime_store,
+    classify_runtime,
+)
 from .preflight import PreflightInterceptor, PreflightError as PreflightGateError
 from .substrate import (
     BackingStore,
@@ -100,4 +109,11 @@ __all__ = [
     "resolve_store",
     "classify_area",
     "classify_substrate",
+    "PlanningSyncBackingStore",
+    "SyncReport",
+    "discover_planning_repo",
+    "discover_planning_root",
+    "runtime_has_git",
+    "resolve_runtime_store",
+    "classify_runtime",
 ]
