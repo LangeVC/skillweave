@@ -254,6 +254,86 @@ def _task_surface(task: Mapping[str, Any]) -> set[str]:
     return surface
 
 
+def _declared_paths(task: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """The lane's declared ``creates``/``modifies`` paths as (kind, path) pairs.
+
+    ``kind`` is the key that declared the path, so a path that a lane promises
+    to create can be validated differently from one it claims to modify.
+    """
+    lane = task.get("lane") or {}
+    pairs: list[tuple[str, str]] = []
+    for key in ("creates", "modifies"):
+        value = lane.get(key)
+        if isinstance(value, str):
+            pairs.append((key, value))
+        elif isinstance(value, list):
+            pairs.extend((key, v) for v in value if isinstance(v, str))
+    return pairs
+
+
+def resolve_lane_surfaces(
+    task: Mapping[str, Any], repo_root: Path
+) -> set[str]:
+    """Resolve a lane's declared ``creates``/``modifies`` paths into real paths.
+
+    Each declared surface must *resolve in the target repository* or this
+    raises ``ValueError`` naming every unresolvable path — the generator fails
+    closed before a single lane exists, never emitting a lane whose declared
+    surfaces do not exist.
+
+    Resolution rules, fail-closed like the rest of the generator:
+
+    * a path declared under ``modifies`` must already exist in the repository
+      as a file (a lane cannot modify a file that is not there) — an invented
+      path like the 1.5.1 ``src/cli.py`` is refused, naming the path;
+    * a path declared under ``creates`` resolves when its parent directory
+      exists in the repository; the generator never invents the directory the
+      file would be created under.
+
+    ``repo_root`` is rooted against the repository top level; a declared path
+    escaping it (``..``) is unresolvable. The returned set holds the
+    repository-resolved, normalized path strings the phasing and mutual
+    exclusion logic key on, so two lanes naming the same real file collide on
+    the same key.
+    """
+    root = repo_root.resolve()
+    unresolvable: list[tuple[str, str]] = []
+    resolved: set[str] = set()
+    for kind, raw in _declared_paths(task):
+        # A path that would escape the repository root does not resolve in it.
+        candidate = (root / raw).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            unresolvable.append((kind, raw))
+            continue
+        if kind == "modifies":
+            if not candidate.is_file():
+                unresolvable.append((kind, raw))
+            else:
+                # Canonical, portable relative form: two lanes naming the same
+                # real file (via ``./``, ``..`` or a different spelling) collapse
+                # to one key, so exclusion and phasing see the collision.
+                resolved.add(candidate.relative_to(root).as_posix())
+        elif kind == "creates":
+            # A create target resolves when its parent directory exists in the
+            # repository; the generator never invents the directory it would be
+            # created under. An already-existing target is not refused here — a
+            # lane may ship a freshly scaffolded file — but a path under a
+            # directory the repository does not have is unresolvable.
+            if not candidate.parent.is_dir():
+                unresolvable.append((kind, raw))
+            else:
+                resolved.add(candidate.relative_to(root).as_posix())
+    if unresolvable:
+        named = ", ".join(f"{kind}:{path}" for kind, path in unresolvable)
+        raise ValueError(
+            f"lane {task.get('id', '<no-id>')!r} declares unresolvable "
+            f"surface(s) in repository {root}: {named}"
+        )
+    return resolved
+
+
 def _topological_levels(tasks: list[Mapping[str, Any]]) -> dict[str, int]:
     by_id = {task["id"]: task for task in tasks}
     depth: dict[str, int] = {}
@@ -301,11 +381,28 @@ def _lane_entry(task: Mapping[str, Any], sequence: Mapping[str, Any]) -> dict[st
     return entry
 
 
+def _surfaces_for(
+    task: Mapping[str, Any],
+    resolved: Optional[dict[str, set[str]]],
+) -> set[str]:
+    """The write surface used for phasing and exclusion decisions.
+
+    When ``resolved`` (repository-resolved, canonical paths) is available it is
+    authoritative — two lanes touching one real file collide even when they
+    spell it differently. Otherwise the raw declared surface is used, preserving
+    the generator's previous behaviour when no repository is known.
+    """
+    if resolved is not None:
+        return resolved.get(task.get("id"), set())
+    return _task_surface(task)
+
+
 def _build_phases(
     tasks: list[Mapping[str, Any]],
     levels: dict[str, int],
     phase_names: Mapping[Any, Any],
     sequence: Mapping[str, Any],
+    resolved: Optional[dict[str, set[str]]] = None,
 ) -> list[dict[str, Any]]:
     by_level: dict[int, list[Mapping[str, Any]]] = {}
     for task in tasks:
@@ -317,7 +414,7 @@ def _build_phases(
         serialized: list[dict[str, Any]] = []
         taken: set[str] = set()
         for task in by_level[level]:
-            surface = _task_surface(task)
+            surface = _surfaces_for(task, resolved)
             if surface & taken:
                 serialized.append(_lane_entry(task, sequence))
             else:
@@ -337,10 +434,13 @@ def _build_phases(
     return phases
 
 
-def _mutual_exclusion(tasks: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _mutual_exclusion(
+    tasks: list[Mapping[str, Any]],
+    resolved: Optional[dict[str, set[str]]] = None,
+) -> list[dict[str, Any]]:
     owners: dict[str, list[str]] = {}
     for task in tasks:
-        for surface in _task_surface(task):
+        for surface in _surfaces_for(task, resolved):
             owners.setdefault(surface, []).append(task["id"])
     return [
         {
@@ -367,12 +467,24 @@ def _gate_pass_requires(phases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def build_execution_sequences(prd: Mapping[str, Any]) -> dict[str, Any]:
+def build_execution_sequences(
+    prd: Mapping[str, Any],
+    repo_root: Optional[Path] = None,
+) -> dict[str, Any]:
     """Derive a build-format ``execution-sequences.yaml`` from a PRD.
 
     Fails closed exactly like the canonical generator: a missing ``sequence``
     block, a missing required sequence key, or a task without
     ``acceptanceCriteria`` raises before a single lane exists.
+
+    When ``repo_root`` names the target repository, every lane's declared
+    ``creates``/``modifies`` surfaces are additionally resolved against it
+    (SW-BRIEF-001 / SW152): a surface that does not resolve raises, naming the
+    path, before any lane is emitted. Resolution also feeds the phasing and
+    ``mutual_exclusion`` decisions, so two lanes that touch the same real file
+    collide even when they spell it differently. With ``repo_root`` omitted the
+    surfaces are not filesystem-validated and raw declared paths are used, so
+    callers that generate without a repository keep their previous behaviour.
     """
     sequence = prd.get("sequence")
     if not isinstance(sequence, dict):
@@ -387,8 +499,14 @@ def build_execution_sequences(prd: Mapping[str, Any]) -> dict[str, Any]:
         if "acceptanceCriteria" not in task:
             raise KeyError(f"task {task.get('id')!r} has no acceptanceCriteria")
 
+    resolved: Optional[dict[str, set[str]]] = None
+    if repo_root is not None:
+        resolved = {
+            task["id"]: resolve_lane_surfaces(task, repo_root) for task in tasks
+        }
+
     levels = _topological_levels(tasks)
-    phases = _build_phases(tasks, levels, sequence.get("phase_names") or {}, sequence)
+    phases = _build_phases(tasks, levels, sequence.get("phase_names") or {}, sequence, resolved)
     return {
         "sequence_id": sequence["sequence_id"],
         "sequence_type": sequence.get("sequence_type", "build"),
@@ -400,7 +518,7 @@ def build_execution_sequences(prd: Mapping[str, Any]) -> dict[str, Any]:
         "state_file": sequence["state_file"],
         "runner_shell": sequence["runner_shell"],
         "phases": phases,
-        "mutual_exclusion": _mutual_exclusion(tasks),
+        "mutual_exclusion": _mutual_exclusion(tasks, resolved),
         "gate_pass_requires": _gate_pass_requires(phases),
     }
 
@@ -433,7 +551,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     ap.add_argument(
         "--repo", type=Path, default=Path("."),
-        help="worktree root for --inject-prd (default: current directory)",
+        help=(
+            "target repository root: --from-prd resolves and validates every "
+            "lane's creates/modifies surfaces against it, and --inject-prd "
+            "copies prd.json into its .skillweave/ (default: current directory)"
+        ),
     )
     args = ap.parse_args(argv)
 
@@ -464,7 +586,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     prd = json.loads(args.from_prd.read_text(encoding="utf-8"))
-    sequence = build_execution_sequences(prd)
+    sequence = build_execution_sequences(prd, repo_root=args.repo)
     target = args.out / "execution-sequences.yaml"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render_execution_sequences(sequence), encoding="utf-8")
