@@ -304,6 +304,8 @@ The following areas under `.skillweave/` represent supplementary runtime artifac
 - **Role**: JSON schema specifications and validation contracts ensuring phase gate conformance and artifact structural integrity.
 - **Key Artifacts**: `blueprint-ready.schema.json`, `build-complete.schema.json`, `deployed.schema.json`, `handover.schema.json`, `launch-ready.schema.json`.
 
+  **Canonical location**: the five gate schemas named above are durably tracked in the planning repository at `.skillweave/planning/schemas/` in `skillweave/skillweave-planning` (allowlisted and committed there under SW152-016). Any byte-identical copy under this repository's own `.skillweave/schemas/` is a git-excluded local mirror, not a source of truth. Sync direction is planning (canonical) → here (mirror); never edited here, not durable.
+
 ### 5.6 `testing/`
 - **Owner**: `skillweave-promptchain-execute` / Verification Subsystem
 - **Lifecycle**: Build (Phase 4) / Verification
@@ -384,3 +386,82 @@ SkillWeave core runtime and execution components are structured under `src/skill
 - **Lifecycle**: Execution / Runtime
 - **Role**: Parses the model & harness catalogue (`config/catalogue.yaml`) and resolves roles to models, honouring the `!= ops` separation-of-duties constraint and `cost_index` preference.
 - **Key Artifacts**: `__init__.py`.
+
+---
+
+## 7. Classification by Direction, Durability and Disclosure
+
+Every canonical area additionally carries three axes, each orthogonal to owner, phase and mutability:
+
+- **Direction** — whether the content flows *into* a run (consumed as authored input) or *out of* a run (produced as generated output).
+- **Durability** — whether the content is *authored* (written/maintained by humans or shipped as an asset, persistent by intent) or *generated* (machine-produced and recreated/overwritten each cycle).
+- **Disclosure** — whether the content is *public* (safe for a public mirror under invariant 5: policy, config, templates, code) or *private* (IP that must stay out of the public mirror: PRDs, discovery findings, plans, handover records).
+
+`pending` means the axis is resolved by an operator decision, not by this document. See section 8.
+
+| Area | Direction | Durability | Disclosure | Reason |
+|------|-----------|------------|------------|--------|
+| `archive/` | output | generated | private | Historical snapshots of completed runs are machine-written record and project IP. |
+| `bundles.yaml` | input | authored | public | Declarative bundle definitions are authored configuration. |
+| `checklists/` | pending | pending | pending | See section 8 — authored rubric vs. generated checklist. |
+| `cleanup/` | output | generated | private | Inventory and classification outputs are generated per run. |
+| `config.yaml` | input | authored | public | Project configuration is authored by the user, not generated. |
+| `design/` | output | generated | private | Design tokens and critique reports are produced by the design phase. |
+| `discovery/` | output | generated | private | Research findings and council syntheses are generated investigation output. |
+| `handover/` | output | generated | private | Session hand-over records are written state between runs. |
+| `hooks/` | pending | pending | pending | See section 8 — declarative hook config vs. generated event state. |
+| `lenses/` | input | authored | public | Lens specifications are authored policy consumed during planning. |
+| `lib/` | input | authored | pending | Helper code is authored; its disclosure hinges on the feature question in section 8. |
+| `licenses/` | output | generated | public | Third-party attribution and compliance audits must be disclosed, not hidden. |
+| `lifecycle/` | pending | pending | pending | See section 8 — state-machine definition vs. dynamic transition state. |
+| `manifesto/` | input | authored | public | Foundational principles are the canonical, shared, non-negotiable vision. |
+| `memory/` | output | generated | private | Persistent project knowledge is accumulated machine-assisted output. |
+| `onboarding-state.yaml` | output | generated | private | Interactive onboarding progress is a user's own state. |
+| `phases.yaml` | input | authored | public | The authoritative phase hierarchy is authored configuration. |
+| `planning/` | output | generated | private | Kanban tickets are generated/edited planning state. |
+| `prds/` | output | generated | private | Product requirements documents are the core planning IP. |
+| `prompts/` | input | authored | public | Phase prompt templates are authored catalogue assets. |
+| `release/` | pending | pending | pending | See section 8 — governed policy vs. generated readiness state. |
+| `reports/` | output | generated | private | Execution and audit summaries are generated output. |
+| `sequences/` | output | generated | private | Machine-executable sequences are generated planning output. |
+| `specs/` | output | generated | private | Technical specs and backlogs are authored planning artefacts, IP by default. |
+| `templates/` | input | authored | public | Starter scaffolds are authored assets. |
+| `tracking-log/` | output | generated | private | Runtime journals are machine-written audit state. |
+| `rework/` | output | generated | private | Rework briefs are machine-written output, never human-authored input. |
+
+The two trees implied by Direction:
+
+- **Input tree** (authored, flows in): `bundles.yaml`, `config.yaml`, `lenses/`, `lib/`, `manifesto/`, `phases.yaml`, `prompts/`, `templates/`.
+- **Output tree** (generated, flows out): `archive/`, `cleanup/`, `design/`, `discovery/`, `handover/`, `licenses/`, `memory/`, `onboarding-state.yaml`, `planning/`, `prds/`, `reports/`, `rework/`, `sequences/`, `specs/`, `tracking-log/`.
+- **Pending** (operator-reserved, see section 8): `checklists/`, `hooks/`, `lifecycle/`, `release/`.
+
+---
+
+## 8. Pending Operator Decisions
+
+The four areas below each have a reading as *authored policy* and a reading as *generated state*. This document records both readings and the evidence, and deliberately does **not** choose. The operator decides; the implementing/testing lane must not assume one. The same holds for whether `lib/ideation.py` and `lib/assumptions.py` are product features.
+
+### 8.1 `checklists/`
+- **Authored-policy reading**: a rubric is a policy — release-readiness and execution checklists encode what must pass before a gate, authored once and re-read each run.
+- **Generated-state reading**: `src/skillweave/release/checklist.py` ("Generates markdown checklists from readiness assessment results") and `src/skillweave/execution_checklist.py` (mkdirs and writes `.skillweave/checklists/*`) both *produce* files into this directory each run.
+- **Evidence leans**: generated — the two in-tree writers both treat it as output; no in-tree writer reads it as authored input.
+
+### 8.2 `release/`
+- **Authored-policy reading**: `skill-boundaries.yaml` (tracked in the fixture) and `readiness-model.yaml` are governed policy; the map's mutability column says "Governed / Policy".
+- **Generated-state reading**: `src/skillweave/release/readiness.py` writes `.skillweave/release/security-review.md` (generated review status).
+- **Evidence leans**: mixed — the boundaries/model are authored policy, while `security-review.md` is generated; the policy subset dominates by volume but the generated subset is non-zero.
+
+### 8.3 `lifecycle/`
+- **Authored-policy reading**: `state-machine.yaml` and `custom-phases.yaml` are authored definitions of the state machine.
+- **Generated-state reading**: the map's mutability column says "Engine / State" and "dynamic phase configuration", implying transition state is written during operation.
+- **Evidence leans**: inconclusive — no `src/` writer targets `.skillweave/lifecycle/` directly; the nearest generated artefact is `phases.yaml` (a separate area).
+
+### 8.4 `hooks/`
+- **Authored-policy reading**: `src/skillweave/studio/hooks/binding/loader.py` reads `.skillweave/hooks/<phase>-<position>.yaml` as declarative hook declarations (authored by the project).
+- **Generated-state reading**: `src/skillweave/studio/hooks/discovery/registry.py` writes `.skillweave/hooks/.dismissed.json` (generated dismissal state).
+- **Evidence leans**: mixed — declared hooks are authored input, `.dismissed.json` is generated state.
+
+### 8.5 `lib/ideation.py` and `lib/assumptions.py` — product features or project extensions?
+- **Product-feature reading**: `tests/test_discovery.py` imports `IdeationSession` and `AssumptionTracker` and exercises them as if they were product surface; if they are features they belong in `src/skillweave/` and in **no** `.skillweave/` asset tier, and would ship (public).
+- **Project-extension reading**: nothing under `src/` imports them; the packaged distribution deliberately excludes them (`tests/packaging/test_discovery_installed.py`); the map calls `lib/` "project-specific extensions"; today they exist only under `tests/fixtures/substrate-root/.skillweave/lib/`.
+- **Evidence leans**: currently fixture/extension — they ship nowhere and `tests/fixtures/substrate-root/README.md` explicitly flags the "shipped assets" question as open. But the suite's framing and the absence of any `src/` home are exactly why the operator must call it, not the lane.

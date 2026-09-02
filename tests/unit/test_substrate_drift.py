@@ -48,6 +48,45 @@ CANONICAL_27_AREAS = [
     "rework",
 ]
 
+#: The two direction trees, as documented in docs/substrate-map.md section 7.
+#: These are the authoritative "documented sets" each tree is checked against.
+INPUT_TREE = [
+    "bundles.yaml",
+    "config.yaml",
+    "lenses",
+    "lib",
+    "manifesto",
+    "phases.yaml",
+    "prompts",
+    "templates",
+]
+
+OUTPUT_TREE = [
+    "archive",
+    "cleanup",
+    "design",
+    "discovery",
+    "handover",
+    "licenses",
+    "memory",
+    "onboarding-state.yaml",
+    "planning",
+    "prds",
+    "reports",
+    "rework",
+    "sequences",
+    "specs",
+    "tracking-log",
+]
+
+#: Areas whose direction is operator-reserved (docs/substrate-map.md section 8).
+PENDING_DIRECTION_AREAS = [
+    "checklists",
+    "hooks",
+    "lifecycle",
+    "release",
+]
+
 
 def extract_documented_areas(doc_text: str) -> set[str]:
     """Extract all documented .skillweave/ top-level area names from docs/substrate-map.md."""
@@ -110,6 +149,88 @@ def check_substrate_drift(doc_path: Path = DOC_PATH, dot_skillweave_dir: Path = 
     return errors
 
 
+def extract_direction_classification(doc_text: str) -> dict[str, str]:
+    """Extract each area's declared Direction from the section 7 classification table.
+
+    Parses rows of the form ``| `area/` | direction | durability | disclosure | reason |``
+    and returns a mapping of area name -> direction token (``input``/``output``/``pending``).
+    """
+    classification = {}
+    # Section 7 is delimited by the "## 7." heading up to the next "## " heading.
+    rows = re.compile(
+        r'\|\s*`([^`/]+)/?`\s*\|\s*(input|output|pending)\s*\|'
+    )
+    for match in rows.finditer(doc_text):
+        area_name = match.group(1).strip()
+        direction = match.group(2).strip()
+        classification[area_name] = direction
+    return classification
+
+
+def check_direction_trees(doc_text: str) -> list[str]:
+    """Check each direction tree against its documented set.
+
+    Returns a list of error messages (empty if both trees are correct): an area
+    appearing on the wrong side, a canonical area missing a direction token, or
+    an operator-reserved area silently claimed as input/output.
+    """
+    classification = extract_direction_classification(doc_text)
+    errors = []
+
+    documented_inputs = {a for a, d in classification.items() if d == "input"}
+    documented_outputs = {a for a, d in classification.items() if d == "output"}
+    documented_pending = {a for a, d in classification.items() if d == "pending"}
+
+    # Each tree must match its documented set exactly.
+    wrong_inputs = documented_inputs - set(INPUT_TREE)
+    if wrong_inputs:
+        errors.append(
+            f"Area(s) classified input but not in the documented input tree: {sorted(wrong_inputs)}"
+        )
+    missing_inputs = set(INPUT_TREE) - documented_inputs
+    if missing_inputs:
+        errors.append(
+            f"Documented input tree area(s) not classified as input: {sorted(missing_inputs)}"
+        )
+
+    wrong_outputs = documented_outputs - set(OUTPUT_TREE)
+    if wrong_outputs:
+        errors.append(
+            f"Area(s) classified output but not in the documented output tree: {sorted(wrong_outputs)}"
+        )
+    missing_outputs = set(OUTPUT_TREE) - documented_outputs
+    if missing_outputs:
+        errors.append(
+            f"Documented output tree area(s) not classified as output: {sorted(missing_outputs)}"
+        )
+
+    # An area on the wrong side outright (classified into the opposite tree).
+    cross_input = documented_inputs & set(OUTPUT_TREE)
+    if cross_input:
+        errors.append(
+            f"Area(s) on the wrong side: output-tree area(s) classified as input: {sorted(cross_input)}"
+        )
+    cross_output = documented_outputs & set(INPUT_TREE)
+    if cross_output:
+        errors.append(
+            f"Area(s) on the wrong side: input-tree area(s) classified as output: {sorted(cross_output)}"
+        )
+
+    # Operator-reserved areas must remain pending, not silently claimed.
+    reserved_claimed = set(PENDING_DIRECTION_AREAS) & (documented_inputs | documented_outputs)
+    if reserved_claimed:
+        errors.append(
+            f"Operator-reserved area(s) claimed as input/output instead of pending: {sorted(reserved_claimed)}"
+        )
+    missing_pending = set(PENDING_DIRECTION_AREAS) - documented_pending
+    if missing_pending:
+        errors.append(
+            f"Operator-reserved area(s) missing a pending classification: {sorted(missing_pending)}"
+        )
+
+    return errors
+
+
 class TestSubstrateDocumentationAndDrift:
     """Test suite for .skillweave substrate map and drift detection."""
 
@@ -159,6 +280,41 @@ class TestSubstrateDocumentationAndDrift:
             assert phase, f"Missing lifecycle phase for area '{area}'"
             assert mutability, f"Missing mutability for area '{area}'"
             assert purpose, f"Missing purpose description for area '{area}'"
+
+    def test_direction_trees_match_documented_sets(self):
+        """Both direction trees are correct: no area lands on the wrong side."""
+        doc_text = DOC_PATH.read_text(encoding="utf-8")
+        errors = check_direction_trees(doc_text)
+        assert not errors, "\n".join(errors)
+
+    def test_direction_tree_reports_wrong_side(self):
+        """The direction check flags an area that appears on the wrong side."""
+        doc_text = DOC_PATH.read_text(encoding="utf-8")
+        # Move a known output-tree area onto the input side and assert it is caught.
+        poisoned = re.sub(
+            r'(\|\s*`prds/`\s*\|)\s*output\s*\|',
+            r'\1 input |',
+            doc_text,
+            count=1,
+        )
+        errors = check_direction_trees(poisoned)
+        assert any("prds" in err for err in errors), (
+            f"Expected prds to be flagged as wrong-side, got: {errors}"
+        )
+
+    def test_reserved_area_claimed_as_input_is_flagged(self):
+        """An operator-reserved area must not be silently classified."""
+        doc_text = DOC_PATH.read_text(encoding="utf-8")
+        poisoned = re.sub(
+            r'(\|\s*`checklists/`\s*\|)\s*pending\s*\|',
+            r'\1 input   |',
+            doc_text,
+            count=1,
+        )
+        errors = check_direction_trees(poisoned)
+        assert any("checklists" in err for err in errors), (
+            f"Expected checklists to be flagged as reserved-claimed, got: {errors}"
+        )
 
     def test_drift_detector_catches_synthetic_undocumented_area(self, tmp_path):
         """Verify the drift test logic correctly catches newly created undocumented areas."""
