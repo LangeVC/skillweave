@@ -22,7 +22,6 @@ from skillweave.persistence import (
     Durability,
     StoreKind,
     get_area_declaration,
-    known_areas,
 )
 from skillweave.runtime import (
     BackingStore,
