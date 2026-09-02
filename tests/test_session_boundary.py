@@ -1,4 +1,4 @@
-"""FFR-700-2: session_boundary required; parallel lanes dispatched as
+"""session_boundary required; parallel lanes dispatched as
 subagents; a cold session resumes from the state file alone and runs one batch.
 
 Covers all four acceptance criteria of this lane:

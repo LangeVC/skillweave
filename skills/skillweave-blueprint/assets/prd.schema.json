@@ -165,7 +165,7 @@
           "id": {
             "type": "string",
             "pattern": "^[A-Z]+[-A-Z0-9]+$",
-            "description": "Task ID (e.g., INFRA-001, OPS-002-R, FFR-000-1); prefix plus dashed alphanumeric sections"
+            "description": "Task ID (e.g., INFRA-001, OPS-002-R, CORE-000-1); prefix plus dashed alphanumeric sections"
           },
           "title": {
             "type": "string",

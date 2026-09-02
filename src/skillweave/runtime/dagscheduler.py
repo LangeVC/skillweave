@@ -23,7 +23,7 @@ Dispatch 3 scope (SW-135-010, criteria 7, 8 and 10):
   * every emitted batch is a session boundary and carries the marker
     explicitly, so a consumer never has to infer where one session ends;
   * a sequence that does not declare ``session_boundary`` is refused, never
-    defaulted (inventing a boundary is the defect, LVC-219);
+    defaulted (inventing a boundary is the defect);
   * red proof: the missing boundary is rejected with a message naming the
     missing key, and overlapping lanes are never emitted as fan-out.
 
@@ -234,7 +234,7 @@ def build_lanes(
 class MissingSessionBoundaryError(Exception):
     """Raised when a sequence does not declare ``session_boundary``.
 
-    This error exists so a boundary is never invented. LVC-219: defaulting a
+    This error exists so a boundary is never invented. Defaulting a
     boundary is the defect, not a convenience — a caller that forgets the key
     must be stopped, not silently given a wrong session split.
     """
