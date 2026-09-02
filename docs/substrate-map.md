@@ -326,6 +326,23 @@ The following areas under `.skillweave/` represent supplementary runtime artifac
 
 ---
 
+## 5a. Durable Input Tier (`skillweave.config/`)
+
+The **`skillweave.config/`** directory is the single durable *input* tier. It is **not** part of the `.skillweave/` substrate: it lives in the consumer's repository root, is meant to be tracked and hand-edited, and is **never** git-excluded by preflight. It carries a leading-less name (no dot) to avoid colliding with the `skillweave` Python package and with a consumer's own `config/` directory.
+
+| Tier | Path | Kind | Git treatment | Purpose |
+|------|------|------|---------------|---------|
+| Tier 1 (shipped default) | `config/catalogue.yaml` | Shipped deliverable | tracked in this repo | The default catalogue that ships with SkillWeave. |
+| Tier 2 (durable override) | `skillweave.config/catalogue.yaml` | Durable input | tracked in consumer repo, never git-excluded | A team's tuned model roster. Preflight seeds it from the tier-1 deliverable on first run and never overwrites it afterwards. |
+
+- **Owner**: Core Runtime / Model & Harness Catalogue Subsystem + preflight (`SkillWeavePersistence`).
+- **Lifecycle**: Global / Setup.
+- **Seed semantics**: `SkillWeavePersistence.ensure_folder_structure()` copies `config/catalogue.yaml` into `skillweave.config/catalogue.yaml` only when the target does not already exist — a fresh clone starts from the shipped default, and a tuned roster is preserved across preflights and clones.
+- **Read semantics**: `core.catalogue._default_path()` prefers `skillweave.config/catalogue.yaml` when present, falling back to the shipped `config/catalogue.yaml`. It must never read a catalogue from `.skillweave/`.
+- **Key Artifacts**: `catalogue.yaml`.
+
+---
+
 ## 6. Core Subsystem & Runtime Architecture Layout (SW-140)
 
 SkillWeave core runtime and execution components are structured under `src/skillweave/`:

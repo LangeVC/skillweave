@@ -98,9 +98,18 @@ class SkillWeavePersistence:
     """Manages the .skillweave folder and persistent state."""
 
     FOLDER_NAME = ".skillweave"
+    # Tier-2 durable input directory. Lives in the CONSUMER's repo root, is
+    # meant to be tracked and hand-edited, and carries no leading dot for that
+    # reason. Named ``skillweave.config`` (not ``skillweave`` or ``config``) to
+    # avoid colliding with the ``skillweave`` Python package in a consuming
+    # project and with a ``config/`` directory already owned there (Django,
+    # Rails, Kubernetes, Ansible, …). See SW152-008.
+    CONFIG_TIER_DIR = "skillweave.config"
     SUBDIRS = ["handover", "specs", "tracking-log", "manifesto"]
     CONFIG_FILE = "config.yaml"
-    GITIGNORE_ENTRY = f"{FOLDER_NAME}/tracking-log/*"
+    # Anchored so a nested fixture root is not swallowed; the whole substrate is
+    # git-excluded. skillweave.config/ is never added to .gitignore.
+    GITIGNORE_ENTRY = "/.skillweave/"
 
     def __init__(self, project_root: Optional[str] = None):
         """
@@ -112,6 +121,7 @@ class SkillWeavePersistence:
         """
         self.project_root = Path(project_root or os.getcwd()).resolve()
         self.skillweave_dir = self.project_root / self.FOLDER_NAME
+        self.config_tier_dir = self.project_root / self.CONFIG_TIER_DIR
         self.config = None
 
     def ensure_folder_structure(self) -> None:
@@ -133,9 +143,36 @@ class SkillWeavePersistence:
         
         # Update .gitignore if needed
         self._ensure_gitignore()
+
+        # Seed the durable tier-2 config directory from packaged defaults.
+        self._seed_config_tier()
         
         # Create README files in subdirectories
         self._create_readme_files()
+
+    def _seed_config_tier(self) -> None:
+        """Seed ``skillweave.config/`` from packaged defaults, never overwrite.
+
+        The tier-2 directory holds the team's tuned inputs. A file that is
+        absent is copied from its shipped tier-1 deliverable so a human has a
+        starting point; one that already exists is left byte-identical, so a
+        newer shipped default cannot clobber a tuning.
+        """
+        self.config_tier_dir.mkdir(exist_ok=True, parents=True)
+
+        packaged = self._packaged_catalogue()
+        target = self.config_tier_dir / "catalogue.yaml"
+        if packaged is not None and packaged.exists() and not target.exists():
+            target.write_bytes(packaged.read_bytes())
+
+    def _packaged_catalogue(self) -> Optional[Path]:
+        """Locate the shipped tier-1 catalogue deliverable, if present."""
+        return (
+            Path(__file__).resolve().parents[1]
+            / "skillweave"
+            / "assets"
+            / "catalogue.yaml"
+        )
 
     def _create_default_config(self, config_path: Path) -> None:
         """Create default configuration file."""
@@ -143,7 +180,13 @@ class SkillWeavePersistence:
         self.save_config(default_config)
 
     def _ensure_gitignore(self) -> None:
-        """Ensure .gitignore excludes tracking-log but not config/manifesto."""
+        """Ensure .gitignore excludes the substrate, but not skillweave.config/.
+
+        The exclusion is anchored (``/.skillweave/``) so it only ignores THIS
+        project's substrate and leaves any nested fixture root tracked. The
+        tier-2 ``skillweave.config/`` directory is a durable input tier and is
+        deliberately never added here.
+        """
         gitignore_path = self.project_root / ".gitignore"
         if not gitignore_path.exists():
             return
@@ -155,7 +198,7 @@ class SkillWeavePersistence:
         entry = self.GITIGNORE_ENTRY
         if entry not in lines:
             lines.append("")
-            lines.append(f"# SkillWeave tracking logs (auto-generated)")
+            lines.append("# SkillWeave substrate (auto-generated)")
             lines.append(entry)
             gitignore_path.write_text("\n".join(lines))
 
