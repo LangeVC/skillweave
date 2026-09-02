@@ -15,9 +15,10 @@ were measured stale (SW-SKILL-001):
   ``gate_pass_requires``/``session_boundary``.
 
 The two named production PRDs (ops-002 mirror-rollout, Forgejo-first) are
-treated as unchanged fixtures under ``tests/fixtures/prd-schema/``. They are
-verbatim copies of the documents produced in ``lvc-planning``; do not edit
-them to make tests pass.
+treated as fixtures under ``tests/fixtures/prd-schema/``. They are real
+production artifacts with their structure preserved intact and their prose
+redacted; do not simplify them to make tests pass — flattening that structure
+destroys the only check that catches a stale schema.
 """
 
 from pathlib import Path
