@@ -99,6 +99,12 @@ env:
 # config.yml). Fallback when the variable is unset: ${{ github.repository }} —
 # correct only when the Forgejo org == GitHub org (e.g. langevc/lvc-ops).
 # Setting GH_REPOSITORY once per repo keeps this file byte-identical everywhere.
+#
+# SW152-024: the mirror job opens with a preflight guard that resolves this
+# destination and PROVES it reachable (git ls-remote) before any push. An
+# unset variable or a variable naming a repository that does not exist on
+# github.com fails at that named step with a message pointing at the
+# GH_REPOSITORY variable — never as a git exit 128 from deep inside a push.
 
 jobs:
   # --- Gate: runs BEFORE the mirror. The mirror depends on it via needs:. ---
@@ -283,11 +289,75 @@ jobs:
         with:
           fetch-depth: 0
 
+      # --- Preflight guard (SW152-024): REFUSE to run with a destination the
+      # workflow cannot vouch for. An unset GH_REPOSITORY previously fell back
+      # to ${{ github.repository }}, which is the Forgejo repo name — the same
+      # string is only the correct GitHub destination when the Forgejo org and
+      # the GitHub org match. On skillweave they differ (Forgejo skillweave/skillweave,
+      # GitHub LangeVC/skillweave), so the fallback silently resolved to a repo
+      # that does not exist on github.com and every mirror push died with a git
+      # exit 128 deep inside the push. The guard below resolves the destination
+      # and PROVES it reachable (a real `git ls-remote`) before any push. It
+      # fails at this named step, not inside git, and names the variable to set.
+      #
+      # Two failure modes land here, at the same named step:
+      #   1. GH_REPOSITORY unset -> the fallback github.repository is used; if
+      #      that name is not a reachable GitHub destination the step fails and
+      #      points the operator at the GH_REPOSITORY variable (criterion 1).
+      #   2. GH_REPOSITORY set but to a nonexistent/unreadable repository -> the
+      #      reachability check fails it the same way (criterion 2), so a wrong
+      #      destination can never look like a working one until a push.
+      # On success the validated destination is exported as GH_REPOSITORY for the
+      # push/dispatch steps, so they push exactly what this step vouched for.
+      - name: Preflight — validate mirror destination (GH_REPOSITORY) is reachable
+        env:
+          GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+          GH_REPOSITORY_VAR: ${{ vars.GH_REPOSITORY }}
+          GH_REPOSITORY_FALLBACK: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Which source resolved the destination? The variable, when set; the
+          # Forgejo self-name otherwise. This lets the failure message tell the
+          # operator whether to reach for the variable (mode 1) or correct it
+          # (mode 2), instead of blaming a git internal error.
+          if [ -n "${GH_REPOSITORY_VAR:-}" ]; then
+            MIRROR_DEST="${GH_REPOSITORY_VAR}"
+            dest_source="GH_REPOSITORY variable"
+          else
+            MIRROR_DEST="${GH_REPOSITORY_FALLBACK}"
+            dest_source="fallback (github.repository) — GH_REPOSITORY is NOT set"
+          fi
+          echo "Mirror destination: ${MIRROR_DEST}  (source: ${dest_source})"
+
+          # Reachability proof BEFORE any push: the repo must exist and be
+          # readable on github.com. A variable that names a nonexistent repo
+          # fails exactly like an unset one — neither can be vouched for.
+          echo "Checking destination is reachable on github.com..."
+          if ! git ls-remote \
+               "https://x-access-token:${GH_MIRROR_TOKEN}@github.com/${MIRROR_DEST}.git" \
+               HEAD >/dev/null 2>&1; then
+            echo "::error::Cannot vouch for the mirror destination '${MIRROR_DEST}' (source: ${dest_source}): it is not reachable/readable on github.com."
+            if [ -z "${GH_REPOSITORY_VAR:-}" ]; then
+              echo "::error::GH_REPOSITORY is UNSET. The workflow fell back to github.repository, but on skillweave the" \
+                   "Forgejo org does not match the GitHub org, so the fallback name is not a valid GitHub destination."
+              echo "::error::Set the repository variable GH_REPOSITORY to your GitHub destination (owner/repo)," \
+                   "e.g. LangeVC/skillweave. The workflow refuses to push to an unvouched destination."
+            else
+              echo "::error::GH_REPOSITORY is set to '${GH_REPOSITORY_VAR}' but that repository is not reachable/readable" \
+                   "on github.com. Correct GH_REPOSITORY to the real destination (owner/repo), e.g. LangeVC/skillweave."
+            fi
+            echo "::error::Not pushing anywhere. Exit before any git push reaches a remote."
+            exit 1
+          fi
+          echo "Destination '${MIRROR_DEST}' is reachable. Proceeding to push."
+          echo "GH_REPOSITORY=${MIRROR_DEST}" >> "$GITHUB_ENV"
+
       - name: Push triggering ref to GitHub mirror (exact-ref, event path)
         if: github.event_name == 'push'
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
-          GH_REPOSITORY: ${{ vars.GH_REPOSITORY || github.repository }}
+          GH_REPOSITORY: ${{ env.GH_REPOSITORY }}
           MIRROR_DECISION: ${{ needs.visibility-gate.outputs.decision }}
         run: |
           echo "Gate decision: ${MIRROR_DECISION} (OVERRIDE = recorded release)"
@@ -299,7 +369,7 @@ jobs:
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
           FORGEJO_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ vars.GH_REPOSITORY || github.repository }}
+          GH_REPOSITORY: ${{ env.GH_REPOSITORY }}
           PRUNE: ${{ github.event.inputs.prune }}
           REF: ${{ github.event.inputs.ref }}
           MIRROR_DECISION: ${{ needs.visibility-gate.outputs.decision }}
