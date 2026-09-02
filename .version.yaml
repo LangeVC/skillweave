@@ -44,12 +44,17 @@ locations:
     required: true
 
   # The bundle's `capabilities[]` entries are dependency pins to member
-  # skills, not the version authority for those skills. Pattern targets the
-  # indented `version:` lines inside the capabilities block.
+  # skills, not the version authority for those skills. A member skill's
+  # version may legitimately differ from the bundle's: a bundle bump can be
+  # packaging alone (OPS decision 2026-09-01). The consistency of each pin
+  # with the member's own capability.yaml is owned by scripts/check-manifest.py
+  # (case 4 in validate-release-tag.yml), never by this gate. This location is
+  # therefore informational, not lockstep; version-sync must NOT force it equal
+  # to source_of_truth.
   - path: capability.yaml
     role: bundle_member_pins
     pattern: '^  version:\s*(\S+)'
-    required: true
+    required: false
 
   # Every independently installable skill-capability artifact. One explicit
   # entry per shipped skill; each is a separate artifact in its own right.
