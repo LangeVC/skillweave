@@ -234,8 +234,15 @@ jobs:
           # Generic tooling lives in the open base (LVC-221). ops-engine is
           # OSS and publicly mirrored, so this needs no credential and works
           # identically from every org — the private lvc-ops URL did not.
+          #
+          # The fetch is PINNED to the v3.0.0 tag, not master. A gate that
+          # does not bump must not follow a moving branch: master could carry
+          # a version-sync.py change that changes what "in sync" means between
+          # two releases of this repo. v3.0.0 is the release that wired the
+          # gate (d5eb867, 4f0fa50) and whose ReleaseHandler states it neither
+          # bumps nor substitutes for the gate.
           curl -fsSL \
-            "https://raw.githubusercontent.com/LangeVC/ops-engine/master/scripts/version-sync.py" \
+            "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.0.0/scripts/version-sync.py" \
             -o "$RUNNER_TEMP/version-sync.py"
 
           # Prove what arrived. Without this the step reports success even
@@ -247,6 +254,12 @@ jobs:
             "$RUNNER_TEMP/version-sync.py" \
             || { echo "fetched file is not Python — first three lines:"; \
                  head -3 "$RUNNER_TEMP/version-sync.py"; exit 1; }
+          # Prove the pinned tag carries the bump subcommand the release path
+          # depends on (DEVELOPMENT_WORKFLOW.md "Release Process"). A tag whose
+          # version-sync.py lost `bump` silently removes the ability to write
+          # every declared location before the tag gate runs.
+          python3 "$RUNNER_TEMP/version-sync.py" bump --help >/dev/null \
+            || { echo "pinned version-sync.py has no 'bump' subcommand"; exit 1; }
 
           echo "VERSION_SYNC=$RUNNER_TEMP/version-sync.py" >> "$GITHUB_ENV"
 
