@@ -139,10 +139,10 @@ def test_core_schemas_dir_does_not_copy_sdk_preview_ids():
     authority). The legacy co-located schemas (run-state, evidence) predate the
     four-way split and are not preview-contract copies.
     """
-    require(sib.sdk_root, name="skillweave-sdk")
+    require(sib.sdk_schemas_dir, name="skillweave-sdk")
     core = _core_root()
     schemas_dir = core / "schemas"
-    sdk_schemas = sib.sdk_root() / "schemas"
+    sdk_schemas = sib.sdk_schemas_dir()
     import json
     preview_ids = set()
     for f in sdk_schemas.rglob("*.preview.schema.json"):
