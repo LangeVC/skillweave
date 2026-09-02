@@ -24,6 +24,19 @@ from skillweave.persistence import (
 )
 
 
+# ---------------------------------------------------------------------------
+# SW152-008 — skillweave.config/ as the durable input tier
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_SHIPPED_CATALOGUE = _REPO_ROOT / "config" / "catalogue.yaml"
+
+
+def _catalogue_bytes(tmpdir: Path) -> bytes:
+    """Return the bytes of the seeded tier-2 catalogue (raises if absent)."""
+    return (Path(tmpdir) / "skillweave.config" / "catalogue.yaml").read_bytes()
+
+
 def test_skillweave_persistence_initialization():
     """Test that persistence manager initializes correctly."""
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -247,3 +260,70 @@ def test_get_mode_specific_setting():
         # Non-existent path returns default
         value = get_mode_specific_setting("conservative.nonexistent", "default", tmpdir)
         assert value == "default"
+
+
+# ---------------------------------------------------------------------------
+# SW152-008 — skillweave.config/ as the durable input tier
+# ---------------------------------------------------------------------------
+
+def test_preflight_seeds_config_tier_from_packaged_defaults():
+    """Criterion 1: an empty project gets skillweave.config/ populated from
+    the shipped default, not left empty or leaked into .skillweave/."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        persistence = SkillWeavePersistence(tmpdir)
+        persistence.ensure_folder_structure()
+
+        tier2_dir = Path(tmpdir) / "skillweave.config"
+        assert tier2_dir.is_dir(), "skillweave.config/ was not created"
+
+        catalogue = tier2_dir / "catalogue.yaml"
+        assert catalogue.is_file(), "skillweave.config/catalogue.yaml was not seeded"
+
+        # Seeded content must match the shipped tier-1 deliverable byte-for-byte.
+        assert catalogue.read_bytes() == _SHIPPED_CATALOGUE.read_bytes()
+
+        # The tier-2 config tier must NOT leak into the git-excluded substrate.
+        assert not (persistence.skillweave_dir / "catalogue.yaml").exists()
+
+
+def test_preflight_preserves_tuned_config_tier():
+    """Criterion 2: a second preflight over a modified skillweave.config/
+    leaves the modified file byte-identical (never overwrite a tuning)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        persistence = SkillWeavePersistence(tmpdir)
+        persistence.ensure_folder_structure()
+
+        catalogue = Path(tmpdir) / "skillweave.config" / "catalogue.yaml"
+        tuned = b"# team-tuned roster\nmodels: {}\n"
+        catalogue.write_bytes(tuned)
+
+        persistence.ensure_folder_structure()
+
+        assert catalogue.read_bytes() == tuned, (
+            "a second preflight overwrote the team's tuned catalogue"
+        )
+
+
+def test_gitignore_inverted_and_anchored():
+    """Criterion 3: the consumer .gitignore receives /.skillweave/ (anchored)
+    and never a skillweave.config/ entry."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        gitignore = Path(tmpdir) / ".gitignore"
+        gitignore.write_text("# existing entry\n", encoding="utf-8")
+
+        persistence = SkillWeavePersistence(tmpdir)
+        persistence.ensure_folder_structure()
+
+        content = gitignore.read_text()
+
+        # The anchored exclusion is written (inverts the old tracking-log-only form).
+        assert "/.skillweave/" in content
+        # The old unanchored-per-file entry is gone.
+        assert ".skillweave/tracking-log/*" not in content
+        # skillweave.config/ is a durable input tier — never gitignored.
+        assert "skillweave.config" not in content
+
+
+def test_gitignore_entry_is_exact_class_constant():
+    """The written entry is the anchored form and lives on the class."""
+    assert SkillWeavePersistence.GITIGNORE_ENTRY == "/.skillweave/"
