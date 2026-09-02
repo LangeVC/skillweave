@@ -327,3 +327,50 @@ def test_gitignore_inverted_and_anchored():
 def test_gitignore_entry_is_exact_class_constant():
     """The written entry is the anchored form and lives on the class."""
     assert SkillWeavePersistence.GITIGNORE_ENTRY == "/.skillweave/"
+
+
+def test_catalogue_reader_consumes_durable_tier():
+    """Criterion 4: the catalogue reader resolves from skillweave.config/, not
+    .skillweave/. A tuned roster seeded into the durable tier is what the
+    catalogue module reads after a fresh preflight, not the shipped default."""
+    import skillweave.core.catalogue as catalogue
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        persistence = SkillWeavePersistence(tmpdir)
+        persistence.ensure_folder_structure()
+
+        # Tune the durable tier with an unmistakable marker.
+        tier2 = Path(tmpdir) / "skillweave.config" / "catalogue.yaml"
+        tuned = (
+            "# team-tuned roster\n"
+            "models:\n"
+            "  faigate/tuned-model:\n"
+            "    cost_index: 0\n"
+            "role_defaults:\n"
+            "  ops:\n"
+            "    model: faigate/tuned-model\n"
+        )
+        tier2.write_text(tuned, encoding="utf-8")
+
+        # Simulate a fresh clone: the substrate is gone, preflight rebuilds it.
+        shutil.rmtree(persistence.skillweave_dir, ignore_errors=True)
+        persistence.ensure_folder_structure()
+
+        # The substrate must be rebuilt WITHOUT a catalogue.yaml leak.
+        assert not (persistence.skillweave_dir / "catalogue.yaml").exists()
+
+        # The reader must resolve the tuned durable tier, not the shipped default.
+        import os
+        prev = os.getcwd()
+        os.chdir(tmpdir)
+        try:
+            resolved = catalogue._default_path()
+            assert resolved == tier2.resolve(), (
+                f"reader resolved {resolved}, expected {tier2.resolve()}"
+            )
+            catalogue._catalogue = None
+            data = catalogue.load_catalogue()
+            assert data["role_defaults"]["ops"]["model"] == "faigate/tuned-model"
+        finally:
+            os.chdir(prev)
+            catalogue._catalogue = None

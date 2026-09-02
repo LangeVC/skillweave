@@ -37,19 +37,21 @@ _catalogue_path: Path | None = None
 
 
 def _default_path() -> Path:
-    """Locate the tracked ``config/catalogue.yaml``, preferring an override.
+    """Locate the tracked catalogue, preferring a durable tier-2 override.
 
     Resolution order:
 
-    1. An operator-provided ``.skillweave/catalogue.yaml`` found by walking up
-       from the current working directory (this is substrate IP and is never
-       committed, but may be supplied at runtime).
+    1. A team-tuned ``skillweave.config/catalogue.yaml`` found by walking up
+       from the current working directory. This is the durable input tier
+       seeded by preflight: a human edits it, and it is tracked in the
+       consumer's repository (it is never git-excluded), so a tuned model
+       roster survives a fresh clone.
     2. The deliverable shipped with the repository at ``config/catalogue.yaml``,
        anchored to the installed package so the lookup works from any ``cwd``.
     """
     candidate = Path.cwd()
     for parent in (candidate, *candidate.parents):
-        probe = parent / ".skillweave" / "catalogue.yaml"
+        probe = parent / "skillweave.config" / "catalogue.yaml"
         if probe.exists():
             return probe
     return Path(__file__).resolve().parents[4] / "config" / "catalogue.yaml"
@@ -61,8 +63,8 @@ def _default_path() -> Path:
 def load_catalogue(path: str | Path | None = None) -> dict[str, Any]:
     """Load (or reload) the catalogue from *path*.
 
-    If *path* is ``None`` the default catalogue is resolved: an operator
-    ``.skillweave/catalogue.yaml`` if present, else ``config/catalogue.yaml``
+    If *path* is ``None`` the default catalogue is resolved: a team-tuned
+    ``skillweave.config/catalogue.yaml`` if present, else ``config/catalogue.yaml``
     (see :func:`_default_path`).
 
     Args:
