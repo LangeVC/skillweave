@@ -158,13 +158,19 @@ class TestBundlePinsMatchOnDiskSkills:
 
 
 class TestLockstepPolicy:
-    """Under the declared lockstep policy, every surface carries one version."""
+    """Under the declared policy, every REQUIRED surface shares one version.
 
-    def test_release_policy_is_lockstep(self):
-        assert _load_topology()["release_policy"] == "lockstep"
+    The policy ``decoupled_member_pins`` keeps runtime, bundle and skill
+    capabilities locked to the train version, but treats ``bundle_member_pins``
+    as informational: a member's version may legitimately lag the bundle (a
+    bundle bump can be packaging alone). Only required locations must equal the
+    runtime; informational locations may diverge.
+    """
+
+    def test_release_policy_decouples_member_pins(self):
+        assert _load_topology()["release_policy"] == "decoupled_member_pins"
 
     def test_all_surfaces_share_the_runtime_version(self):
-        topo = _load_topology()
         runtime = _read_first_match(
             "pyproject.toml", r'^version\s*=\s*"(\d+\.\d+\.\d+)"'
         )
@@ -179,9 +185,12 @@ class TestLockstepPolicy:
         for loc in _locations():
             value = _read_first_match(loc["path"], loc["pattern"])
             assert value is not None, f"no match for {loc['role']} at {loc['path']}"
+            if not loc.get("required", True):
+                # Informational (bundle member pins) may legitimately diverge.
+                continue
             assert value == runtime, (
                 f"{loc['role']} at {loc['path']} is {value!r}, not runtime {runtime!r} "
-                f"(lockstep policy violated)"
+                f"(lockstep policy violated for a required surface)"
             )
 
     def test_same_version_cannot_hide_a_different_inventory(self):

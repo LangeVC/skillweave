@@ -3,10 +3,10 @@
 Where ``tests/unit/test_version_sync.py`` proves the snapshot agrees with
 itself on the *current* tree, this module proves the *release* behaviour:
 the product tag binds to the runtime source, bundle and skill artifacts are
-verified under the declared lockstep policy, CHANGELOG prose stays outside any
-automatic bump, and a 1.3.11-to-1.3.12 rehearsal shows that trusting only the
-old two declared locations fails red while the expanded declaration reaches
-every surface.
+verified under the declared decoupled-member-pins policy, CHANGELOG prose stays
+outside any automatic bump, and a 1.3.11-to-1.3.12 rehearsal shows that trusting
+only the old two declared locations fails red while the expanded declaration
+reaches every required surface.
 
 Hermetic: reads the tree, writes only to the pytest ``tmp_path``.
 """
@@ -38,15 +38,6 @@ def _read(path: Path, pattern: str) -> str | None:
         if m:
             return m.group(1)
     return None
-
-
-def _version_surfaces(repo: Path, topo: dict) -> dict[str, str]:
-    """Return {role/or-path: version} for every declared location."""
-    out: dict[str, str] = {}
-    for loc in topo["locations"]:
-        v = _read(repo / loc["path"], loc["pattern"])
-        out[loc["path"]] = v
-    return out
 
 
 # ── Criterion 7: tag binding ────────────────────────────────────────────────
@@ -220,6 +211,7 @@ class TestRehearsal:
     def test_expanded_declaration_finishes_synchronized(self, tmp_path):
         repo = _copy_tree(tmp_path)
         new = "1.3.12"
+        old = "1.3.11"  # the pre-bump version of the copied test tree
 
         # The canonical tool must parse and bump the full declaration. If the
         # declaration is outside the tool's YAML subset, `bump` exits 2 here —
@@ -231,18 +223,30 @@ class TestRehearsal:
         chk = _run_version_sync(repo, "check")
         assert chk.returncode == 0, f"check failed (exit {chk.returncode}): {chk.stderr}"
 
-        surfaces = _version_surfaces(repo, self.TOPO)
-        # Every declared surface — runtime, bundle, bundle pins and all skills —
-        # must now report 1.3.12, reached from the single expanded declaration.
-        assert surfaces, "no surfaces collected"
-        for path, v in surfaces.items():
-            assert v == new, f"{path} is {v!r}, expected {new!r} after bump"
+        # Every REQUIRED declared surface — runtime, bundle and all skill
+        # capabilities — must report 1.3.12, reached from the single expanded
+        # declaration. The bundle_member_pins role is informational and is NOT
+        # forced by a plain `bump`: a bundle bump can be packaging alone, so the
+        # pins legitimately stay at the prior version (decoupled_member_pins).
+        assert self.TOPO["locations"], "no locations collected"
+        for loc in self.TOPO["locations"]:
+            v = _read(repo / loc["path"], loc["pattern"])
+            assert v is not None, f"no match for {loc['role']} at {loc['path']}"
+            if not loc.get("required", True):
+                continue  # informational (bundle member pins) may lag on purpose
+            assert v == new, (
+                f"{loc['role']} at {loc['path']} is {v!r}, expected {new!r} after bump"
+            )
 
-        # The bundle member pins (capabilities[] entries) also reached 1.3.12.
+        # The bundle member pins (capabilities[] entries) are NOT bumped by a
+        # plain `bump`; they keep the pre-bump version because member versions
+        # may legitimately differ from the bundle's.
         bundle = yaml.safe_load((repo / "capability.yaml").read_text())
         for entry in bundle["capabilities"]:
-            assert entry["version"] == new, (
-                f"bundle pin {entry['name']} still {entry['version']!r} after bump"
+            assert entry["version"] == old, (
+                f"bundle pin {entry['name']} is {entry['version']!r} after bump; "
+                f"informational pins must stay at the prior version {old!r} "
+                f"(decoupled_member_pins)"
             )
 
     def test_changelog_untouched_by_bump(self, tmp_path):

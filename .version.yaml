@@ -7,13 +7,14 @@
 schema: 1
 
 # release_policy names how the distinct artifact roles below relate to one
-# another for this release train. `lockstep` means every surface carries the
-# same version for this train. It deliberately does NOT collapse the roles:
-# runtime, bundle, bundle member pins and separately installable skill
-# capabilities remain distinct artifacts, and a future policy (e.g. decoupled
-# skill versions) only needs a different `release_policy` value, not a new
-# declarative inventory.
-release_policy: lockstep
+# another for this release train. `decoupled_member_pins` means the runtime
+# product, the distribution bundle and every separately installable skill
+# capability carry one train version, while the bundle's `capabilities[]`
+# member pins are NOT forced to that version: a bundle bump can be packaging
+# alone, so a member's version may legitimately differ from the bundle's
+# (OPS decision 2026-09-01). The consistency of each pin with the member's own
+# capability.yaml is owned by scripts/check-manifest.py, not by this gate.
+release_policy: decoupled_member_pins
 
 # The single authority whose version the bump reads as its reference and whose
 # version the release tag is bound to.
