@@ -1,7 +1,7 @@
 """Execute a ``sequences/*.yaml`` orchestration file as bounded sessions.
 
 The sequence format already carries the structure that prevents context
-exhaustion (LVC-219): it groups lanes into ``parallel_lanes`` and
+exhaustion: it groups lanes into ``parallel_lanes`` and
 ``serialized_lanes`` blocks inside ``phases``. Two defects sit behind the
 observed drift, and this module closes both:
 
@@ -44,7 +44,7 @@ _SESSION_BOUNDARY_KEY = "session_boundary"
 class MissingSessionBoundaryError(Exception):
     """Raised when a sequence does not declare ``session_boundary: batch``.
 
-    The boundary is never invented. LVC-219: defaulting a boundary is the
+    The boundary is never invented: defaulting a boundary is the
     defect, not a convenience — a sequence that omits the key is stopped, so
     wrong work can never be assigned to a session that does not exist.
     """

@@ -154,13 +154,13 @@ class TestGNFSuite:
             artifact_id="art-bridge-p0", sha256=sha, schema_version="1",
             producer_command="git diff", subject_repo="e", subject_commit="abc",
             created_at="2026-08-06T00:00:00Z", evidence_type="artifact",
-            purpose="bridge-p0 patch for Elementeer",
+            purpose="bridge-p0 patch for Amberleaf",
         ))
         registry.register(ArtifactReceipt(
             artifact_id="art-mcp-p0", sha256=sha, schema_version="1",
             producer_command="git diff", subject_repo="e", subject_commit="abc",
             created_at="2026-08-06T00:00:00Z", evidence_type="artifact",
-            purpose="mcp-p0 patch for Capacium",
+            purpose="mcp-p0 patch for Coralspine",
         ))
         findings = registry.get_findings()
         assert len(findings) >= 1, (
@@ -199,15 +199,15 @@ class TestGNFSuite:
             "GNF-06 FAIL: unresolved external gate was reconciled instead of blocked"
         )
 
-    # ── GNF-07: Capacium-Prompt in Elementeer-Session ─────────────────────
+    # ── GNF-07: Coralspine-Prompt in Amberleaf-Session ────────────────────
 
-    def test_gnf_07_capacium_prompt_in_elementeer_session(self):
+    def test_gnf_07_coralspine_prompt_in_amberleaf_session(self):
         if not _assert_v120_defect_uncaught("skillweave.runtime.preflight"):
             return
         from skillweave.runtime.preflight import SessionEnvelope, run_preflight
 
         env = SessionEnvelope(
-            product="Elementeer",
+            product="Amberleaf",
             remote_repo="git@canonical", worktree="/w",
             branch="feature/x", role="OPS",
             prd_digest="d", chain_digest="c",
@@ -217,9 +217,9 @@ class TestGNFSuite:
         )
         result = run_preflight(env, actual_repo="git@canonical",
                                actual_branch="feature/x",
-                               actual_product="Capacium")
+                               actual_product="Coralspine")
         assert result.passed is False, (
-            "GNF-07 FAIL: Capacium prompt was not rejected in Elementeer session"
+            "GNF-07 FAIL: Coralspine prompt was not rejected in Amberleaf session"
         )
 
     # ── GNF-08: Observer-Empfehlung widerspricht offenem Finding ──────────
