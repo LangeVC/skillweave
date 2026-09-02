@@ -51,10 +51,21 @@ from skillweave.runtime.substrate import (
 #: Discovery also reads ``sync.yaml`` (see :func:`discover_planning_repo`).
 PLANNING_REPO_ENV = "SKILLWEAVE_PLANNING_REPOSITORY"
 
+#: Environment variable that names the *local checkout* of the planning
+#: repository — the reachable destination directory a sync writes into. This is
+#: how a configured repository name becomes a usable destination.
+PLANNING_ROOT_ENV = "SKILLWEAVE_PLANNING_ROOT"
+
 #: The sync manifest key that declares the planning repository. This mirrors
 #: ``skillweave/skillweave-planning/sync.yaml``, which carries
 #: ``planning_repository: skillweave/skillweave-planning``.
 PLANNING_REPO_KEY = "planning_repository"
+
+#: The sync manifest key that declares the local checkout of the planning
+#: repository. When absent, discovery falls back to the environment variable.
+#: ``sync.yaml`` shipped today carries ``planning_repository`` but no
+#: destination key, so the environment variable is the primary producer.
+PLANNING_ROOT_KEY = "planning_root"
 
 #: Default sync root inside the planning repository checkout. The planning
 #: repo's own ``.gitignore`` re-includes ``.skillweave/planning/`` by name,
@@ -111,6 +122,47 @@ def discover_planning_repo(project_root: Optional[str] = None) -> Optional[str]:
                 return repo.strip()
 
     return None
+
+
+def discover_planning_root(project_root: Optional[str] = None) -> Optional[str]:
+    """Return the local planning-repository checkout directory, or None.
+
+    This is what turns a *configured repository name* into a *reachable
+    destination*: the sync can copy payload only into a directory that exists
+    on this machine. Resolution order (explicit wins, absence is significant):
+
+    1. ``SKILLWEAVE_PLANNING_ROOT`` in the environment.
+    2. the ``planning_root`` key of ``<project_root>/sync.yaml`` (also accepts
+       the historical ``planning_checkout`` spelling).
+
+    Only a directory that actually exists on disk is returned; a configured
+    path that is absent is treated as unreachable (the caller reports the area
+    at risk), never waved through.
+    """
+    env = os.environ.get(PLANNING_ROOT_ENV)
+    candidate = env.strip() if (env and env.strip()) else None
+
+    if candidate is None and project_root is not None:
+        sync_yaml = Path(project_root) / "sync.yaml"
+        if sync_yaml.is_file():
+            import yaml
+
+            try:
+                data = yaml.safe_load(sync_yaml.read_text()) or {}
+            except Exception:
+                data = {}
+            value = data.get(PLANNING_ROOT_KEY) or data.get("planning_checkout")
+            if isinstance(value, str) and value.strip():
+                candidate = value.strip()
+
+    if not candidate:
+        return None
+
+    candidate_path = Path(candidate)
+    if not candidate_path.is_dir():
+        return None
+
+    return str(candidate_path.resolve())
 
 
 def runtime_has_git(project_root: Optional[str] = None) -> bool:
@@ -242,14 +294,17 @@ def resolve_runtime_store(
 
     ``planning_repo`` and ``planning_root`` may be supplied explicitly (used by
     the operator and by tests); when omitted they are discovered from the
-    environment and ``sync.yaml``.
+    environment and ``sync.yaml``. ``planning_root`` is resolved through
+    :func:`discover_planning_root` so a configured repository alone yields a
+    reachable destination instead of a bare, unreachable name.
     """
     if runtime_has_git(project_root):
         return GitBackingStore()
 
     repo = planning_repo if planning_repo is not None else discover_planning_repo(project_root)
     if repo:
-        return PlanningSyncBackingStore(repository=repo, planning_root=planning_root)
+        root = planning_root if planning_root is not None else discover_planning_root(project_root)
+        return PlanningSyncBackingStore(repository=repo, planning_root=root)
 
     return LocalOnlyBackingStore()
 
@@ -302,9 +357,12 @@ __all__ = [
     "PlanningSyncBackingStore",
     "SyncReport",
     "discover_planning_repo",
+    "discover_planning_root",
     "runtime_has_git",
     "resolve_runtime_store",
     "classify_runtime",
     "PLANNING_REPO_ENV",
+    "PLANNING_ROOT_ENV",
     "PLANNING_REPO_KEY",
+    "PLANNING_ROOT_KEY",
 ]

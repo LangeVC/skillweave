@@ -18,6 +18,7 @@ from skillweave.runtime import (
     SyncReport,
     classify_runtime,
     discover_planning_repo,
+    discover_planning_root,
     resolve_runtime_store,
     runtime_has_git,
 )
@@ -125,3 +126,54 @@ def test_ephemeral_never_carried_or_disclosed(tmp_path):
         decl = get_area_declaration(name)
         assert store.effective_durability(decl) is Durability.EPHEMERAL
         assert store.effective_disclosure(decl) is Disclosure.SEALED
+
+
+def test_sync_reaches_store_via_configured_path(tmp_path, monkeypatch):
+    """Criterion 1 end to end: a durable area syncs when the planning repository
+    and its local checkout are configured only via environment, with no explicit
+    planning_root handed to any call."""
+    assert not (tmp_path / ".git").exists()
+
+    source = tmp_path / ".skillweave" / "prds"
+    source.mkdir(parents=True)
+    (source / "a.json").write_text("{}\n")
+
+    planning_root = tmp_path / "planning-checkout"
+    planning_root.mkdir()
+
+    # Configure the destination purely through the environment + sync.yaml:
+    # no explicit planning_root is passed to resolve_runtime_store/classify_runtime.
+    monkeypatch.setenv("SKILLWEAVE_PLANNING_REPOSITORY", "skillweave/skillweave-planning")
+    monkeypatch.setenv("SKILLWEAVE_PLANNING_ROOT", str(planning_root))
+
+    store = resolve_runtime_store(str(tmp_path))
+    assert isinstance(store, PlanningSyncBackingStore)
+    assert store.reachable is True
+
+    classified = classify_runtime(str(tmp_path))
+    assert classified["prds"].is_at_risk() is False
+    assert classified["prds"].is_durable() is True
+
+    report = store.sync("prds", str(tmp_path))
+    assert report.at_risk is False
+    assert set(report.names()) == {"a.json"}, report.names()
+    assert (planning_root / ".skillweave" / "planning" / "prds" / "a.json").is_file()
+
+
+def test_planning_root_discovered_from_sync_yaml(tmp_path):
+    """The local planning checkout is read from <root>/sync.yaml (planning_root)."""
+    planning_root = tmp_path / "planning-checkout"
+    planning_root.mkdir()
+    (tmp_path / "sync.yaml").write_text(
+        "organization: skillweave\n"
+        "planning_repository: skillweave/skillweave-planning\n"
+        f"planning_root: {planning_root}\n"
+    )
+    assert discover_planning_root(str(tmp_path)) == str(planning_root.resolve())
+
+
+def test_planning_root_absent_is_unreachable(tmp_path, monkeypatch):
+    """A configured destination path that does not exist is not waved through."""
+    monkeypatch.setenv("SKILLWEAVE_PLANNING_ROOT", str(tmp_path / "does-not-exist"))
+    assert discover_planning_root() is None
+
