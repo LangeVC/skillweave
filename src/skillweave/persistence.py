@@ -6,6 +6,7 @@ and tracking logs to enable session recovery and mode-based behavior.
 """
 
 import os
+import warnings
 import yaml
 import json
 from datetime import datetime
@@ -137,7 +138,8 @@ class SkillWeavePersistence:
             (self.skillweave_dir / subdir).mkdir(exist_ok=True)
         
         # Create default config if missing
-        config_path = self.skillweave_dir / self.CONFIG_FILE
+        self._migrate_legacy_config()
+        config_path = self._config_path()
         if not config_path.exists():
             self._create_default_config(config_path)
         
@@ -217,25 +219,75 @@ class SkillWeavePersistence:
                 readme_path.write_text(content)
 
     def load_config(self) -> SkillWeaveConfig:
-        """Load configuration from .skillweave/config.yaml."""
-        config_path = self.skillweave_dir / self.CONFIG_FILE
+        """Load configuration from skillweave.config/config.yaml.
+
+        Migrates a legacy .skillweave/config.yaml on first read, preferring the
+        durable tier when both are present (see the SW152-010 contract).
+        """
+        self._migrate_legacy_config()
+
+        config_path = self._config_path()
         if not config_path.exists():
             self.ensure_folder_structure()
-        
+
         with open(config_path, 'r') as f:
             data = yaml.safe_load(f) or {}
-        
+
         self.config = SkillWeaveConfig.from_dict(data)
         return self.config
 
     def save_config(self, config: SkillWeaveConfig) -> None:
-        """Save configuration to .skillweave/config.yaml."""
-        # Ensure .skillweave directory exists
-        self.skillweave_dir.mkdir(exist_ok=True, parents=True)
-        config_path = self.skillweave_dir / self.CONFIG_FILE
+        """Save configuration to skillweave.config/config.yaml."""
+        # Ensure the durable config tier exists
+        self.config_tier_dir.mkdir(exist_ok=True, parents=True)
+        config_path = self._config_path()
         with open(config_path, 'w') as f:
             yaml.dump(config.to_dict(), f, default_flow_style=False, sort_keys=False)
         self.config = config
+
+    def _config_path(self) -> Path:
+        """Resolve the durable tier-2 config path (skillweave.config/config.yaml)."""
+        return self.config_tier_dir / self.CONFIG_FILE
+
+    def _legacy_config_path(self) -> Path:
+        """Resolve the legacy substrate config path (.skillweave/config.yaml)."""
+        return self.skillweave_dir / self.CONFIG_FILE
+
+    def _migrate_legacy_config(self) -> None:
+        """Migrate a legacy .skillweave/config.yaml into the durable tier, once.
+
+        Rules (SW152-010):
+
+        * If only the legacy file exists, copy its values into
+          skillweave.config/config.yaml and leave the legacy file in place
+          (never delete anything in a consumer's repository).
+        * If both exist, prefer skillweave.config/ and emit a single notice;
+          the legacy file is left untouched and is never merged silently.
+        """
+        durable = self._config_path()
+        legacy = self._legacy_config_path()
+
+        if durable.exists() and legacy.exists():
+            self._notify_dual_config_once()
+            return
+
+        if not durable.exists() and legacy.exists():
+            # Copy the legacy values verbatim into the durable tier so a fresh
+            # clone passes through the durable tier, not through defaults.
+            durable.parent.mkdir(exist_ok=True, parents=True)
+            durable.write_bytes(legacy.read_bytes())
+
+    def _notify_dual_config_once(self) -> None:
+        """Emit the dual-config notice at most once per process per project."""
+        key = str(self.project_root)
+        if key in _MIGRATION_NOTIFIED:
+            return
+        _MIGRATION_NOTIFIED.add(key)
+        warnings.warn(
+            f"Both {self._legacy_config_path()} and {self._config_path()} are "
+            "present; using the durable skillweave.config/config.yaml.",
+            stacklevel=2,
+        )
 
     def get_tracking_log_path(self, session_id: str) -> Path:
         """Get path for a tracking log file."""
@@ -287,6 +339,11 @@ class SkillWeavePersistence:
 
 
 # No global instance to avoid cross-project contamination
+
+# Tracks which project roots have already emitted the one-time "both config
+# files present" notice. Keyed by resolved project root so the notice fires at
+# most once per process per project, satisfying the "says so once" contract.
+_MIGRATION_NOTIFIED: set = set()
 
 
 def get_persistence(project_root: Optional[str] = None) -> SkillWeavePersistence:
@@ -375,8 +432,18 @@ def get_mode_specific_setting(setting_path: str, default: Any = None, project_ro
 
 
 def get_global_config() -> SkillWeaveConfig:
-    """Load global configuration from ~/.skillweave/config.yaml."""
+    """Load global configuration from ~/.skillweave/config.yaml.
+
+    The global (user-home) config is a per-user setting, not a repo input tier;
+    it intentionally keeps its legacy path and is unaffected by the project
+    config migration in SW152-010.
+    """
     global_persistence = SkillWeavePersistence(str(Path.home()))
+    legacy = global_persistence._legacy_config_path()
+    if legacy.exists():
+        with open(legacy, 'r') as f:
+            data = yaml.safe_load(f) or {}
+        return SkillWeaveConfig.from_dict(data)
     return global_persistence.load_config()
 
 
