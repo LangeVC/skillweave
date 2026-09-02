@@ -28,6 +28,16 @@ from .checkpoint import (
     capture_environment, create_checkpoint, validate_resume,
 )
 from .preflight import PreflightInterceptor, PreflightError as PreflightGateError
+from .substrate import (
+    BackingStore,
+    GitBackingStore,
+    LocalOnlyBackingStore,
+    ResolvedArea,
+    UnclassifiedAreaError,
+    resolve_store,
+    classify_area,
+    classify_substrate,
+)
 
 __all__ = [
     "RunStore",
@@ -82,4 +92,12 @@ __all__ = [
     "assert_no_foreign_repos",
     "validate_summary",
     "WireframeError",
+    "BackingStore",
+    "GitBackingStore",
+    "LocalOnlyBackingStore",
+    "ResolvedArea",
+    "UnclassifiedAreaError",
+    "resolve_store",
+    "classify_area",
+    "classify_substrate",
 ]
