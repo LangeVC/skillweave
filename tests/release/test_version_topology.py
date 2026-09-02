@@ -56,9 +56,12 @@ class TestTagBinding:
         assert runtime is not None
         assert re.fullmatch(r"\d+\.\d+\.\d+", runtime), f"runtime not semver: {runtime!r}"
 
-        # A product tag must equal the runtime version: no other surface may
+        # A product tag must equal the runtime version: no required surface may
         # carry a version that would produce a divergent tag under lockstep.
+        # Informational locations (bundle member pins) may legitimately diverge.
         for loc in topo["locations"]:
+            if not loc.get("required", True):
+                continue  # informational (bundle member pins) may lag on purpose
             v = _read(REPO_ROOT / loc["path"], loc["pattern"])
             assert v == runtime, (
                 f"tag-binding failure: {loc['role']} at {loc['path']} is {v!r}, "
