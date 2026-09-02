@@ -24,11 +24,6 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from skillweave.persistence import Durability, get_area_declaration
-from skillweave.runtime import (
-    PlanningSyncBackingStore,
-    classify_runtime,
-    resolve_runtime_store,
-)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,6 +61,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    import importlib
+
+    runtime = importlib.import_module("skillweave.runtime")
+    PlanningSyncBackingStore = runtime.PlanningSyncBackingStore
+    classify_runtime = runtime.classify_runtime
+    resolve_runtime_store = runtime.resolve_runtime_store
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
