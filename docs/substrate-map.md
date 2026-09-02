@@ -22,6 +22,17 @@ It is created in a consuming project by the preflight (`SkillWeavePersistence.en
    `Versioned` in the Mutability column below means *revised across iterations*. It does not mean *tracked in git*.
 6. **Reachability is Injection, not Tracking**: A dispatched lane needs the PRD inside its worktree. That is solved by copying or linking it in at dispatch time (`regen-sequence.py`; see the 1.5.1 dispatch initiative), never by committing the substrate so that `git worktree add` happens to carry it along. Tracking the substrate to make it reachable trades an IP boundary for a convenience the dispatcher already provides.
 
+### The substrate rule is taught, not only enforced
+
+Invariants 5 and 6 are not something a user can infer; onboarding must teach them so a new project ends up correctly configured without the operator explaining anything. `onboarding_cli.run_onboarding` now does the following, in order:
+
+1. **States the substrate rule** — what `.skillweave/` is, that it is generated, that direction/durability/disclosure are declared per area and git answers none of them on its own, that a public repository never carries substrate content, and that a dispatched lane receives its PRD by injection (`onboarding_cli.SUBSTRATE_RULE`).
+2. **Writes the `.gitignore` exclusion** for a git project — the anchored `/.skillweave/` entry (`onboarding_cli.GITIGNORE_ENTRY`) — without being asked. Absent `.gitignore` is created.
+3. **Asks whether a private per-org planning repository exists** and records the answer (`planning_repo_exists`) instead of assuming the substrate is durable where it stands.
+4. **Refuses in a public repository** — when the `origin` remote is public (`github.com`) and git is already tracking `.skillweave/` content, onboarding returns `substrate_refused` with a reason, rather than leaving that content tracked. The reason names the IP boundary and the untracking command (`git rm -r --cached .skillweave`).
+
+The git-facing pieces (`_is_git_project`, `_is_public_remote`, `_git_tracked_substrate`, `_ensure_gitignore_exclusion`) live in `onboarding_cli.py` and keep the `GITIGNORE_ENTRY` path consistent with `SkillWeavePersistence._ensure_gitignore`.
+
 ### Current deviation from invariant 5
 
 This repository does not yet satisfy invariant 5. `.skillweave/` is tracked here, and 105 files are on the public GitHub mirror as a result.
