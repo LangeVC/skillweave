@@ -1,39 +1,39 @@
 {
-  "projectName": "OPS-002 — roll the unified mirror out, and make the script keep its promise",
+  "projectName": "Neutral placeholder wording describing the work item in general terms witho",
   "version": "1.0",
   "status": "draft",
   "sequence": {
     "sequence_id": "ops-002",
     "sequence_type": "build",
     "execution_mode": "ralph_attended",
-    "worktree": "langevc/wt-ops002-rollout-ops",
-    "branch": "ops/OPS-002-rollout",
-    "base": "main 71f96cf",
+    "worktree": "Neutral placeholder wording d",
+    "branch": "Neutral placeholder",
+    "base": "Neutral plac",
     "state_file": ".ops002-state.md",
     "runner_shell": "bash -eo pipefail",
     "phase_names": {
-      "0": "fix-the-tool",
-      "1": "dry-run",
-      "2": "gate",
-      "3": "rollout",
-      "4": "verify"
+      "0": "Neutral plac",
+      "1": "Neutral",
+      "2": "Neut",
+      "3": "Neutral",
+      "4": "Neutra"
     }
   },
   "tasks": [
     {
       "id": "OPS-002-001",
-      "title": "mirror-rollout.sh opens the PR its header promises",
-      "description": "LVC-213 finding 2, measured: the script's header describes clone, write reference, commit on ops/ops-002-unify-mirror, and says it 'opens a PR -> base main'. The body contains no pulls call. Across 51 repos this decides whether 51 PRs wait for review or 51 branches nobody knows about.\n\nPATH CORRECTION 2026-08-16: this PRD first named scripts/mirror-rollout.sh. That path does not exist. The real script is 159 lines at server/langevc-prod-01/scripts/mirror-rollout.sh, and giving the wrong path produced a second 292-line script at the repo root — the two-copies defect, caused by the PRD rather than by the lane. The lane's work is sound; only its address was wrong.\n\nCAPABILITY INVENTORY, measured 2026-08-16 on the 159-line prod-host version, after two of my own greps returned false zeros. It is NOT the lesser tool:\n  ADR-0001 referenced 4x, section D.6 2x — public-before-private ordering\n  Forgejo->GitHub path table: fusionAIze/ 16, Capacium/ 22, LangeVC/ 4 entries\n  public/private as a measured column, not inferred from the name\n  Stage-1 skip list (elementeer-mcp, elementeer-docs) with the reason inline\n  NON-MECHANICAL handling: a missing file is listed, never auto-created\n  --dry-run present; timeouts on clone and push\n  zero pulls calls — it deliberately stops at pushing the branch\n\nThat last line corrects this PRD's own framing. The header/body gap is real — the header says 'opens a PR' and the body does not — but the resolution is not automatically 'add the call'. The tool was built to stop before the PR, and the header describes the finished state. Which of the two moves is the reconciliation's decision, and it must be recorded.\n\nThe 292-line version at the wrong path contributes compare_repo() (contents-API match/drift/missing/error classification), open_pr() and pr_body(). compare_repo is what decides WHICH repos need a PR and is therefore input to criteria 2-3; open_pr and pr_body belong to those criteria, not to this one. They live in commit 41e33ea and are not lost by being deferred.",
+      "title": "Neutral placeholder wording describing the work it",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutr\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, orga\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral pla\nNeutral placeholder wording describing the work item in general terms wit\nNeutral placeholder wording describing the work item in general terms without\nNeutral placeholder wording describing the work item in general t\nNeutral placeholder wording describing the work item in general terms withou\nNeutral placeholder wording describing the work item in general terms w\nNeutral placeholder wording describing the work\nNeutral placeholder wording describing the work item in general\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms witho\n\nNeutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming",
       "acceptanceCriteria": [
-        "EXACTLY ONE mirror-rollout.sh exists when this task is done, at server/langevc-prod-01/scripts/. The 159-line prod-host version is the base — it carries operational knowledge the root copy never had (ADR-0001 D.6 public-first ordering, the Forgejo->GitHub path table, the measured visibility column, the Stage-1 skip list with its reason, NON-MECHANICAL handling, --dry-run, timeouts). Nothing of that may be lost. compare_repo() from 41e33ea is carried over because criteria 2-3 need it; open_pr() and pr_body() are DEFERRED to those criteria with a note naming 41e33ea, which is a recorded deferral and not a dropped capability",
-        "The script opens a pull request per repo against main, or its header stops claiming it does. Silence between header and behaviour is the defect",
-        "The PR carries a body naming the ticket and what changed, so a reviewer opening one of 51 does not have to reconstruct why",
-        "--dry-run (present at lines 30, 37, 38, 145) covers the PR step too: it prints what it would open and opens nothing",
-        "An existing PR is skipped BEFORE any branch or push is attempted, and the run reports it as a skip. Measured on the live proof 2026-08-16: no duplicate PR was created, but by failure rather than by idempotence. compare_repo reads mirror.yml from the DEFAULT BRANCH, so while a PR is open main still carries the old file, the repo classifies as 'drift', and the run reaches `git checkout -b` (line 289) which collides with the existing branch. The find_pr / PR-EXISTS gate sits at line 300, AFTER that failure, and is never reached. Over 51 repos this is 51 errors instead of 51 clean skips, and the error counter aborts the wave run of OPS-002-003 on what is in fact the normal state. The header at lines 35-36 already claims find_pr runs first — the code is what has to move, not the header.",
-        "The script reads the token envctl actually provides. Measured 2026-08-16: it reads CAPACIUM_BOT_TOKEN, SKILLWEAVE_BOT_TOKEN, ELEMENTEER_BOT_TOKEN, FUSIONAIZE_BOT_TOKEN and LANGEVC_BOT_TOKEN — five names nobody assigns. envctl on langevc-prod-01 carries FORGEJO_BOT_TOKEN per cluster (capacium-ops, elementeer-ops, fusionaize-ops, langevc-ops, skillweave-ops), plus FORGEJO_URL and GITHUB_APP_TOKEN. The mapping org -> cluster is mechanical: <org>-ops. Since one run spans five orgs, the script looks the token up per org via `envctl get \"${org}-ops\" FORGEJO_BOT_TOKEN` rather than expecting five variables in its environment. No invented variable name survives",
-        "Red proof: run against one throwaway repo with --dry-run, then for real; the PR exists, has a body, and a second run creates no duplicate The live run happens ON langevc-prod-01, where envctl already holds every org's bot token — the script's own path, server/langevc-prod-01/scripts/, says so. It was never blocked on a missing credential; it was blocked on a variable name.",
-        "MIRROR_REFERENCE is resolved to an absolute path before it is used. Measured on the live proof: `cp \"$MIRROR_REFERENCE\"` at line 290 runs inside a subshell that has already `cd`-ed into the clone (line 289), so a relative path fails with 'cannot stat'. --dry-run does not copy and therefore never showed it — the defect is invisible to every test that does not write.",
-        "Red proof for both, re-run against capacium/capacium-test-lab with PR #10 still open: the second run prints PR-EXISTS #10 and leaves the branch alone, errors stays 0, and a relative MIRROR_REFERENCE works."
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neu",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, pro",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any pro",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, or",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any projec",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming an",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general t"
       ],
       "priority": "P0",
       "points": 5,
@@ -41,8 +41,8 @@
       "type": "bugfix",
       "passes": false,
       "lane": {
-        "creates": "server/langevc-prod-01/scripts/mirror-rollout.sh",
-        "tests": "server/langevc-prod-01/tests/test_mirror_rollout.sh",
+        "creates": "Neutral placeholder wording describing the work",
+        "tests": "Neutral placeholder wording describing the work ite",
         "reads": [
           "docs/templates/unified-mirror.yml"
         ],
@@ -54,33 +54,33 @@
             "criteria": [
               1
             ],
-            "focus": "reconcile the two scripts into one at the prod-host path"
+            "focus": "Neutral placeholder wording describing the work item in"
           },
           {
             "criteria": [
               2,
               3
             ],
-            "focus": "open the PR or stop claiming it; body names ticket and change"
+            "focus": "Neutral placeholder wording describing the work item in gener"
           },
           {
             "criteria": [
               4,
               5
             ],
-            "focus": "--dry-run covers the PR step; idempotent over reruns"
+            "focus": "Neutral placeholder wording describing the work item"
           },
           {
             "criteria": [
               6
             ],
-            "focus": "read FORGEJO_BOT_TOKEN per <org>-ops cluster, not invented names"
+            "focus": "Neutral placeholder wording describing the work item in general"
           },
           {
             "criteria": [
               7
             ],
-            "focus": "live red proof on langevc-prod-01, including the second run"
+            "focus": "Neutral placeholder wording describing the work item in gen"
           },
           {
             "criteria": [
@@ -88,20 +88,20 @@
               8,
               9
             ],
-            "focus": "gate before branch/push, absolute MIRROR_REFERENCE, re-proof against the open PR"
+            "focus": "Neutral placeholder wording describing the work item in general terms without na"
           }
         ]
       }
     },
     {
       "id": "OPS-002-002",
-      "title": "A dry run over every repo, and the inventory it produces",
-      "description": "Repo lists are not hardcoded in any of the three scripts — measured, zero repo-lines. The inventory therefore has to be produced, not assumed.",
+      "title": "Neutral placeholder wording describing the work item in",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Ne",
       "acceptanceCriteria": [
-        "A dry run covers every repo in all five orgs and produces an inventory: which already match the reference, which drift and how, which have no mirror workflow at all",
-        "Repos are classified by what the rollout would do to them, not by org. A repo already carrying the exact-ref pattern needs no PR",
-        "Known exceptions are listed with a reason that holds against the live files. xyz-planning and xyz-internal-docs are always private on GitHub. The skillweave repos must NOT receive the reference unchanged: the reference carries tags: [\"v*\"], and skillweave/.forgejo/workflows/validate-release-tag.yml already mirrors tags through a job declaring needs: validate — the tag reaches GitHub only after the release gate passes. An unconditional tags trigger in mirror.yml would push the tag before anything validated it, which is the failure SW-CI-002-G exists to prevent. THIRD REVISION, 2026-08-17: the first wording claimed skillweave retains a tags trigger (it has none), the second claimed manual mirroring was the exception (it is gate-bound, not manual). Both were written without reading validate-release-tag.yml. The OPS-002-R reviewer found the inversion.",
-        "The inventory is committed, so the rollout can be compared against what was expected rather than against memory"
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder word",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strat",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization,"
       ],
       "priority": "P0",
       "points": 5,
@@ -114,10 +114,10 @@
         "creates": "docs/ops-002-rollout-inventory.md",
         "tests": "tests/test_rollout_inventory.sh",
         "reads": [
-          "server/langevc-prod-01/scripts/mirror-rollout.sh"
+          "Neutral placeholder wording describing the work"
         ],
         "must_not_touch": [
-          "server/langevc-prod-01/scripts/mirror-rollout.sh"
+          "Neutral placeholder wording describing the work"
         ],
         "dispatch_order": [
           {
@@ -125,27 +125,27 @@
               1,
               2
             ],
-            "focus": "dry run over all five orgs; classify by effect, not by org"
+            "focus": "Neutral placeholder wording describing the work item in ge"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "exceptions with reasons; commit the inventory"
+            "focus": "Neutral placeholder wording describing the wo"
           }
         ]
       }
     },
     {
       "id": "OPS-002-R",
-      "title": "Gate before anything is pushed to 51 repos",
-      "description": "Reviewer role. This is the last point at which a wrong reference costs one repo instead of 51.",
+      "title": "Neutral placeholder wording describing the",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any proje",
       "acceptanceCriteria": [
-        "Branch tip refetched, SHA named",
-        "The reviewer opens the PR the script produced on the throwaway repo and confirms it targets main and carries a body",
-        "The inventory is spot-checked against three repos the reviewer picks, one per class",
-        "Reviewer did not repair anything"
+        "Neutral placeholder wording des",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, pro",
+        "Neutral placeholder wording describing the work item in general terms without namin",
+        "Neutral placeholder wording desc"
       ],
       "priority": "P0",
       "points": 3,
@@ -155,14 +155,14 @@
       "type": "review",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ops002-review",
-        "branch": "(detached am ops-Stand — der Reviewer pinnt, was er geprueft hat)",
+        "worktree": "Neutral placeholder word",
+        "branch": "Neutral placeholder wording describing the work item in general t",
         "reads": [
-          "server/langevc-prod-01/scripts/mirror-rollout.sh",
-          "server/langevc-prod-01/tests/test_mirror_rollout.sh"
+          "Neutral placeholder wording describing the work",
+          "Neutral placeholder wording describing the work ite"
         ],
         "must_not_touch": [
-          "server/langevc-prod-01/scripts/mirror-rollout.sh",
+          "Neutral placeholder wording describing the work",
           "docs/templates/unified-mirror.yml"
         ],
         "dispatch_order": [
@@ -171,27 +171,27 @@
               1,
               2
             ],
-            "focus": "tip refetched and named; the reviewer opens the PR the script produced"
+            "focus": "Neutral placeholder wording describing the work item in general terms"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "inventory spot-checked on three repos the REVIEWER picks; nothing repaired"
+            "focus": "Neutral placeholder wording describing the work item in general terms with"
           }
         ]
       }
     },
     {
       "id": "OPS-002-003",
-      "title": "Roll out in waves, with a stop between them",
-      "description": "51 repos at once means a wrong reference is discovered 51 times. Waves make the first mistake cost one wave.",
+      "title": "Neutral placeholder wording describing the",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organizati",
       "acceptanceCriteria": [
-        "Wave 1 is a single repo and is verified end to end before wave 2 exists",
-        "Each wave records which repos it touched and which PR number resulted, in a TRACKED file — docs/ops-002-rollout-log.md — and the test asserts against that file. CORRECTED 2026-08-17: the criterion first said 'in the state file', and the test was written against .ops002-state.md. That file was then untracked on the same instruction that ordered the cleanup, so the test passes only in the worktree whose session wrote it and fails in a fresh checkout, in CI, and for every reviewer. Measured: 11/11 in the ops tree, 9/11 in the review tree, same SHA. A record that must persist cannot live in a file the repository does not carry. The state file stays untracked and stays the per-dispatch handoff; the durable record is the log.",
-        "A failed repo stops its wave and does not block the others; the state file names it",
-        "No merge happens in this task — 51 PRs waiting for review is the intended end state"
+        "Neutral placeholder wording describing the work item in general terms w",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording d",
+        "Neutral placeholder wording describing the work item in general terms without namin",
+        "Neutral placeholder wording describing the work item in general terms without namin"
       ],
       "priority": "P0",
       "points": 8,
@@ -207,7 +207,7 @@
           "docs/ops-002-rollout-inventory.md"
         ],
         "must_not_touch": [
-          "server/langevc-prod-01/scripts/mirror-rollout.sh"
+          "Neutral placeholder wording describing the work"
         ],
         "dispatch_order": [
           {
@@ -215,26 +215,26 @@
               1,
               2
             ],
-            "focus": "wave 1 is one repo, verified end to end; record repo and PR number"
+            "focus": "Neutral placeholder wording describing the work item in general te"
           },
           {
             "criteria": [
               3,
               4
             ],
-            "focus": "a failed repo stops its wave only; no merges here"
+            "focus": "Neutral placeholder wording describing the work i"
           }
         ]
       }
     },
     {
       "id": "OPS-002-004",
-      "title": "Verify the mirrors actually match afterwards",
-      "description": "A rollout that opened 51 PRs proves nothing about the mirrors until the PRs are merged and a push has run through them.",
+      "title": "Neutral placeholder wording describing the w",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product",
       "acceptanceCriteria": [
-        "For every merged repo, the mirror workflow matches the reference template byte for byte",
-        "A real push in one repo per org is followed through to GitHub and the resulting ref compared",
-        "Repos still open are listed as open, not as done — a rollout report that counts PRs as completions is the thing this criterion forbids"
+        "Neutral placeholder wording describing the work item in general terms without naming an",
+        "Neutral placeholder wording describing the work item in general terms without naming any pro",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy de"
       ],
       "priority": "P0",
       "points": 5,
@@ -250,7 +250,7 @@
           "docs/ops-002-rollout-log.md"
         ],
         "must_not_touch": [
-          "server/langevc-prod-01/scripts/mirror-rollout.sh"
+          "Neutral placeholder wording describing the work"
         ],
         "dispatch_order": [
           {
@@ -258,27 +258,27 @@
               1,
               2
             ],
-            "focus": "byte-for-byte parity; one real push per org followed to GitHub"
+            "focus": "Neutral placeholder wording describing the work item in genera"
           },
           {
             "criteria": [
               3
             ],
-            "focus": "open repos are listed as open, never counted as done"
+            "focus": "Neutral placeholder wording describing the work item"
           }
         ]
       }
     },
     {
       "id": "OPS-002-V",
-      "title": "Review the verification — the count is recounted, not read",
-      "description": "OPS-002-R stood before the rollout and did its job there. The verification lane that follows it has no independent check, so the closing figure — 45 open, 0 merged across 51 table rows — rests on the assertion of the lane that produced it. For a rollout across 51 repositories in five orgs that is too thin. This lane recounts. Reviewer repairs nothing, merges nothing and opens nothing; the end state is PRs waiting for review and it stays that way.",
+      "title": "Neutral placeholder wording describing the work item in ge",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording de",
       "acceptanceCriteria": [
-        "Branch tip refetched, SHA named in the verdict.",
-        "The closing figures are RECOUNTED against Forgejo, not read from docs/ops-002-verification.md. Open, merged and excluded are counted separately, and the excluded four skillweave repos are not folded into 'open' — they are not pending, they are out of scope by the release-gate reason.",
-        "At least one mirror parity proof is reproduced on a repo the REVIEWER picks, one that dispatch 1 did not use. A probe branch is deleted from both sides afterwards, and the verdict says so.",
-        "Any repo whose PR is missing, closed or merged is named individually. A count that matches while a single row is wrong is the failure this lane exists to catch — the rollout log lists rows, and a total can be right while a row is not.",
-        "Reviewer repaired nothing, pushed nothing, merged nothing. PR #10 and PR #26 are still open at the end."
+        "Neutral placeholder wording describing the work",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neut",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any proje",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organ"
       ],
       "priority": "P0",
       "points": 3,
@@ -288,16 +288,16 @@
       "type": "verification",
       "passes": false,
       "lane": {
-        "worktree": "langevc/wt-ops002-verify-review",
-        "branch": "(detached am ops-Stand — der Reviewer pinnt, was er geprueft hat)",
+        "worktree": "Neutral placeholder wording des",
+        "branch": "Neutral placeholder wording describing the work item in general t",
         "reads": [
           "docs/ops-002-verification.md",
           "docs/ops-002-rollout-log.md",
           "docs/ops-002-rollout-inventory.md",
-          "server/langevc-prod-01/scripts/mirror-rollout.sh"
+          "Neutral placeholder wording describing the work"
         ],
         "must_not_touch": [
-          "server/langevc-prod-01/scripts/mirror-rollout.sh",
+          "Neutral placeholder wording describing the work",
           "docs/templates/unified-mirror.yml",
           "docs/ops-002-verification.md"
         ],
@@ -307,7 +307,7 @@
               1,
               2
             ],
-            "focus": "tip named; the closing figures recounted against Forgejo, excluded kept apart from open"
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming an"
           },
           {
             "criteria": [
@@ -315,7 +315,7 @@
               4,
               5
             ],
-            "focus": "one parity proof on a reviewer-picked repo; every wrong row named; nothing touched"
+            "focus": "Neutral placeholder wording describing the work item in general terms without nami"
           }
         ]
       }
@@ -324,7 +324,7 @@
   "execution_recommendation": {
     "mode": "standard",
     "suggested_workflow": "ralph-loop-attended",
-    "reason": "5 Tasks, 26 Punkte"
+    "reason": "Neutral placeholde"
   },
   "totals": {
     "tasks": 6,

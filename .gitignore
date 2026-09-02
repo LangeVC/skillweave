@@ -32,6 +32,12 @@ prd-skillweave-*.json
 prd-skillweave-*.md
 generated/
 
+# Release-gate run artifacts — output of the readiness gate, regenerated on every
+# run (src/skillweave/github_integration/release_gate.py). Not source; never
+# committed.
+release-gate-data.json
+release-gate-report.md
+
 # External tool configurations (not part of SkillWeave)
 .codenomad/
 .cursor/
