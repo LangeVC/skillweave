@@ -177,3 +177,57 @@ def test_planning_root_absent_is_unreachable(tmp_path, monkeypatch):
     monkeypatch.setenv("SKILLWEAVE_PLANNING_ROOT", str(tmp_path / "does-not-exist"))
     assert discover_planning_root() is None
 
+
+def test_unreachable_destination_sync_reports_at_risk_no_crash(tmp_path, monkeypatch):
+    """Criterion 2 (b): a configured planning repository whose destination root
+    is absent on disk reports the durable area at risk through the sync/carry
+    path without crashing, rather than silently accepting it."""
+    assert not (tmp_path / ".git").exists()
+
+    # Payload exists so a successful sync would carry it.
+    source = tmp_path / ".skillweave" / "prds"
+    source.mkdir(parents=True)
+    (source / "a.json").write_text("{}\n")
+
+    # Configure a planning repository + a planning_root that does NOT exist.
+    (tmp_path / "sync.yaml").write_text(
+        "organization: skillweave\n"
+        "planning_repository: skillweave/skillweave-planning\n"
+        f"planning_root: {tmp_path / 'does-not-exist'}\n"
+    )
+
+    store = resolve_runtime_store(str(tmp_path))
+    assert isinstance(store, PlanningSyncBackingStore)
+    assert store.reachable is False
+
+    classified = classify_runtime(str(tmp_path))
+    assert classified["prds"].is_at_risk() is True
+    assert classified["prds"].is_durable() is False
+
+    report = store.sync("prds", str(tmp_path))
+    assert report.at_risk is True
+    assert report.reason, "at-risk report must carry a non-empty reason"
+
+
+def test_unreachable_destination_sync_reports_at_risk_via_env(tmp_path, monkeypatch):
+    """Same as above, but configured purely via environment variables."""
+    assert not (tmp_path / ".git").exists()
+
+    source = tmp_path / ".skillweave" / "prds"
+    source.mkdir(parents=True)
+    (source / "a.json").write_text("{}\n")
+
+    monkeypatch.setenv("SKILLWEAVE_PLANNING_REPOSITORY", "skillweave/skillweave-planning")
+    monkeypatch.setenv("SKILLWEAVE_PLANNING_ROOT", str(tmp_path / "does-not-exist"))
+
+    store = resolve_runtime_store(str(tmp_path))
+    assert isinstance(store, PlanningSyncBackingStore)
+    assert store.reachable is False
+
+    classified = classify_runtime(str(tmp_path))
+    assert classified["prds"].is_at_risk() is True
+
+    report = store.sync("prds", str(tmp_path))
+    assert report.at_risk is True
+    assert report.reason, "at-risk report must carry a non-empty reason"
+

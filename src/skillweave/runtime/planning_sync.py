@@ -247,9 +247,14 @@ class PlanningSyncBackingStore(BackingStore):
 
         source = Path(project_root) / ".skillweave" / area_name
         if not self.reachable:
+            destination = (
+                str(self.destination(area_name))
+                if self._planning_root is not None
+                else str(Path(self._ticket_root) / area_name)
+            )
             return SyncReport(
                 area=area_name,
-                destination=str(self.destination(area_name)),
+                destination=destination,
                 at_risk=decl.durability is Durability.DURABLE,
                 reason=(
                     f"planning repository {self._repository!r} is configured "
