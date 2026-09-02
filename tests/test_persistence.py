@@ -62,9 +62,10 @@ def test_ensure_folder_structure():
             assert subdir_path.exists(), f"Missing subdirectory: {subdir}"
             assert subdir_path.is_dir()
         
-        # Check config file exists
-        config_path = persistence.skillweave_dir / "config.yaml"
+        # Check config file exists in the durable tier, not the substrate
+        config_path = persistence.config_tier_dir / "config.yaml"
         assert config_path.exists()
+        assert not (persistence.skillweave_dir / "config.yaml").exists()
         
         # Check README files
         for subdir in ["handover", "specs", "tracking-log", "manifesto"]:
@@ -374,3 +375,99 @@ def test_catalogue_reader_consumes_durable_tier():
         finally:
             os.chdir(prev)
             catalogue._catalogue = None
+
+
+# ---------------------------------------------------------------------------
+# SW152-010 — config.yaml moves to the durable input tier, migrated once
+# ---------------------------------------------------------------------------
+
+def test_load_and_save_config_use_durable_tier():
+    """Criterion 1: load_config()/save_config() read and write
+    skillweave.config/config.yaml, never .skillweave/config.yaml."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        persistence = SkillWeavePersistence(tmpdir)
+        config = SkillWeaveConfig(mode=RiskMode.UNICORN, features={"checklist_execution": True})
+        persistence.save_config(config)
+
+        durable = Path(tmpdir) / "skillweave.config" / "config.yaml"
+        legacy = Path(tmpdir) / ".skillweave" / "config.yaml"
+
+        # save_config wrote to the durable tier, not the substrate.
+        assert durable.exists(), "save_config() did not write skillweave.config/config.yaml"
+        assert not legacy.exists(), "save_config() leaked config into .skillweave/"
+
+        # load_config reads back the durable tier.
+        loaded = persistence.load_config()
+        assert loaded.mode == RiskMode.UNICORN
+        assert loaded.features["checklist_execution"] is True
+
+
+def test_legacy_config_migrated_on_first_preflight_and_preserved():
+    """Criterion 2: a project with only a legacy .skillweave/config.yaml is
+    migrated on first preflight with values preserved, and the legacy file is
+    left in place, not deleted."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+
+        # Author a legacy config with unmistakable tuned values.
+        legacy_dir = root / ".skillweave"
+        legacy_dir.mkdir(parents=True)
+        legacy = legacy_dir / "config.yaml"
+        legacy.write_text(
+            "mode: conservative\n"
+            "features:\n"
+            "  checklist_execution: true\n",
+            encoding="utf-8",
+        )
+
+        persistence = SkillWeavePersistence(tmpdir)
+        persistence.ensure_folder_structure()  # first preflight
+
+        durable = root / "skillweave.config" / "config.yaml"
+
+        # Migrated, values preserved.
+        assert durable.exists(), "legacy config was not migrated into skillweave.config/"
+        loaded = persistence.load_config()
+        assert loaded.mode == RiskMode.CONSERVATIVE
+        assert loaded.features["checklist_execution"] is True
+
+        # Legacy file is left in place, not destroyed.
+        assert legacy.exists(), "legacy .skillweave/config.yaml was deleted"
+
+
+def test_dual_config_prefers_durable_and_notifies_once():
+    """Criterion 3: when both files exist, skillweave.config/ is preferred and
+    the conflict is announced (once), rather than silently merged."""
+    import warnings as _warnings
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+
+        # Legacy says conservative; durable says unicorn.
+        legacy_dir = root / ".skillweave"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "config.yaml").write_text("mode: conservative\n", encoding="utf-8")
+
+        durable_dir = root / "skillweave.config"
+        durable_dir.mkdir(parents=True)
+        (durable_dir / "config.yaml").write_text("mode: unicorn\n", encoding="utf-8")
+
+        persistence = SkillWeavePersistence(tmpdir)
+
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            loaded = persistence.load_config()
+
+        # Durable tier wins.
+        assert loaded.mode == RiskMode.UNICORN, "durable skillweave.config/ was not preferred"
+
+        # The conflict was announced.
+        notices = [w for w in caught if "skillweave.config/config.yaml" in str(w.message)]
+        assert len(notices) == 1, "the dual-config notice was not emitted exactly once"
+
+        # A second load must not re-announce.
+        with _warnings.catch_warnings(record=True) as caught2:
+            _warnings.simplefilter("always")
+            persistence.load_config()
+        notices2 = [w for w in caught2 if "skillweave.config/config.yaml" in str(w.message)]
+        assert len(notices2) == 0, "the dual-config notice was emitted more than once"
