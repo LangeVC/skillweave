@@ -78,11 +78,6 @@ on:
         description: "Mandatory reason when release_override=true. Recorded in the log."
         required: false
         type: string
-      dry_run:
-        description: "true = run the preflight guard and stop before any push (proof runs). Default false."
-        required: false
-        default: false
-        type: boolean
 
 # Paths that carry planning/strategy content and must not reach the PUBLIC mirror.
 # A hit turns the push red unless a release_override with a mandatory reason is
@@ -364,7 +359,7 @@ jobs:
           echo "GH_REPO_OWNER=${owner}" >> "$GITHUB_ENV"
 
       - name: Push triggering ref to GitHub mirror (exact-ref, event path)
-        if: github.event_name == 'push' && inputs.dry_run != 'true'
+        if: github.event_name == 'push'
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
           GH_REPO: ${{ env.GH_REPO }}
@@ -375,7 +370,7 @@ jobs:
           git push --force "$remote" "+${GITHUB_REF}:${GITHUB_REF}"
 
       - name: Dispatch — targeted exact-ref (break-glass) or full state sync
-        if: github.event_name == 'workflow_dispatch' && inputs.dry_run != 'true'
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
           FORGEJO_TOKEN: ${{ github.token }}
