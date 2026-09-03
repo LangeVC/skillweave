@@ -1,8 +1,13 @@
 # unified-mirror.yml — single Mirror to GitHub workflow for every mirrored repo.
 # Decided by ADR-0001 (lvc-ops, OPS-001). Deploy as `.forgejo/workflows/mirror.yml`
-# verbatim in every repo that has one. The GitHub target is derived from the
-# repository variable GH_REPOSITORY (set once per repo); falls back to
-# ${{ github.repository }} when the Forgejo org and GitHub org match.
+# verbatim in every repo that has one. The GitHub target is resolved from two
+# Actions variables read via the `vars` context (no token, no API):
+#   GH_REPO_OWNER  — org scope, the owning GitHub org/user (e.g. LangeVC)
+#   GH_REPO        — repo scope, the full owner/name destination (e.g. LangeVC/skillweave)
+# A preflight guard in the mirror job enforces the mapping contract in cost
+# order — double match (string), existence (reachability), then permission
+# (ownership) — and exports the vetted destination for the push steps. Nothing
+# is pushed until all three hold.
 #
 # Two entry points:
 #   1. push event  -> exact-ref: force-push ONLY the triggering ref.
@@ -94,17 +99,14 @@ on:
 env:
   BLOCKED_PATHS: ".skillweave/**|strategy.md|**/strategy.md|prd*.md|**/prd*.md|prd*.json|**/prd*.json|*.contract*|**/*.contract*|*contract*.md|**/*contract*.md|*proposal*.md|**/*proposal*.md|*.proposal*|**/*.proposal*"
 
-# The GitHub destination is a per-repo repository VARIABLE named GH_REPOSITORY
-# (e.g. "LangeVC/lvc-ops", "LangeVC/skillweave", "Fusionaize/faigate", mapped in
-# config.yml). Fallback when the variable is unset: ${{ github.repository }} —
-# correct only when the Forgejo org == GitHub org (e.g. langevc/lvc-ops).
-# Setting GH_REPOSITORY once per repo keeps this file byte-identical everywhere.
-#
-# SW152-024: the mirror job opens with a preflight guard that resolves this
-# destination and PROVES it reachable (git ls-remote) before any push. An
-# unset variable or a variable naming a repository that does not exist on
-# github.com fails at that named step with a message pointing at the
-# GH_REPOSITORY variable — never as a git exit 128 from deep inside a push.
+# The GitHub destination comes from TWO Actions variables, read through the
+# `vars` context: GH_REPO_OWNER at org scope and GH_REPO at repo scope. The
+# preflight guard enforces the mapping contract in cost order — double match
+# (string), existence (reachability), then permission (ownership) — and only then
+# exports the vetted destination for the push and dispatch steps. An unset
+# variable, a pair that drifted apart, a nonexistent destination, or a
+# destination the token may not push to all fail at that named preflight step —
+# never as a git exit 128 from inside a push.
 
 jobs:
   # --- Gate: runs BEFORE the mirror. The mirror depends on it via needs:. ---
@@ -289,79 +291,82 @@ jobs:
         with:
           fetch-depth: 0
 
-      # --- Preflight guard (SW152-024): REFUSE to run with a destination the
-      # workflow cannot vouch for. An unset GH_REPOSITORY previously fell back
-      # to ${{ github.repository }}, which is the Forgejo repo name — the same
-      # string is only the correct GitHub destination when the Forgejo org and
-      # the GitHub org match. On skillweave they differ (Forgejo skillweave/skillweave,
-      # GitHub LangeVC/skillweave), so the fallback silently resolved to a repo
-      # that does not exist on github.com and every mirror push died with a git
-      # exit 128 deep inside the push. The guard below resolves the destination
-      # and PROVES it reachable (a real `git ls-remote`) before any push. It
-      # fails at this named step, not inside git, and names the variable to set.
-      #
-      # Two failure modes land here, at the same named step:
-      #   1. GH_REPOSITORY unset -> the fallback github.repository is used; if
-      #      that name is not a reachable GitHub destination the step fails and
-      #      points the operator at the GH_REPOSITORY variable (criterion 1).
-      #   2. GH_REPOSITORY set but to a nonexistent/unreadable repository -> the
-      #      reachability check fails it the same way (criterion 2), so a wrong
-      #      destination can never look like a working one until a push.
-      # On success the validated destination is exported as GH_REPOSITORY for the
-      # push/dispatch steps, so they push exactly what this step vouched for.
-      - name: Preflight — validate mirror destination (GH_REPOSITORY) is reachable
+      # --- Preflight guard: enforce the mapping contract before any push.
+      # Reads GH_REPO_OWNER (org scope) and GH_REPO (repo scope) through the
+      # `vars` context — no token, no API. Checks, in cost order:
+      #   1. presence  (either unset -> named error naming the variable + scope)
+      #   2. DOUBLE MATCH  (GH_REPO owner prefix == GH_REPO_OWNER, case-sensitive)
+      #      A pure string comparison, runs BEFORE any call to GitHub.
+      #   3. existence (real git ls-remote reachability)
+      #   4. permission (permissions.push for the mirror token — reachability is
+      #      NOT ownership; a public repo someone else owns passes ls-remote).
+      # Each failure exits 1 at this named step, before any push. On success the
+      # vetted destination is exported as GH_REPO for the push/dispatch steps.
+      - name: Preflight — resolve, double-match, verify, and vouch for the destination
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
-          GH_REPOSITORY_VAR: ${{ vars.GH_REPOSITORY }}
-          GH_REPOSITORY_FALLBACK: ${{ github.repository }}
+          GH_REPO_OWNER: ${{ vars.GH_REPO_OWNER }}
+          GH_REPO: ${{ vars.GH_REPO }}
         run: |
           set -euo pipefail
 
-          # Which source resolved the destination? The variable, when set; the
-          # Forgejo self-name otherwise. This lets the failure message tell the
-          # operator whether to reach for the variable (mode 1) or correct it
-          # (mode 2), instead of blaming a git internal error.
-          if [ -n "${GH_REPOSITORY_VAR:-}" ]; then
-            MIRROR_DEST="${GH_REPOSITORY_VAR}"
-            dest_source="GH_REPOSITORY variable"
-          else
-            MIRROR_DEST="${GH_REPOSITORY_FALLBACK}"
-            dest_source="fallback (github.repository) — GH_REPOSITORY is NOT set"
-          fi
-          echo "Mirror destination: ${MIRROR_DEST}  (source: ${dest_source})"
+          owner="${GH_REPO_OWNER:-}"
+          repo="${GH_REPO:-}"
 
-          # Reachability proof BEFORE any push: the repo must exist and be
-          # readable on github.com. A variable that names a nonexistent repo
-          # fails exactly like an unset one — neither can be vouched for.
-          echo "Checking destination is reachable on github.com..."
-          if ! git ls-remote \
-               "https://x-access-token:${GH_MIRROR_TOKEN}@github.com/${MIRROR_DEST}.git" \
-               HEAD >/dev/null 2>&1; then
-            echo "::error::Cannot vouch for the mirror destination '${MIRROR_DEST}' (source: ${dest_source}): it is not reachable/readable on github.com."
-            if [ -z "${GH_REPOSITORY_VAR:-}" ]; then
-              echo "::error::GH_REPOSITORY is UNSET. The workflow fell back to github.repository, but on skillweave the" \
-                   "Forgejo org does not match the GitHub org, so the fallback name is not a valid GitHub destination."
-              echo "::error::Set the repository variable GH_REPOSITORY to your GitHub destination (owner/repo)," \
-                   "e.g. LangeVC/skillweave. The workflow refuses to push to an unvouched destination."
-            else
-              echo "::error::GH_REPOSITORY is set to '${GH_REPOSITORY_VAR}' but that repository is not reachable/readable" \
-                   "on github.com. Correct GH_REPOSITORY to the real destination (owner/repo), e.g. LangeVC/skillweave."
-            fi
-            echo "::error::Not pushing anywhere. Exit before any git push reaches a remote."
+          # 1. Presence — either missing is a named error, before any network.
+          if [ -z "${owner}" ]; then
+            echo "::error::preflight: GH_REPO_OWNER is UNSET. Set the ORG-level Actions variable GH_REPO_OWNER to the GitHub org/user that owns the mirror (e.g. LangeVC)."
             exit 1
           fi
-          echo "Destination '${MIRROR_DEST}' is reachable. Proceeding to push."
-          echo "GH_REPOSITORY=${MIRROR_DEST}" >> "$GITHUB_ENV"
+          if [ -z "${repo}" ]; then
+            echo "::error::preflight: GH_REPO is UNSET. Set the REPOSITORY-level Actions variable GH_REPO to the full destination (owner/repo, e.g. LangeVC/skillweave)."
+            exit 1
+          fi
+          echo "preflight: GH_REPO_OWNER='${owner}'  GH_REPO='${repo}'"
+
+          # 2. Double match — pure string comparison, BEFORE any GitHub request.
+          #    Catches the most likely drift: a pair whose prefix has strayed.
+          repo_owner="${repo%%/*}"
+          if [ "${repo_owner}" != "${owner}" ]; then
+            echo "::error::preflight: DOUBLE MATCH failed — GH_REPO '${repo}' has owner prefix '${repo_owner}', but GH_REPO_OWNER is '${owner}' (case-sensitive)."
+            echo "::error::Correct one of the two variables so GH_REPO's owner prefix equals GH_REPO_OWNER exactly. Refusing to push; no GitHub request was made."
+            exit 1
+          fi
+          echo "preflight: double match OK — owner prefix '${repo_owner}' == GH_REPO_OWNER '${owner}'"
+
+          # 3. Existence — first network call: prove the destination reachable.
+          echo "preflight: checking '${repo}' is reachable on github.com..."
+          if ! git ls-remote "https://x-access-token:${GH_MIRROR_TOKEN}@github.com/${repo}.git" HEAD >/dev/null 2>&1; then
+            echo "::error::preflight: destination '${repo}' does not exist (or is not reachable) on github.com."
+            echo "::error::Correct the GH_REPO variable to an existing repository. Refusing to push."
+            exit 1
+          fi
+          echo "preflight: '${repo}' is reachable."
+
+          # 4. Permission — reachability is NOT ownership. A public repository
+          #    someone else owns passes ls-remote but must not be pushed to.
+          push_ok="$(curl -sS -H "Authorization: token ${GH_MIRROR_TOKEN}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${repo}" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("permissions",{}).get("push", False))' 2>/dev/null || echo False)"
+          if [ "${push_ok}" != "True" ]; then
+            echo "::error::preflight: destination '${repo}' exists and is reachable, but the mirror token may NOT push to it (permissions.push != true)."
+            echo "::error::Reachability is not ownership. Grant the mirror token push access to '${repo}', or correct GH_REPO. Refusing to push."
+            exit 1
+          fi
+          echo "preflight: '${repo}' is reachable AND the mirror token may push to it."
+
+          # Export the vetted destination so the push steps push exactly what
+          # this step vouched for.
+          echo "GH_REPO=${repo}" >> "$GITHUB_ENV"
+          echo "GH_REPO_OWNER=${owner}" >> "$GITHUB_ENV"
 
       - name: Push triggering ref to GitHub mirror (exact-ref, event path)
         if: github.event_name == 'push'
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
-          GH_REPOSITORY: ${{ env.GH_REPOSITORY }}
+          GH_REPO: ${{ env.GH_REPO }}
           MIRROR_DECISION: ${{ needs.visibility-gate.outputs.decision }}
         run: |
           echo "Gate decision: ${MIRROR_DECISION} (OVERRIDE = recorded release)"
-          remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/${GH_REPOSITORY}.git"
+          remote="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/${GH_REPO}.git"
           git push --force "$remote" "+${GITHUB_REF}:${GITHUB_REF}"
 
       - name: Dispatch — targeted exact-ref (break-glass) or full state sync
@@ -369,18 +374,18 @@ jobs:
         env:
           GH_MIRROR_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
           FORGEJO_TOKEN: ${{ github.token }}
-          GH_REPOSITORY: ${{ env.GH_REPOSITORY }}
+          GH_REPO: ${{ env.GH_REPO }}
           PRUNE: ${{ github.event.inputs.prune }}
           REF: ${{ github.event.inputs.ref }}
           MIRROR_DECISION: ${{ needs.visibility-gate.outputs.decision }}
         run: |
           set -euo pipefail
           # LVC-214b: assemble the GitHub remote INSIDE the shell, where
-          # ${GH_REPOSITORY}/${GH_MIRROR_TOKEN} resolve from the step env. An
+          # ${GH_REPO}/${GH_MIRROR_TOKEN} resolve from the step env. An
           # env:-level TARGET literal is NOT re-interpolated, so it baked the
-          # literal "${GH_REPOSITORY}" into the URL and every clone/push hit
-          # github.com/${GH_REPOSITORY}.git -> Not Found.
-          TARGET="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/${GH_REPOSITORY}.git"
+          # literal "${GH_REPO}" into the URL and every clone/push hit
+          # github.com/${GH_REPO}.git -> Not Found.
+          TARGET="https://x-access-token:${GH_MIRROR_TOKEN}@github.com/${GH_REPO}.git"
           # A `ref` narrows a dispatch to one break-glass re-push of exactly that
           # ref (recorded gate decision above). It never prunes: pruning is only
           # ever the full-state path further down, which is health-gated by the
