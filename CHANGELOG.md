@@ -1,4 +1,54 @@
 # SkillWeave Changelog
+## v1.5.3 (2026-09-08) — Releases that reach both forges, and a history that is whole
+
+Every release from 1.3.12 to 1.5.2 was tagged on both forges while only Forgejo
+carried a release object, so the public "latest release" stood at 1.3.11 for nine
+days, and the notes that did exist were raw commit dumps. This release replaces
+the machinery that produced that and repairs the history it damaged. No runtime
+or skill code changes.
+
+### Highlights
+- A release is published to every declared forge, or the run goes red. There is no
+  longer a path where one forge succeeds quietly and the other is skipped.
+- The release body is the changelog entry for the tag. A version with no entry is
+  refused, instead of falling back to commit subjects.
+- The changelog carries all 41 released versions again, each with a date.
+
+### Added
+- `.ops.yaml` declares the release destinations and this repository's tracker
+  prefixes. No forge repository, API host or CI variable survives as a literal in
+  the workflow layer.
+- Three gates that run before any release object exists on either forge: the
+  release title, the presence of a changelog entry, and whether that entry still
+  addresses an internal tracker rather than a reader.
+- The canonical tag is pushed onto the mirror before publication, and both tags
+  are peeled and compared after it, so the release API cannot invent a tag at the
+  mirror's default-branch head.
+
+### Changed
+- Publication is handed to the ops-engine release handler, pinned to 3.4.2 and
+  version-gated after install. The workflow no longer reimplements it.
+- The mirror destination is read from repository variables with a double match and
+  an existence and permission preflight, instead of being assumed reachable.
+
+### Fixed
+- Release notes are no longer a commit-log dump assembled with `printf`, which
+  left every line separator as a literal backslash-n: the 1.5.2 body was 4356
+  characters rendering as four lines.
+- The release history deleted at the 1.4.0 bump is restored — 597 lines, covering
+  everything at or below 1.3.13.
+- Six tagged versions that never carried a changelog entry have one.
+- `pytest-asyncio` is declared. Without it a clean environment runs the async
+  suites as unknown marks and 32 tests fail without the code being at fault.
+
+### Upgrade
+`pip install --upgrade skillweave`. `src/` and `skills/` are identical to 1.5.2,
+so nothing you call changes. Installing from source also needs the sibling SDK
+checkout installed first; the dependency on it has never resolved from an index.
+
+**Full changelog:** [CHANGELOG.md](https://github.com/LangeVC/skillweave/blob/v1.5.3/CHANGELOG.md) · **Diff:** [v1.5.2...v1.5.3](https://github.com/LangeVC/skillweave/compare/v1.5.2...v1.5.3)
+
+
 ## v1.5.2 (2026-09-02)
 
 ### Substrate
