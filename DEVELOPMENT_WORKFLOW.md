@@ -113,7 +113,7 @@ python3 -m pytest tests/ -v
 # and all 13 skills/*/capability.yaml).
 # This MUST happen before the tag is created, or the tag gate rejects the push.
 curl -fsSL \
-  "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.0.0/scripts/version-sync.py" \
+  "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.4.2/scripts/version-sync.py" \
   -o /tmp/version-sync.py
 python3 /tmp/version-sync.py bump X.Y.Z --repo .
 # The bump self-verifies: it re-runs `check` and fails if any location drifted.

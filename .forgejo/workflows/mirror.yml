@@ -250,7 +250,7 @@ jobs:
           # gate (d5eb867, 4f0fa50) and whose ReleaseHandler states it neither
           # bumps nor substitutes for the gate.
           curl -fsSL \
-            "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.0.0/scripts/version-sync.py" \
+            "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.4.2/scripts/version-sync.py" \
             -o "$RUNNER_TEMP/version-sync.py"
 
           # Prove what arrived. Without this the step reports success even
