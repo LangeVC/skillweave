@@ -17,3 +17,17 @@ destinations:
     repo: LangeVC/skillweave
     role: release
     visibility: public
+
+# This repository's tracker prefixes. The release workflow reads them from here and
+# hands them to the audience gate, so no workflow carries a vocabulary as a literal.
+# The gate classifies nothing by shape: the code-and-number form is shared by internal
+# ticket ids and by identifiers a reader legitimately needs (CVE, RFC, ISO, PEP-8,
+# UTF-8, SHA-256, TLS-1.3), so a ticket-shaped token is refused only when its prefix
+# appears below. A repository that declares none gets no tracker check, which is the
+# correct default rather than a hole.
+#
+# The list was measured, not guessed: these are the prefixes that actually occur in
+# this repository's commit subjects and changelog. Run against the restored changelog
+# it accepts 29 of 35 version sections and refuses six historical ones by name.
+# Must stay on ONE line — the extractor reads a single `tracker_prefixes:` line.
+tracker_prefixes: [ADR, ART, AUTH, BRIEF, CAT, CHAIN, CI, CLAIM, CN, DEPR, DEPS, DR, ENV, EPIC, FAI, FFR, GATE, GLE, GNF, IDEMP, LC, LIVE, LOCK, LVC, MODEL, OPT, ROUTE, RT, RTF, SCOPE, SKILL, STATE, SUITE, SVC, SW, UOW, VOCAB, XPA]
