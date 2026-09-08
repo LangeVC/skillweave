@@ -1,5 +1,26 @@
 name: Create Forgejo Release
 
+# Forgejo is canonical; GitHub is the public mirror. This workflow no longer
+# writes a release object itself — it gates the release, then hands publication
+# to the ops-engine ReleaseHandler, which publishes to every destination in
+# .ops.yaml and reports a partial publication instead of swallowing it.
+#
+# What this replaces, and why. The previous job built the release body from
+# `git log --oneline` and assembled it with `printf "...%s" "$CHANGES"` after
+# accumulating `"- ${line}\n"` in a shell variable. `printf %s` does not
+# interpret escapes inside its argument, so every separator stayed a literal
+# backslash-n: the v1.5.2 body was 4356 characters rendering as four lines of
+# run-together commit subjects. It also posted to one forge only, which is how
+# five tags (v1.3.12 through v1.5.2) reached GitHub with no release object at
+# all while the public "latest release" stood at v1.3.11.
+#
+# The four defects and where each is now answered:
+#   commit dump      -> the body is the CHANGELOG section for the tag
+#   literal \n       -> the notes never pass through printf; they cross steps
+#                       as a heredoc-delimited GITHUB_OUTPUT value
+#   bare-tag title   -> the title gate, before any release object exists
+#   one forge only   -> destinations come from .ops.yaml, both are published
+
 on:
   push:
     tags:
@@ -19,48 +40,324 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create Release
+      # The release title is a gate, not an agreement. It must be exactly
+      # "SkillWeave vX.Y.Z"; a tag whose rendered title does not conform is
+      # refused here, before any release object exists on either forge. Forge
+      # default behaviour names a release after the bare tag — that is not the
+      # convention, and v1.5.2's title had to be corrected by hand because of it.
+      - name: Gate the release title
+        id: title
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: "${{ github.event.inputs.tag_name || github.ref_name }}"
         run: |
           set -euo pipefail
-          
-          TAG_NAME="${{ github.event.inputs.tag_name || github.ref_name }}"
-          
-          # Generate release notes
-          LAST_TAG=$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || echo "")
-          CHANGES=""
-          if [ -n "$LAST_TAG" ]; then
-              COMMITS=$(git log "${LAST_TAG}..${TAG_NAME}" --oneline --no-merges 2>/dev/null || true)
-          else
-              COMMITS=$(git log "${TAG_NAME}" --oneline --no-merges --max-count=10 2>/dev/null || true)
-          fi
-          
-          while IFS= read -r line; do
-              [ -n "$line" ] && CHANGES="${CHANGES}- ${line}\n"
-          done <<< "$COMMITS"
-          
-          # Format notes safely
-          NOTES=$(printf "## %s\n\n### What's Changed\n%s" "$TAG_NAME" "$CHANGES")
-          
-          PAYLOAD=$(jq -n \
-            --arg tag_name "$TAG_NAME" \
-            --arg name "$TAG_NAME" \
-            --arg body "$NOTES" \
-            '{tag_name: $tag_name, name: $name, body: $body, draft: false, prerelease: false}')
-            
-          echo "Creating Forgejo release for $TAG_NAME..."
-          
-          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" \
-            -X POST "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases" \
-            -H "Authorization: token ${GITHUB_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD")
-            
-          if [ "$HTTP_STATUS" != "201" ]; then
-            echo "Failed to create release. HTTP $HTTP_STATUS"
-            cat response.json
-            exit 1
-          fi
-          
-          echo "Release created successfully."
+          RELEASE_NAME="SkillWeave ${TAG_NAME}"
+          python3 - "${RELEASE_NAME}" <<'TITLE_GATE_PY'
+          import re
+          import sys
+
+          NAME_RE = re.compile(r"^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$")
+          name = sys.argv[1]
+          if not NAME_RE.match(name):
+              sys.stderr.write(
+                  "ReleaseTitleError: release name %r does not match the required "
+                  "convention ^SkillWeave v[0-9]+\\.[0-9]+\\.[0-9]+$. Refusing "
+                  "before any release object exists on either forge.\n" % name
+              )
+              sys.exit(2)
+          sys.stdout.write("title gate: %r conforms\n" % name)
+          TITLE_GATE_PY
+          echo "release_name=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
+
+      # The release body is the CHANGELOG entry for this version, never commit
+      # subjects. A tag whose version has no section fails here, before any
+      # release object exists — which is the correct outcome: a release with no
+      # authored notes is a release nobody can read.
+      #
+      # The extractor is a byte-for-byte copy of the one in ops-engine v3.4.0's
+      # own release workflow, and it is stdlib-only on purpose: importing
+      # ops_engine at this point would pull yaml and pydantic, which the bare
+      # runner image does not carry. The heading pattern accepts every form
+      # CHANGELOG.md uses: `## v1.5.2 (2026-09-02)`, `## v1.3.13 (2026-08-31) —
+      # Dynamic Routing and Anti-Masking`, and the bracketed `## [2.1.2] — ...`.
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        env:
+          TAG_NAME: "${{ github.event.inputs.tag_name || github.ref_name }}"
+        run: |
+          set -euo pipefail
+
+          NOTES="$(python3 - "$TAG_NAME" <<'PY'
+          import re
+          import sys
+
+          HEADER_PATTERN = re.compile(
+              r"^##\s+"
+              r"(?:\[)?(?:[\w-]+\s+)?v?"
+              r"(\d+\.\d+\.\d+(?:[-.\w]*)?)"
+              r"(?:\])?"
+              r".*$",
+              re.MULTILINE,
+          )
+
+          tag = sys.argv[1]
+          version = tag.lstrip("v")
+          with open("CHANGELOG.md", encoding="utf-8") as fh:
+              content = fh.read()
+          matches = list(HEADER_PATTERN.finditer(content))
+          target_match = None
+          target_idx = -1
+          for idx, m in enumerate(matches):
+              if m.group(1) == version:
+                  target_match = m
+                  target_idx = idx
+                  break
+          if target_match is None:
+              notes = ""
+          else:
+              start = target_match.end()
+              if target_idx + 1 < len(matches):
+                  end = matches[target_idx + 1].start()
+              else:
+                  end = len(content)
+              notes = content[start:end].strip()
+          if not notes:
+              sys.stderr.write(
+                  "MissingChangelogEntryError: no '## %s' section in CHANGELOG.md; "
+                  "a release with no notes would post commit subjects, so the "
+                  "release is refused.\n" % version
+              )
+              sys.exit(2)
+          sys.stdout.write(notes)
+          PY
+          )"
+
+          {
+            echo "notes<<EOF"
+            echo "${NOTES}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # Generic tooling lives in the open base. ops-engine is OSS and publicly
+      # mirrored, so this needs no credential — the same fetch the version gate
+      # in mirror.yml already uses.
+      #
+      # Pinned to a COMMIT, not to the v3.4.0 tag. The tag is not a fixed point
+      # on this mirror: `LangeVC/ops-engine` carries `v3.4.0` on a96cab7, twenty
+      # commits behind the canonical tag on `git.langevc.com`, and that commit's
+      # pyproject.toml still declares 3.3.0. Installing from the tag therefore
+      # yields 3.3.0. The mirror's `main` does carry the canonical release
+      # commit, so 0df3286 — the commit the canonical v3.4.0 tag
+      # points at — is reachable and immutable. A gate that decides releases
+      # must not follow a ref that has already drifted once.
+      - name: Fetch the audience gate (canonical, ops-engine)
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://raw.githubusercontent.com/LangeVC/ops-engine/0df3286a2cea64bd0757a2f9f5387fa77ab6dac3/scripts/release_notes_audience_gate.py" \
+            -o "$RUNNER_TEMP/release_notes_audience_gate.py"
+
+          # Prove what arrived. Without this the step reports success even when
+          # it fetched an HTML page: a redirect to a login page returns 200 and
+          # curl -f never triggers, so the failure surfaces later as a
+          # SyntaxError on "<!DOCTYPE html>".
+          python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" \
+            "$RUNNER_TEMP/release_notes_audience_gate.py" \
+            || { echo "fetched file is not Python — first three lines:"; \
+                 head -3 "$RUNNER_TEMP/release_notes_audience_gate.py"; exit 1; }
+
+      # The release body is addressed at an external reader. A section that
+      # still names an internal ticket addresses the tracker that produced the
+      # release, not the consumer the body is for.
+      #
+      # The engine classifies nothing by shape: the code-and-number form is
+      # shared by internal ticket ids and by identifiers a reader legitimately
+      # needs (CVE, RFC, ISO, PEP-8, UTF-8, SHA-256, TLS-1.3). It refuses a
+      # ticket-shaped token only when its prefix appears in the vocabulary THIS
+      # repository declares. That vocabulary is a committed file rather than a
+      # shell literal because it was derived by measurement — the prefixes that
+      # actually occur in this repository's commit subjects and changelog — and
+      # a reviewer must be able to see and change the list.
+      - name: Gate the release notes for an external audience
+        env:
+          NOTES: "${{ steps.notes.outputs.notes }}"
+        run: |
+          set -euo pipefail
+          NOTES_FILE="$(mktemp)"
+          trap 'rm -f "$NOTES_FILE"' EXIT
+          printf '%s\n' "$NOTES" > "$NOTES_FILE"
+          python3 "$RUNNER_TEMP/release_notes_audience_gate.py" \
+            --ticket-prefixes .forgejo/release-ticket-prefixes.txt \
+            "$NOTES_FILE"
+
+      # The workflow calls the engine to publish; it does not reimplement
+      # publication. ReleaseHandler.publish_release creates the release on EVERY
+      # destination resolved from the committed .ops.yaml and reports a partial
+      # publication rather than swallowing it — which is precisely the failure
+      # that left five tags on GitHub with no release object.
+      #
+      # Two forges carry two credentials, so the adapter factory is given one
+      # credential per forge value. A destination whose forge has no credential
+      # is a named refusal, never a silent unauthenticated publication. The
+      # webhook secret is empty on both: publication never parses a webhook, and
+      # neither forge's ingress contract is exercised here.
+      #
+      # No assets are attached. This repository publishes no built distribution
+      # — there is no PyPI claim, and distribution to the Capacium Exchange runs
+      # from the mirror side. The directory is created and left empty so the
+      # engine attaches nothing, rather than failing on a missing path.
+      - name: Publish the release to every destination
+        env:
+          TAG_NAME: "${{ github.event.inputs.tag_name || github.ref_name }}"
+          NOTES: "${{ steps.notes.outputs.notes }}"
+          NAME_TEMPLATE: "SkillWeave {tag_name}"
+          FORGEJO_REPOSITORY: "${{ github.repository }}"
+          FORGEJO_BASE_URL: "${{ github.server_url }}"
+          FORGEJO_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GH_MIRROR_TOKEN: "${{ secrets.GH_MIRROR_TOKEN }}"
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-assets
+
+          # The engine installs into an isolated venv outside the source tree:
+          # the runner's system interpreter is PEP 668 externally managed, and an
+          # in-tree venv would become part of anything this repository packages.
+          ENGINE_VENV="$(mktemp -d)/engine-venv"
+          python3 -m venv "$ENGINE_VENV"
+          # Pinned to the commit the canonical v3.4.0 tag points at, not to
+          # the tag: the mirror's `v3.4.0` resolves to 3.3.0, whose adapter
+          # factory has no per-destination Credential and would fail this step
+          # with an ImportError.
+          "$ENGINE_VENV/bin/python" -m pip install --quiet \
+            "git+https://github.com/LangeVC/ops-engine@0df3286a2cea64bd0757a2f9f5387fa77ab6dac3"
+
+          # Prove what was installed. A silently older engine is the failure
+          # mode this whole step exists to remove.
+          "$ENGINE_VENV/bin/python" - <<'VERSION_GATE_PY'
+          import importlib.metadata as md
+          import sys
+
+          REQUIRED = "3.4.0"
+          got = md.version("ops-engine")
+          if got != REQUIRED:
+              sys.stderr.write(
+                  "EngineVersionError: installed ops-engine %s, required %s. "
+                  "Refusing to publish with an engine other than the pinned one.\n"
+                  % (got, REQUIRED)
+              )
+              sys.exit(2)
+          from ops_engine.adapters.factory import Credential  # noqa: F401
+          sys.stdout.write("engine: ops-engine %s, per-destination Credential present\n" % got)
+          VERSION_GATE_PY
+
+          "$ENGINE_VENV/bin/python" - <<'PUBLISH_PY'
+          import asyncio
+          import os
+          import sys
+
+          from ops_engine.adapters.factory import Credential, adapters_for
+          from ops_engine.config_loader import (
+              OpsEngineConfig,
+              OpsYamlError,
+              load_ops_yaml,
+          )
+          from ops_engine.modules.release import ReleaseHandler
+
+          # Destinations come from the committed .ops.yaml at the repository
+          # root. A missing or empty file is a named refusal, never a silently
+          # narrowed release: "no destinations" resolving to a Forgejo-only
+          # publication that reports success is exactly what must not ship.
+          try:
+              layer3 = load_ops_yaml(".")
+          except OpsYamlError as exc:
+              print(f"::error::OpsYamlError: {exc}", file=sys.stderr)
+              sys.exit(2)
+
+          if layer3 is None:
+              print(
+                  "::error::MissingOpsYamlError: no .ops.yaml at the repository "
+                  "root; the release destination is a committed file, not a CI "
+                  "variable. Refusing to publish with no declared destinations.",
+                  file=sys.stderr,
+              )
+              sys.exit(2)
+
+          destinations = layer3.destinations
+          if not destinations:
+              print(
+                  "::error::MissingReleaseDestinationsError: .ops.yaml declares "
+                  "no destinations; refusing to publish to zero forges rather "
+                  "than silently narrowing the release.",
+                  file=sys.stderr,
+              )
+              sys.exit(2)
+
+          repo = os.environ["FORGEJO_REPOSITORY"]
+          tag_name = os.environ["TAG_NAME"]
+          release_notes = os.environ["NOTES"]
+          name_template = os.environ["NAME_TEMPLATE"]
+          forgejo_base_url = os.environ["FORGEJO_BASE_URL"]
+
+          # Materialise the Layer-3 destinations into a typed Layer-2 config so
+          # that publish_release's internal resolve_destinations re-resolves the
+          # same list.
+          org, _, repo_name = repo.partition("/")
+          config = OpsEngineConfig.load(
+              {
+                  "orgs": {
+                      org: {
+                          "repositories": {
+                              repo_name: {
+                                  "destinations": [
+                                      {
+                                          "forge": d.forge,
+                                          "repo": d.repo,
+                                          "role": d.role,
+                                          "visibility": d.visibility,
+                                      }
+                                      for d in destinations
+                                  ]
+                              }
+                          }
+                      }
+                  }
+              }
+          )
+
+          async def main():
+              credentials = {
+                  "forgejo": Credential(token=os.environ["FORGEJO_TOKEN"]),
+                  "github": Credential(token=os.environ["GH_MIRROR_TOKEN"]),
+              }
+              adapters = adapters_for(
+                  destinations,
+                  credentials=credentials,
+                  base_url=forgejo_base_url,
+              )
+
+              report = await ReleaseHandler.publish_release(
+                  config,
+                  repo,
+                  tag_name,
+                  release_notes,
+                  "release-assets",
+                  name_template=name_template,
+                  adapters=adapters,
+              )
+
+              published = ", ".join(report.published) or "(none)"
+              failed = ", ".join(report.failed) or "(none)"
+              print(f"published destinations: {published}")
+              print(f"failed destinations:    {failed}")
+              if report.failed:
+                  # A partial publication is a reported failure, never a silent
+                  # success: the run goes red so the operator sees the drift.
+                  print(
+                      "::error::PartialPublicationError: the release was not "
+                      "published to every destination; failed: " + failed
+                  )
+                  sys.exit(1)
+
+          asyncio.run(main())
+          PUBLISH_PY

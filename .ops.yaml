@@ -1,0 +1,19 @@
+# Layer-3 repository override: the release destinations for this repository.
+#
+# The release workflow reads this file through ops_engine.config_loader.load_ops_yaml
+# and resolves EVERY destination from it. Nothing here is restated as a literal in
+# .forgejo/ — no forge repository, no API host, no CI variable. A release that
+# reaches one forge and not the other is the failure this file exists to prevent:
+# v1.3.12 through v1.5.2 were tagged on both forges while only Forgejo carried a
+# release object, so the public "latest release" stood at v1.3.11 for nine days.
+#
+# The forge is a value, not a key name. Order is publication order.
+destinations:
+  - forge: forgejo
+    repo: skillweave/skillweave
+    role: release
+    visibility: public
+  - forge: github
+    repo: LangeVC/skillweave
+    role: release
+    visibility: public
