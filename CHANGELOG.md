@@ -197,6 +197,41 @@ All fourteen manifests (root plus thirteen skills) move to 1.3.7 in step. The
 prose changelog remains a hand-written history and is not an auto-bumped
 location.
 
+### The core imports without `runtime`
+
+Recorded 2026-08-13, before this release was cut. It is the consumer-facing
+detail behind the lazy-surface restoration named above.
+
+
+`import skillweave` used to fail with `ModuleNotFoundError` as soon as `runtime/`
+was physically absent: `__init__.py` imported `.execution` and `.observation`
+eagerly, and those pulled in `runtime` through `state_machine.py`,
+`gate_policy.py` and `event_logger.py`. A consumer embedding the engine could
+therefore embed nothing less than all of it.
+
+Resolved through PEP 562: fourteen runtime-reachable names resolve on first
+access. `OPTIONAL_SUBPACKAGES = ("runtime",)` is declared explicitly rather than
+left implicit.
+
+**A behaviour change that can affect consumers.** The public API is unchanged
+character for character — `__all__` still carries the same 50 names, and
+`from skillweave import *` yields the same set. What goes away is the eager
+binding of the submodule names:
+
+```python
+hasattr(skillweave, "execution")              # True  -> False
+hasattr(skillweave, "observation")            # True  -> False
+hasattr(skillweave, "execution_integration")  # True  -> False
+dir(skillweave)                               # 16 entries fewer
+
+import skillweave.execution                   # unchanged
+from skillweave.execution.batch_planner import BatchPlanner   # unchanged
+```
+
+That lies outside the `__all__` contract and is nowhere attribute-chained inside
+this repository. Anyone using `hasattr` for feature detection should switch to
+`importlib.util.find_spec("skillweave.execution")`.
+
 ## v1.3.6 (2026-08-18) — The seam closes, and the council learns who answered
 
 1.3.5 shipped every part of a dispatch except the seam that joins them: a
@@ -330,39 +365,6 @@ The thirteen member versions in `capability.yaml` stay at 1.3.0. No skill
 changed in this release; only the runtime and the new routing layer did, and the
 bundle version moves because its composition did.
 
-## Unveroeffentlicht
-
-### Der Kern laesst sich ohne `runtime` importieren
-
-`import skillweave` scheiterte bisher mit `ModuleNotFoundError`, sobald
-`runtime/` physisch fehlte — `__init__.py` importierte `.execution` und
-`.observation` eager und zog `runtime` ueber `state_machine.py`,
-`gate_policy.py` und `event_logger.py` nach. Ein Consumer, der die Engine
-einbettet, konnte damit nicht weniger als alles einbetten.
-
-Aufgeloest ueber PEP 562: 14 runtime-erreichbare Namen werden erst beim
-ersten Zugriff aufgeloest. `OPTIONAL_SUBPACKAGES = ("runtime",)` ist
-ausdruecklich deklariert statt implizit.
-
-**Verhaltensaenderung, die Konsumenten betreffen kann.** Die oeffentliche
-API ist zeichengleich — `__all__` unveraendert bei 50 Namen, `from
-skillweave import *` liefert dasselbe. Aber die Eager-Bindungen der
-Submodulnamen entfallen:
-
-```python
-hasattr(skillweave, "execution")              # True  -> False
-hasattr(skillweave, "observation")            # True  -> False
-hasattr(skillweave, "execution_integration")  # True  -> False
-dir(skillweave)                               # 16 Eintraege weniger
-
-import skillweave.execution                   # unveraendert
-from skillweave.execution.batch_planner import BatchPlanner   # unveraendert
-```
-
-Das liegt ausserhalb des `__all__`-Vertrags und wird im Repo nirgends
-attributverkettet genutzt. Wer `hasattr` zur Feature-Erkennung einsetzt,
-muss auf `importlib.util.find_spec("skillweave.execution")` wechseln.
-
 ## v1.3.0 (2026-08-12) — Runtime Foundation
 
 Der dokumentierte Lifecycle war bis hierher nicht durchsetzbar: `executor.py`
@@ -471,6 +473,67 @@ subject of the next PRD, not of this consolidation.
 - **DOCS**: Complete reference docs for plan commands, testing flow, navigator detection, meta-commands, wizard flow
 - **LICENSE**: Copyright updated to LangeVC.com, Apache 2.0 confirmed
 
+## v0.8.5 (2026-05-08) — Search providers consolidated
+
+Reconstructed from the immutable `v0.8.5` tag.
+
+### Added
+- SerpApi search provider (`SERPAPI_API_KEY`).
+- Perplexity MCP support, falling back to the API key when no cookie jar is present.
+
+### Changed
+- The `FAIGNITE_*` environment variables are named `FAIGATE_*`, completing the provider rename.
+
+### Removed
+- The Google CSE provider. Google deprecated the API it used.
+
+### Fixed
+- Manifest normalisation uses the `pyproject.toml` version for skill manifests instead of preserving a stale one.
+
+
+## v0.8.3 (2026-05-04) — More providers, fewer round trips
+
+Reconstructed from the immutable `v0.8.3` tag.
+
+### Added
+- OmniRoute and 9router as council providers, kept separate from Faigate rather than folded into it.
+- Perplexity as a search provider.
+
+### Fixed
+- Faigate availability is checked with one `GET /models` instead of one call per model.
+- Faigate reads its token from the local token file, and its base URL points at the local gateway.
+- The DuckDuckGo parser matches the result link directly, so search works without an external package.
+
+
+## v0.8.2 (2026-04-30) — Capacium validation compatibility
+
+Reconstructed from the immutable `v0.8.2` tag. Rolls up 0.8.1.
+
+### Added
+- Capacium validate auto-patch and manifest sync (0.8.1).
+
+### Removed
+- The `opencode-command` framework, from the default framework set, the bundle and every sub-skill. It failed Capacium validation.
+
+
+## v0.8.0 (2026-04-30) — Council, multi-provider routing, and the Capacium bundle
+
+Reconstructed from the immutable `v0.8.0` tag.
+
+### Added
+- `skillweave-council` — the LLM council skill, with web search and lifecycle integration.
+- A root `capability.yaml` of kind `bundle`, which is what the Capacium Exchange indexes.
+- A Capacium publish step on the release workflow, submitting to the Exchange on release.
+- Multi-provider council routing: Faigate, OpenRouter, Kilo, Claw and LlmAI are detected, with a single-model fallback.
+
+### Changed
+- `FaigniteProvider` is `FaigateProvider`. The old name was a branding error.
+
+### Fixed
+- Capacium sync respects a skill's own version instead of forcing the `pyproject.toml` version onto it.
+- The bundle manifest and the installer's skill list both carry `skillweave-council`.
+
+
 ## v0.7.0 (2026-04-27)
 - **FEATURE**: 6 new agent-facing skills after promptchain pattern (SKILL.md + capability.yaml + sequence_type)
   - `skillweave-lifecycle` (plan): Bundle-Navigator, Phasen-Status, Entry-Point-Detection
@@ -526,6 +589,19 @@ subject of the next PRD, not of this consolidation.
 - **FEATURE**: Capacium badge and install section in README
 - **FEATURE**: Content boundary enforcement for release artifacts (AGENTS.md + prerelease.yml)
 - **IMPROVEMENT**: Version bump to 0.5.6 with updated documentation
+
+## v0.5.5 (2026-04-26) — Scoring and validation fixes
+
+Reconstructed from the immutable `v0.5.5` tag.
+
+### Fixed
+- Confidence scoring, parameter validation, and the test expectations that had drifted from both.
+
+
+## v0.5.1 (2026-04-23) — Cleanup release
+
+Reconstructed from the immutable `v0.5.1` tag. It finalises the 0.5.0 changes and adds no capability of its own.
+
 
 ## v0.5.0 (2026-04-21)
 - **RELEASE**: SkillWeave Next Level Features v0.5.0
