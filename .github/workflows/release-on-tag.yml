@@ -74,7 +74,9 @@ jobs:
           #   ::error::No publish token available. Set api_token or use_oidc:
           #   true with id-token: write permission.
           # That is what every tag since v1.3.12 has done. This repository holds
-          # no Capacium secret, so Trusted Publishing is the route: it needs an
-          # Exchange-side trust policy for this repository and workflow rather
-          # than a credential in the repository.
+          # no Capacium secret, so Trusted Publishing is the route. The Exchange
+          # derives the publisher owner from the OIDC claims at exchange time and
+          # issues a publish token scoped to exactly that owner/repository: there
+          # is no repository-specific trust policy to pre-register and none is
+          # required.
           use_oidc: true
