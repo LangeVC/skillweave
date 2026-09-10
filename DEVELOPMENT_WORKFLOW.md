@@ -144,7 +144,7 @@ version because nothing ever called the bump. The required order is therefore:
 2. Commit the written versions.
 3. `git tag vX.Y.Z` and push — only now can the gate pass.
 
-The bump tool is fetched from the pinned ops-engine tag `v3.0.0` (not the moving
+The bump tool is fetched from the pinned ops-engine tag `v3.4.2` (not the moving
 `master` branch), and the workflow re-proves the fetched file is Python and
 carries the `bump` subcommand before use. Do not hand-edit version strings: the
 `.version.yaml` `locations` list is the single inventory, and the bump writes it
