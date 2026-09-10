@@ -243,12 +243,13 @@ jobs:
           # OSS and publicly mirrored, so this needs no credential and works
           # identically from every org — the private lvc-ops URL did not.
           #
-          # The fetch is PINNED to the v3.0.0 tag, not master. A gate that
-          # does not bump must not follow a moving branch: master could carry
-          # a version-sync.py change that changes what "in sync" means between
-          # two releases of this repo. v3.0.0 is the release that wired the
-          # gate (d5eb867, 4f0fa50) and whose ReleaseHandler states it neither
-          # bumps nor substitutes for the gate.
+          # The fetch is PINNED to a tag, not master. A gate that does not bump
+          # must not follow a moving branch: master could carry a version-sync.py
+          # change that changes what "in sync" means between two releases of this
+          # repo. The pin is v3.4.2, the same release the release workflow installs
+          # as its engine, so this repository names one ops-engine version and not
+          # two. version-sync.py is byte-identical across v3.0.0, v3.4.0 and
+          # v3.4.2, so the gate decides exactly what it decided before.
           curl -fsSL \
             "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.4.2/scripts/version-sync.py" \
             -o "$RUNNER_TEMP/version-sync.py"

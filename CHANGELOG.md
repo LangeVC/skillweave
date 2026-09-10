@@ -1,4 +1,35 @@
 # SkillWeave Changelog
+## v1.5.4 (2026-09-10) — A Capacium publication that actually authenticates
+
+The path that publishes a tagged release to the Capacium Exchange was wired for
+Trusted Publishing but never asked for a token, so every tag since v1.3.12
+reached the CLI with an empty credential and refused. This release turns that
+path on. No runtime or skill code changes.
+
+### Fixed
+- The Capacium publication step now requests a short-lived publish token through
+  OIDC (`id-token: write` plus `use_oidc: true`) instead of arriving with an
+  empty `CAPACIUM_API_TOKEN`. No long-lived Capacium secret is stored in the
+  repository; the Exchange derives the publisher owner from the OIDC claims and
+  issues a token scoped to exactly that owner and repository.
+
+### Changed
+- The version-sync helper fetched by the release gate is pinned to ops-engine
+  `v3.4.2`, the same release the release workflow installs as its engine, so the
+  repository names one ops-engine version rather than two. The helper is
+  byte-identical across `v3.0.0`, `v3.4.0` and `v3.4.2`, so the gate's verdict is
+  unchanged.
+- The `check-manifest` diagnostic output is English, matching the rest of the
+  repository's tracked files. Only strings moved; its exit-code contract is
+  unchanged.
+
+### Upgrade
+`pip install --upgrade skillweave`. `src/` and `skills/` are identical to 1.5.3,
+so nothing you call changes.
+
+**Full changelog:** [CHANGELOG.md](https://github.com/LangeVC/skillweave/blob/v1.5.4/CHANGELOG.md) · **Diff:** [v1.5.3...v1.5.4](https://github.com/LangeVC/skillweave/compare/v1.5.3...v1.5.4)
+
+
 ## v1.5.3 (2026-09-08) — Releases that reach both forges, and a history that is whole
 
 Every release from 1.3.12 to 1.5.2 was tagged on both forges while only Forgejo
