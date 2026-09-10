@@ -20,6 +20,11 @@ on:
 
 permissions:
   contents: read
+  # Trusted Publishing. The action exchanges this job's OIDC token (audience
+  # `capacium`) at the registry for a short-lived publish token, so no long-lived
+  # secret is stored anywhere. Without `id-token: write` the runner sets neither
+  # ACTIONS_ID_TOKEN_REQUEST_TOKEN nor ...REQUEST_URL and the exchange cannot run.
+  id-token: write
 
 jobs:
   publish-capacium:
@@ -64,3 +69,14 @@ jobs:
         uses: Capacium/capacium-action-publish@v1
         with:
           github_url: ${{ github.event.repository.html_url }}
+          # Without this the action reaches `cap publish` with an empty
+          # CAPACIUM_API_TOKEN and refuses:
+          #   ::error::No publish token available. Set api_token or use_oidc:
+          #   true with id-token: write permission.
+          # That is what every tag since v1.3.12 has done. This repository holds
+          # no Capacium secret, so Trusted Publishing is the route. The Exchange
+          # derives the publisher owner from the OIDC claims at exchange time and
+          # issues a publish token scoped to exactly that owner/repository: there
+          # is no repository-specific trust policy to pre-register and none is
+          # required.
+          use_oidc: true
