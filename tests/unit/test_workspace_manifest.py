@@ -328,6 +328,58 @@ def test_manifest_validation_rejects_missing_lease_until():
         raise AssertionError("lease without lease_until was accepted")
 
 
+def test_manifest_rejects_sha_forms_the_schema_rejects():
+    # Runtime/schema parity: the schema pattern is ^[0-9a-f]{40}$, so the
+    # parser must not accept uppercase hex, underscores, or a 0x prefix that
+    # Python's int(x, 16) would happily take.
+    malformed = {
+        "uppercase": "A" * FULL_SHA_LENGTH,
+        "mixed_case": "aA" + "0" * (FULL_SHA_LENGTH - 2),
+        "underscore": "1_" + "2" * (FULL_SHA_LENGTH - 2),
+        "0x_prefix": "0x" + "1" * (FULL_SHA_LENGTH - 2),
+    }
+    for label, sha in malformed.items():
+        assert len(sha) == FULL_SHA_LENGTH
+        for field in ("base_sha", "head_sha"):
+            data = _valid_manifest_dict()
+            data[field] = sha
+            assert any(
+                "does not match pattern" in e for e in _schema_errors(data)
+            ), f"schema unexpectedly accepted {label} {field}"
+            try:
+                WorkspaceManifest.from_dict(data)
+            except WorkspaceManifestError as exc:
+                assert exc.field == field
+            else:
+                raise AssertionError(
+                    f"parser accepted schema-rejected {label} {field}: {sha!r}"
+                )
+
+
+def test_manifest_rejects_properties_the_schema_rejects():
+    # additionalProperties: false at the top level.
+    data = _valid_manifest_dict()
+    data["extra"] = "nope"
+    assert any("disallowed property 'extra'" in e for e in _schema_errors(data))
+    try:
+        WorkspaceManifest.from_dict(data)
+    except WorkspaceManifestError as exc:
+        assert exc.field == "extra"
+    else:
+        raise AssertionError("parser accepted a disallowed top-level property")
+
+    # additionalProperties: false inside lease.
+    data = _valid_manifest_dict()
+    data["lease"]["holder"] = "ops"
+    assert any("disallowed property 'holder'" in e for e in _schema_errors(data))
+    try:
+        WorkspaceManifest.from_dict(data)
+    except WorkspaceManifestError as exc:
+        assert exc.field == "lease.holder"
+    else:
+        raise AssertionError("parser accepted a disallowed lease property")
+
+
 # --- Schema surface -------------------------------------------------------
 
 def test_schema_requires_exactly_the_contract_fields_and_rejects_extras():

@@ -30,10 +30,11 @@ directly. Nothing here tears down a real worktree or branch.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, List, Mapping, Optional
+from typing import Any, FrozenSet, List, Mapping, Optional
 
 #: The new default worktree directory, under the collection root.
 WORKTREES_DIRNAME = ".worktrees"
@@ -47,8 +48,33 @@ LEGACY_WT_PREFIX = "wt-"
 #: A full SHA is 40 hexadecimal characters.
 FULL_SHA_LENGTH = 40
 
+#: The exact full-SHA shape the JSON schema enforces (``^[0-9a-f]{40}$``).
+FULL_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+
 #: The retention classes a manifest may declare (mirrors the evidence schema).
 RETENTION_VALUES = ("permanent", "temporary", "project_lifetime")
+
+#: The exact set of top-level keys the schema permits (``additionalProperties``
+#: is ``false`` there, so the parser must reject any other key).
+MANIFEST_KEYS: FrozenSet[str] = frozenset(
+    (
+        "repo",
+        "base_sha",
+        "head_sha",
+        "branch",
+        "run",
+        "lane",
+        "session",
+        "write_scope",
+        "lease",
+        "heartbeat",
+        "state",
+        "retention",
+    )
+)
+
+#: The exact set of lease keys the schema permits.
+LEASE_KEYS: FrozenSet[str] = frozenset(("lease_until", "owner"))
 
 
 class WorkspaceState(str, Enum):
@@ -171,14 +197,20 @@ def _require_nonempty_string(value: Any, key: str) -> str:
     return value
 
 
+def _require_known_keys(
+    value: Mapping[str, Any], allowed: FrozenSet[str], *, prefix: str = ""
+) -> None:
+    """Fail-closed parity with the schema's ``additionalProperties: false``."""
+    for key in value:
+        if key not in allowed:
+            field = f"{prefix}{key}"
+            raise WorkspaceManifestError(
+                f"disallowed property '{field}'", field=field
+            )
+
+
 def _is_full_sha(value: Any) -> bool:
-    if not isinstance(value, str) or len(value) != FULL_SHA_LENGTH:
-        return False
-    try:
-        int(value, 16)
-    except ValueError:
-        return False
-    return True
+    return isinstance(value, str) and FULL_SHA_PATTERN.fullmatch(value) is not None
 
 
 def _require_full_sha(value: Any, key: str) -> str:
@@ -218,6 +250,7 @@ def _parse_write_scope(value: Any) -> List[str]:
 def _parse_lease(value: Any) -> "Lease":
     if not isinstance(value, Mapping):
         raise WorkspaceManifestError("'lease' must be an object", field="lease")
+    _require_known_keys(value, LEASE_KEYS, prefix="lease.")
     lease_until = _require_nonempty_string(value.get("lease_until"), "lease.lease_until")
     owner = value.get("owner")
     if owner is not None and not isinstance(owner, str):
@@ -293,6 +326,7 @@ class WorkspaceManifest:
         """
         if not isinstance(data, Mapping):
             raise WorkspaceManifestError("manifest must be a mapping", field=None)
+        _require_known_keys(data, MANIFEST_KEYS)
         return cls(
             repo=_require_nonempty_string(data.get("repo"), "repo"),
             base_sha=_require_full_sha(data.get("base_sha"), "base_sha"),
