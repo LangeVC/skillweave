@@ -43,12 +43,16 @@ The module is deliberately additive: it lives inside the existing
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import re
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from skillweave.routing.workspace import (
@@ -56,6 +60,7 @@ from skillweave.routing.workspace import (
     WORKTREES_DIRNAME,
     WorkspaceManifest,
     WorkspaceManifestError,
+    default_worktree_path,
     discover_legacy_worktree_locations,
 )
 
@@ -813,3 +818,662 @@ def _build_row(
     row.classification = classification
     row.reason = reason
     return row
+
+
+# =========================================================================== #
+# Authorized cleanup with durable receipts (SW-155-HEALTH-002)
+# =========================================================================== #
+# The inventory above says what exists and what state it is in; this block acts
+# on that answer, narrowly. Three disciplines, in order of precedence:
+#
+#   1. **Identity, never path.** A candidate is selected only when an explicit
+#      authorization names its stable ``repo/run/lane`` identity. No glob, no
+#      prefix, no "everything under .worktrees". An identity whose component
+#      would escape or glob is refused structurally, at authorization time.
+#   2. **The receipt is the ledger.** A receipt is written durably (write +
+#      flush + fsync) *before* the next candidate is attempted. Resumability is
+#      therefore not inferred from the filesystem: a completed removal stays
+#      completed even if its directory reappears, because the durable ledger —
+#      not the path's current existence — suppresses the repeat.
+#   3. **Facts gate removal, fail-closed.** Only a definitely-adverse row with
+#      no live owner is removed. A dirty tree, a detached head, an active lease,
+#      live process/session evidence, a healthy row or unknown safety facts are
+#      all refused. The workspace the running process occupies is refused before
+#      any of these, so cleanup never removes the worktree it is standing in.
+#
+# Branch deletion is *not* part of this block. It remains the separate,
+# disabled-by-default ``WorkspaceReleasePolicy.delete_branch`` action: cleanup
+# preserves the branch, so the removed work stays recoverable from it.
+
+#: The canonical cleanup outcomes.
+CLEANUP_OUTCOMES = (
+    "removed",
+    "already_absent",
+    "skipped_completed",
+    "refused",
+)
+
+#: The canonical cleanup reason codes. Every reason this block produces is here;
+#: a reason outside the set is a programming error, not a new state.
+CLEANUP_REASONS = (
+    "removed",
+    "already_absent",
+    "already_completed",
+    "not_a_workspace",
+    "healthy",
+    "dirty",
+    "detached",
+    "managed",
+    "current",
+    "unknown",
+    "removal_unavailable",
+)
+
+#: The classifications that are themselves a definite adverse finding, and so
+#: are removable once the per-dimension safety facts below also clear.
+CLEANUP_ALLOWED_CLASSIFICATIONS = frozenset(
+    (Classification.STALE, Classification.ORPHANED)
+)
+
+#: Version tag for the durable receipt line shape.
+CLEANUP_RECEIPT_VERSION = 1
+
+#: A single identity component must be one plain path component: non-empty, no
+#: separator, no ``.``/``..`` and no glob metacharacter. This is what makes
+#: "authorized by identity" structurally unlike "authorized by glob".
+_IDENTITY_COMPONENT = re.compile(r"^(?!\.{1,2}$)[^/\\*?\[\]{}]+$")
+
+
+class CleanupOutcome(str, Enum):
+    """The finite outcome of one authorized cleanup attempt."""
+
+    REMOVED = "removed"
+    ALREADY_ABSENT = "already_absent"
+    SKIPPED_COMPLETED = "skipped_completed"
+    REFUSED = "refused"
+
+
+class Recoverability(str, Enum):
+    """Whether the removed workspace's work survives the removal."""
+
+    #: The branch was preserved; its commits remain reachable from it.
+    BRANCH_PRESERVED = "branch_preserved"
+    #: Nothing was removed, so nothing needed recovering.
+    NOT_APPLICABLE = "not_applicable"
+
+
+def _require_identity_component(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not _IDENTITY_COMPONENT.match(value):
+        raise WorkspaceManifestError(
+            f"cleanup identity component {field_name!r} must be a single "
+            f"non-glob path component, got {value!r}",
+            field=field_name,
+        )
+    return value
+
+
+@dataclass(frozen=True)
+class WorkspaceIdentity:
+    """The stable ``repo/run/lane`` identity of one managed workspace.
+
+    Identity — not a path or a glob — is what authorizes removal. ``path_under``
+    composes the identity's one deterministic path from a collection root.
+    """
+
+    repo: str
+    run: str
+    lane: str
+
+    def __post_init__(self) -> None:
+        _require_identity_component(self.repo, "repo")
+        _require_identity_component(self.run, "run")
+        _require_identity_component(self.lane, "lane")
+
+    @property
+    def key(self) -> str:
+        return f"{self.repo}/{self.run}/{self.lane}"
+
+    def path_under(self, collection: str) -> str:
+        """The one deterministic path this identity names under ``collection``."""
+        return str(
+            default_worktree_path(
+                collection, repo=self.repo, run=self.run, lane=self.lane
+            )
+        )
+
+
+def _identity_from_key(key: Any) -> Optional[WorkspaceIdentity]:
+    """Rebuild an identity from its durable ``repo/run/lane`` key, or ``None``.
+
+    Components cannot contain ``/`` (see :data:`_IDENTITY_COMPONENT`), so the
+    split is unambiguous; a malformed key is dropped rather than guessed at.
+    """
+    if not isinstance(key, str):
+        return None
+    parts = key.split("/")
+    if len(parts) != 3:
+        return None
+    try:
+        return WorkspaceIdentity(repo=parts[0], run=parts[1], lane=parts[2])
+    except WorkspaceManifestError:
+        return None
+
+
+@dataclass(frozen=True)
+class CleanupAuthorization:
+    """An explicit, attributable authorization to clean one identity."""
+
+    repo: str
+    run: str
+    lane: str
+    authorized_by: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.authorized_by, str) or not self.authorized_by.strip():
+            raise WorkspaceManifestError(
+                "cleanup authorization must name an authorizer", field="authorized_by"
+            )
+        # Refuse structurally-unsafe identities at authorization time, so an
+        # escaping or globbing identity can never reach the remover.
+        WorkspaceIdentity(repo=self.repo, run=self.run, lane=self.lane)
+
+    @property
+    def identity(self) -> WorkspaceIdentity:
+        return WorkspaceIdentity(repo=self.repo, run=self.run, lane=self.lane)
+
+
+def _cleanup_digest(
+    action: str,
+    outcome: str,
+    reason: str,
+    identity: str,
+    path: str,
+    branch: str,
+    authorized_by: str,
+    recoverability: str,
+) -> str:
+    payload = json.dumps(
+        {
+            "action": action,
+            "outcome": outcome,
+            "reason": reason,
+            "identity": identity,
+            "path": path,
+            "branch": branch,
+            "authorized_by": authorized_by,
+            "recoverability": recoverability,
+        },
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+@dataclass(frozen=True)
+class CleanupReceipt:
+    """A durable, deterministic record of one authorized cleanup attempt.
+
+    Carries the before/after state, branch status, recoverability, the
+    authorization identity and the outcome. Deterministic: identical inputs
+    yield an identical ``digest``; it carries no timestamp.
+    """
+
+    action: str
+    outcome: CleanupOutcome
+    reason: str
+    identity: WorkspaceIdentity
+    path: str
+    branch: str
+    branch_status: str
+    branch_deleted: bool
+    recoverability: Recoverability
+    authorized_by: str
+    before: Dict[str, Any]
+    after: Dict[str, Any]
+    digest: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "version": CLEANUP_RECEIPT_VERSION,
+            "action": self.action,
+            "outcome": self.outcome.value,
+            "reason": self.reason,
+            "identity": self.identity.key,
+            "path": self.path,
+            "branch": self.branch,
+            "branch_status": self.branch_status,
+            "branch_deleted": self.branch_deleted,
+            "recoverability": self.recoverability.value,
+            "authorized_by": self.authorized_by,
+            "before": dict(self.before),
+            "after": dict(self.after),
+            "digest": self.digest,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True)
+
+
+@dataclass
+class CleanupReport:
+    """The receipts produced by one cleanup pass, in attempt order."""
+
+    collection: str
+    receipts: List[CleanupReceipt] = field(default_factory=list)
+
+
+def _cleanup_receipt(
+    *,
+    outcome: CleanupOutcome,
+    reason: str,
+    identity: WorkspaceIdentity,
+    path: str,
+    branch: str,
+    authorized_by: str,
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    recoverability: Recoverability,
+) -> CleanupReceipt:
+    if outcome.value not in CLEANUP_OUTCOMES:
+        raise ValueError(f"unknown cleanup outcome {outcome!r}")
+    if reason not in CLEANUP_REASONS:
+        raise ValueError(f"unknown cleanup reason {reason!r}")
+    before_d = dict(before)
+    after_d = dict(after)
+    return CleanupReceipt(
+        action="cleanup_worktree",
+        outcome=outcome,
+        reason=reason,
+        identity=identity,
+        path=path,
+        branch=branch,
+        # Cleanup never deletes a branch: the status is always preserved and the
+        # work survives on the branch. Deletion is the separate, disabled-by-
+        # default WorkspaceReleasePolicy.delete_branch action.
+        branch_status="preserved",
+        branch_deleted=False,
+        recoverability=recoverability,
+        authorized_by=authorized_by,
+        before=before_d,
+        after=after_d,
+        digest=_cleanup_digest(
+            "cleanup_worktree",
+            outcome.value,
+            reason,
+            identity.key,
+            path,
+            branch,
+            authorized_by,
+            recoverability.value,
+        ),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# durable receipt ledger
+# --------------------------------------------------------------------------- #
+def _receipt_from_dict(data: Mapping[str, Any]) -> Optional[CleanupReceipt]:
+    """Rebuild a receipt from its durable mapping, or ``None`` if malformed."""
+    identity = _identity_from_key(data.get("identity"))
+    if identity is None:
+        return None
+    try:
+        outcome = CleanupOutcome(data.get("outcome"))
+    except ValueError:
+        outcome = CleanupOutcome.REFUSED
+    try:
+        recoverability = Recoverability(data.get("recoverability"))
+    except ValueError:
+        recoverability = Recoverability.NOT_APPLICABLE
+    before = data.get("before")
+    after = data.get("after")
+    return CleanupReceipt(
+        action=str(data.get("action", "cleanup_worktree")),
+        outcome=outcome,
+        reason=str(data.get("reason", "unknown")),
+        identity=identity,
+        path=str(data.get("path", "")),
+        branch=str(data.get("branch", "")),
+        branch_status=str(data.get("branch_status", "preserved")),
+        branch_deleted=bool(data.get("branch_deleted", False)),
+        recoverability=recoverability,
+        authorized_by=str(data.get("authorized_by", "")),
+        before=dict(before) if isinstance(before, Mapping) else {},
+        after=dict(after) if isinstance(after, Mapping) else {},
+        digest=str(data.get("digest", "")),
+    )
+
+
+def read_cleanup_receipts(receipts_path: str) -> List[CleanupReceipt]:
+    """Read the durable cleanup ledger; a missing file is an empty ledger.
+
+    A torn final line from an interrupted append is skipped, not fatal.
+    """
+    path = Path(receipts_path)
+    if not path.exists():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    receipts: List[CleanupReceipt] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(data, Mapping):
+            continue
+        receipt = _receipt_from_dict(data)
+        if receipt is not None:
+            receipts.append(receipt)
+    return receipts
+
+
+def _append_receipt(receipt: CleanupReceipt, receipts_path: str) -> None:
+    """Append one receipt durably (write + flush + fsync) before returning."""
+    path = Path(receipts_path)
+    if path.parent and not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(receipt.to_json() + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _completed_identities(receipts: Iterable[CleanupReceipt]) -> set:
+    """The identity keys whose removal the durable ledger already recorded."""
+    return {
+        receipt.identity.key
+        for receipt in receipts
+        if receipt.outcome is CleanupOutcome.REMOVED
+    }
+
+
+def _current_locations() -> List[str]:
+    """The locations the running process occupies and must never remove.
+
+    The process's own working directory is always occupied. Its enclosing git
+    checkout (``git rev-parse --show-toplevel``), when resolvable, is too: a
+    cleanup running *inside* a worktree must never remove the worktree it is
+    standing in, however clean and unmanaged that worktree looks.
+    """
+    locations: List[str] = []
+    try:
+        locations.append(os.getcwd())
+    except OSError:
+        pass
+    top = _git_read(os.getcwd(), "rev-parse", "--show-toplevel")
+    if top is not None and top.returncode == 0 and top.stdout.strip():
+        locations.append(top.stdout.strip())
+    return locations
+
+
+def _refusal_reason(row: WorkspaceRow, *, current: bool = False) -> str:
+    """The fail-closed reason this row may not be removed, or ``"removed"``."""
+    # An occupied location is refused before any other fact is considered: the
+    # process must never remove the workspace it is running from.
+    if current:
+        return "current"
+    # Safety-critical facts must be positively known before anything is removed.
+    if row.dirtiness is DirtyState.UNKNOWN or row.head is HeadState.UNKNOWN:
+        return "unknown"
+    if row.dirtiness is DirtyState.DIRTY:
+        return "dirty"
+    if row.head is HeadState.DETACHED:
+        return "detached"
+    # A live owner forbids removal regardless of classification.
+    if row.lease is LeaseState.ACTIVE:
+        return "managed"
+    if row.process is EvidenceState.PRESENT:
+        return "managed"
+    if row.session is EvidenceState.PRESENT:
+        return "managed"
+    if row.classification is Classification.HEALTHY:
+        return "healthy"
+    if (
+        row.classification in CLEANUP_ALLOWED_CLASSIFICATIONS
+        or row.classification is Classification.UNMANAGED
+    ):
+        return "removed"
+    return "unknown"
+
+
+def _row_state(row: WorkspaceRow) -> Dict[str, Any]:
+    """The explicit before/after state recorded on a receipt."""
+    return {
+        "existence": row.existence.value,
+        "classification": row.classification.value,
+        "registration": row.registration.value,
+        "dirtiness": row.dirtiness.value,
+        "head": row.head.value,
+        "reachability": row.reachability.value,
+        "lease": row.lease.value,
+        "process": row.process.value,
+        "session": row.session.value,
+        "disk": row.disk.value,
+    }
+
+
+def _branch_of(path: str, manifests: Mapping[str, Any]) -> str:
+    """The branch checked out at ``path``, or ``""`` when there is none.
+
+    Prefers the manifest's recorded branch (no subprocess); falls back to a
+    read-only ``git symbolic-ref``. Never mutates anything.
+    """
+    for key, value in manifests.items():
+        if _same_location(str(key), path):
+            branch = getattr(value, "branch", None)
+            if isinstance(branch, str) and branch:
+                return branch
+            break
+    result = _git_read(path, "symbolic-ref", "-q", "--short", "HEAD")
+    if result is not None and result.returncode == 0:
+        return result.stdout.strip()
+    return ""
+
+
+def _row_at(inventory: WorkspaceInventory, path: str) -> Optional[WorkspaceRow]:
+    for row in inventory.rows:
+        if _same_location(row.path, path):
+            return row
+    return None
+
+
+def cleanup_authorized_workspaces(
+    collection: str,
+    *,
+    authorizations: Iterable[CleanupAuthorization],
+    worktree_remover: Optional[Callable[[str], bool]] = None,
+    receipts_path: Optional[str] = None,
+    manifests: Optional[Mapping[str, Any]] = None,
+    processes: Optional[Mapping[str, Sequence[int]]] = None,
+    now: Optional[str] = None,
+    session_ttl_seconds: float = DEFAULT_SESSION_TTL_SECONDS,
+    pid_alive: Optional[Callable[[int], Optional[bool]]] = None,
+) -> CleanupReport:
+    """Remove only the workspaces explicitly authorized by identity.
+
+    ``authorizations`` names the exact ``repo/run/lane`` identities to clean;
+    nothing else is ever selected, whatever else exists under the collection.
+    ``worktree_remover(path) -> bool`` performs the removal (``False`` means the
+    target was already gone); without it, an existing candidate is *refused*
+    (``removal_unavailable``), never silently skipped. ``receipts_path`` is the
+    durable ledger: it is read first for resume state, and each attempt is
+    appended durably before the next candidate is attempted.
+
+    Removal is gated by the read-only inventory: only a definitely-adverse row
+    with no live owner is removed. Branch deletion is never performed here.
+    """
+    root = os.path.abspath(collection)
+    report = CleanupReport(collection=root)
+    manifest_map = manifests or {}
+
+    completed = (
+        _completed_identities(read_cleanup_receipts(receipts_path))
+        if receipts_path
+        else set()
+    )
+
+    # One read-only inventory pass over the whole collection. Removals are
+    # applied after it, one authorized candidate at a time.
+    inventory = inventory_workspaces(
+        root,
+        manifests=manifests,
+        processes=processes,
+        now=now,
+        session_ttl_seconds=session_ttl_seconds,
+        pid_alive=pid_alive,
+    )
+
+    def _record(receipt: CleanupReceipt) -> None:
+        if receipts_path:
+            _append_receipt(receipt, receipts_path)
+        report.receipts.append(receipt)
+
+    # Locations the running process occupies: removing the workspace we are
+    # standing in is never part of cleanup, however it classifies.
+    occupied = _current_locations()
+
+    for authorization in authorizations:
+        identity = authorization.identity
+        path = identity.path_under(root)
+
+        # 1. Resume: a durably-recorded removal is never repeated, even if the
+        #    directory (or its registration) reappeared after the interruption.
+        if identity.key in completed:
+            _record(
+                _cleanup_receipt(
+                    outcome=CleanupOutcome.SKIPPED_COMPLETED,
+                    reason="already_completed",
+                    identity=identity,
+                    path=path,
+                    branch="",
+                    authorized_by=authorization.authorized_by,
+                    before={"existence": ExistenceState.UNKNOWN.value},
+                    after={"existence": ExistenceState.UNKNOWN.value},
+                    recoverability=Recoverability.NOT_APPLICABLE,
+                )
+            )
+            continue
+
+        # 2. The candidate must exist as a workspace the inventory knows at
+        #    exactly this identity-derived path.
+        row = _row_at(inventory, path)
+        if row is None:
+            if os.path.exists(path):
+                # The directory exists but is not a workspace we know: refuse.
+                _record(
+                    _cleanup_receipt(
+                        outcome=CleanupOutcome.REFUSED,
+                        reason="not_a_workspace",
+                        identity=identity,
+                        path=path,
+                        branch="",
+                        authorized_by=authorization.authorized_by,
+                        before={"existence": ExistenceState.PRESENT.value},
+                        after={"existence": ExistenceState.PRESENT.value},
+                        recoverability=Recoverability.NOT_APPLICABLE,
+                    )
+                )
+            else:
+                _record(
+                    _cleanup_receipt(
+                        outcome=CleanupOutcome.ALREADY_ABSENT,
+                        reason="already_absent",
+                        identity=identity,
+                        path=path,
+                        branch="",
+                        authorized_by=authorization.authorized_by,
+                        before={"existence": ExistenceState.MISSING.value},
+                        after={"existence": ExistenceState.MISSING.value},
+                        recoverability=Recoverability.NOT_APPLICABLE,
+                    )
+                )
+            continue
+
+        before = _row_state(row)
+        branch = _branch_of(path, manifest_map)
+
+        # 3. Fail-closed gate: only a definitely-adverse, unowned workspace may
+        #    be removed - and never one this process occupies.
+        is_current = any(_same_location(spot, path) for spot in occupied)
+        reason = _refusal_reason(row, current=is_current)
+        if reason != "removed":
+            _record(
+                _cleanup_receipt(
+                    outcome=CleanupOutcome.REFUSED,
+                    reason=reason,
+                    identity=identity,
+                    path=path,
+                    branch=branch,
+                    authorized_by=authorization.authorized_by,
+                    before=before,
+                    after=before,
+                    recoverability=Recoverability.NOT_APPLICABLE,
+                )
+            )
+            continue
+
+        # 4. The removal itself must be available.
+        if worktree_remover is None:
+            _record(
+                _cleanup_receipt(
+                    outcome=CleanupOutcome.REFUSED,
+                    reason="removal_unavailable",
+                    identity=identity,
+                    path=path,
+                    branch=branch,
+                    authorized_by=authorization.authorized_by,
+                    before=before,
+                    after=before,
+                    recoverability=Recoverability.NOT_APPLICABLE,
+                )
+            )
+            continue
+
+        try:
+            removed = worktree_remover(path)
+        except OSError:
+            removed = False
+        if not removed:
+            _record(
+                _cleanup_receipt(
+                    outcome=CleanupOutcome.ALREADY_ABSENT,
+                    reason="already_absent",
+                    identity=identity,
+                    path=path,
+                    branch=branch,
+                    authorized_by=authorization.authorized_by,
+                    before=before,
+                    after=before,
+                    recoverability=Recoverability.NOT_APPLICABLE,
+                )
+            )
+            continue
+
+        after = dict(before)
+        after["existence"] = ExistenceState.MISSING.value
+        _record(
+            _cleanup_receipt(
+                outcome=CleanupOutcome.REMOVED,
+                reason="removed",
+                identity=identity,
+                path=path,
+                branch=branch,
+                authorized_by=authorization.authorized_by,
+                before=before,
+                after=after,
+                recoverability=(
+                    Recoverability.BRANCH_PRESERVED
+                    if branch
+                    else Recoverability.NOT_APPLICABLE
+                ),
+            )
+        )
+        # A repeated identity later in this same pass resumes from the removal
+        # just recorded, rather than attempting it twice.
+        completed.add(identity.key)
+
+    return report
