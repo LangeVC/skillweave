@@ -29,12 +29,13 @@ directly. Nothing here tears down a real worktree or branch.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, FrozenSet, List, Mapping, Optional
+from typing import Any, Callable, FrozenSet, List, Mapping, Optional
 
 #: The new default worktree directory, under the collection root.
 WORKTREES_DIRNAME = ".worktrees"
@@ -343,6 +344,372 @@ class WorkspaceManifest:
         )
 
 
+# --- Release lifecycle (SW-155 / SW-155-WORKSPACE-002) ---------------------
+#
+# The manifest contract above says *what* a workspace is. This block says how
+# it is released, fail-closed. Three operations, deliberately not fused:
+#
+#   1. ``release_lease``   — drop the lease only;
+#   2. ``remove_worktree`` — remove the worktree only, and only when the facts
+#      prove it safe;
+#   3. ``delete_branch``   — a separate action, disabled unless explicitly
+#      authorized for the exact branch.
+#
+# Facts arrive through an injected ``evidence_probe`` and mutations through
+# injected callables. This module never shells out and never touches a real
+# worktree: an absent or unusable probe is *unknown*, and unknown holds.
+
+#: The outcomes an attempt can yield: acted, refused (fail-closed), or already
+#: in the requested terminal state.
+RELEASE_OUTCOMES = ("ok", "hold", "noop")
+
+#: Every reason code an attempt can carry. ``hold`` is always one of the
+#: blocking facts; ``noop`` is always an already-satisfied state.
+RELEASE_REASONS = (
+    "lease_released",
+    "lease_absent",
+    "worktree_removed",
+    "worktree_absent",
+    "branch_deleted",
+    "branch_absent",
+    "branch_deletion_disabled",
+    "branch_authorization_mismatch",
+    "removal_blocked",
+    "dirty",
+    "unreachable",
+    "active_lease",
+    "active_process",
+    "unknown",
+)
+
+#: The recognized worktree evidence values. Anything else is coerced to
+#: ``unknown``, which holds removal.
+WORKTREE_EVIDENCE = ("clean", "dirty", "unreachable", "absent", "unknown")
+
+#: The recognized lease evidence values. Only ``active`` blocks removal.
+LEASE_EVIDENCE = ("active", "released", "absent", "unknown")
+
+#: The recognized process/session evidence values. Only ``active`` blocks.
+PROCESS_EVIDENCE = ("active", "inactive", "unknown")
+
+
+class WorkspaceReleaseError(ValueError):
+    """A release attempt was refused fail-closed before it could act.
+
+    Raised only for structurally unusable input (for example, a non-manifest).
+    Every *decision* about a valid manifest is reported as a receipt, never an
+    exception, so HOLD and no-op outcomes stay observable and deterministic.
+    """
+
+
+@dataclass(frozen=True)
+class WorkspaceEvidence:
+    """The facts a release decision runs on.
+
+    Every dimension is injected, never probed by this module. An unrecognized
+    value is treated as ``unknown`` by the policy, and unknown holds: absence
+    of proof is never read as proof of absence.
+    """
+
+    worktree: str = "unknown"
+    lease: str = "unknown"
+    process: str = "unknown"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "worktree": self.worktree,
+            "lease": self.lease,
+            "process": self.process,
+        }
+
+
+@dataclass(frozen=True)
+class BranchDeletionAuthorization:
+    """Explicit authorization to delete one named branch.
+
+    Deletion is a separate action and defaults to disabled. When supplied, the
+    ``branch`` must name the exact branch to delete — an authorization for a
+    different branch is refused, never retargeted.
+    """
+
+    branch: str
+    authorized_by: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.branch, str) or not self.branch.strip():
+            raise WorkspaceReleaseError(
+                "branch authorization must name a branch", field=None
+            )
+        if not isinstance(self.authorized_by, str) or not self.authorized_by.strip():
+            raise WorkspaceReleaseError(
+                "branch authorization must name an authorizer"
+            )
+
+
+def _receipt_digest(
+    action: str, outcome: str, reason: str, path: str, branch: str
+) -> str:
+    payload = json.dumps(
+        {
+            "action": action,
+            "outcome": outcome,
+            "reason": reason,
+            "path": path,
+            "branch": branch,
+        },
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+@dataclass(frozen=True)
+class ReleaseReceipt:
+    """A deterministic record of one release attempt.
+
+    Deterministic means: identical inputs yield an identical receipt, including
+    its ``digest``. It carries no timestamp and no host-local detail. Every
+    attempt — ``ok``, ``hold`` or ``noop`` — produces one.
+    """
+
+    action: str
+    outcome: str
+    reason: str
+    path: str
+    branch: str
+    digest: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "action": self.action,
+            "outcome": self.outcome,
+            "reason": self.reason,
+            "path": self.path,
+            "branch": self.branch,
+            "digest": self.digest,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True)
+
+
+def _receipt(
+    action: str, outcome: str, reason: str, path: str, branch: str
+) -> ReleaseReceipt:
+    if outcome not in RELEASE_OUTCOMES:
+        raise WorkspaceReleaseError(f"unknown outcome {outcome!r}")
+    if reason not in RELEASE_REASONS:
+        raise WorkspaceReleaseError(f"unknown reason {reason!r}")
+    return ReleaseReceipt(
+        action=action,
+        outcome=outcome,
+        reason=reason,
+        path=path,
+        branch=branch,
+        digest=_receipt_digest(action, outcome, reason, path, branch),
+    )
+
+
+def _hold(action: str, reason: str, path: str, branch: str) -> ReleaseReceipt:
+    return _receipt(action, "hold", reason, path, branch)
+
+
+def _known(value: Any, allowed: tuple) -> str:
+    return value if value in allowed else "unknown"
+
+
+def _removal_blocker(worktree: str, lease: str, process: str) -> Optional[str]:
+    """Return the reason removal must be held, or ``None`` when it may proceed.
+
+    Fail-closed order: unavailable facts first, then the unsafe states.
+    """
+    if worktree == "unknown" or lease == "unknown" or process == "unknown":
+        return "unknown"
+    if worktree == "unreachable":
+        return "unreachable"
+    if worktree == "dirty":
+        return "dirty"
+    if lease == "active":
+        return "active_lease"
+    if process == "active":
+        return "active_process"
+    return None
+
+
+class WorkspaceReleasePolicy:
+    """Fail-closed release lifecycle over an injected evidence/mutation seam.
+
+    ``evidence_probe(manifest) -> WorkspaceEvidence`` reports the facts;
+    ``lease_releaser(manifest) -> bool``, ``worktree_remover(path) -> bool`` and
+    ``branch_deleter(branch) -> bool`` perform the three mutations. A ``bool``
+    of ``False`` means the target was already gone (a no-op, not an error).
+
+    With no probe injected, every fact is unknown and every mutating operation
+    holds — the default is inert. This class never shells out and never removes
+    or deletes anything itself: only the injected callables act.
+    """
+
+    def __init__(
+        self,
+        repo_root: str,
+        *,
+        collection: Optional[str] = None,
+        evidence_probe: Optional[Callable[[WorkspaceManifest], WorkspaceEvidence]] = None,
+        worktree_remover: Optional[Callable[[Path], bool]] = None,
+        branch_deleter: Optional[Callable[[str], bool]] = None,
+        lease_releaser: Optional[Callable[[WorkspaceManifest], bool]] = None,
+    ):
+        self.repo_root = Path(repo_root)
+        self.collection = resolve_collection(self.repo_root, collection=collection)
+        self._evidence_probe = evidence_probe
+        self._worktree_remover = worktree_remover
+        self._branch_deleter = branch_deleter
+        self._lease_releaser = lease_releaser
+
+    @staticmethod
+    def _require_manifest(manifest: Any) -> WorkspaceManifest:
+        if not isinstance(manifest, WorkspaceManifest):
+            raise WorkspaceReleaseError(
+                "release policy requires a WorkspaceManifest, got "
+                f"{type(manifest).__name__}"
+            )
+        return manifest
+
+    def _path(self, manifest: WorkspaceManifest) -> str:
+        return str(
+            worktree_path(
+                str(self.repo_root),
+                repo=manifest.repo,
+                run=manifest.run,
+                lane=manifest.lane,
+                collection=str(self.collection),
+            )
+        )
+
+    def _evidence(self, manifest: WorkspaceManifest) -> WorkspaceEvidence:
+        probe = self._evidence_probe
+        if probe is None:
+            return WorkspaceEvidence()
+        try:
+            evidence = probe(manifest)
+        except Exception:  # noqa: BLE001 - any probe failure is unknown
+            return WorkspaceEvidence()
+        if not isinstance(evidence, WorkspaceEvidence):
+            return WorkspaceEvidence()
+        return evidence
+
+    def release_lease(self, manifest: WorkspaceManifest) -> ReleaseReceipt:
+        """Release the lease only: no worktree removal, no branch deletion."""
+        manifest = self._require_manifest(manifest)
+        path = self._path(manifest)
+        lease = _known(self._evidence(manifest).lease, LEASE_EVIDENCE)
+        if lease == "unknown":
+            return _hold("release_lease", "unknown", path, manifest.branch)
+        if lease in ("released", "absent"):
+            return _receipt(
+                "release_lease", "noop", "lease_absent", path, manifest.branch
+            )
+        if self._lease_releaser is None:
+            return _hold("release_lease", "unknown", path, manifest.branch)
+        if not self._lease_releaser(manifest):
+            return _hold("release_lease", "unknown", path, manifest.branch)
+        return _receipt(
+            "release_lease", "ok", "lease_released", path, manifest.branch
+        )
+
+    def remove_worktree(self, manifest: WorkspaceManifest) -> ReleaseReceipt:
+        """Remove the worktree only, gated by the injected facts.
+
+        Dirty, unreachable, active lease, active process and unknown all hold.
+        Branch deletion is never implied by removal.
+        """
+        manifest = self._require_manifest(manifest)
+        path = self._path(manifest)
+        evidence = self._evidence(manifest)
+        worktree = _known(evidence.worktree, WORKTREE_EVIDENCE)
+        lease = _known(evidence.lease, LEASE_EVIDENCE)
+        process = _known(evidence.process, PROCESS_EVIDENCE)
+
+        blocker = _removal_blocker(worktree, lease, process)
+        if blocker is not None:
+            return _hold("remove_worktree", blocker, path, manifest.branch)
+        if worktree == "absent":
+            return _receipt(
+                "remove_worktree", "noop", "worktree_absent", path, manifest.branch
+            )
+        if self._worktree_remover is None:
+            return _hold("remove_worktree", "unknown", path, manifest.branch)
+        if not self._worktree_remover(Path(path)):
+            return _receipt(
+                "remove_worktree", "noop", "worktree_absent", path, manifest.branch
+            )
+        return _receipt(
+            "remove_worktree", "ok", "worktree_removed", path, manifest.branch
+        )
+
+    def delete_branch(
+        self,
+        manifest: WorkspaceManifest,
+        *,
+        authorization: Optional[BranchDeletionAuthorization] = None,
+    ) -> ReleaseReceipt:
+        """Delete the branch only when explicitly authorized for it.
+
+        Disabled by default. An authorization naming a different branch is
+        refused (held), never retargeted. Removal is never a precondition this
+        method checks: the caller decides the order.
+        """
+        manifest = self._require_manifest(manifest)
+        path = self._path(manifest)
+        if authorization is None:
+            return _receipt(
+                "delete_branch",
+                "noop",
+                "branch_deletion_disabled",
+                path,
+                manifest.branch,
+            )
+        if not isinstance(authorization, BranchDeletionAuthorization):
+            return _hold("delete_branch", "unknown", path, manifest.branch)
+        if authorization.branch != manifest.branch:
+            return _hold(
+                "delete_branch",
+                "branch_authorization_mismatch",
+                path,
+                manifest.branch,
+            )
+        if self._branch_deleter is None:
+            return _hold("delete_branch", "unknown", path, manifest.branch)
+        if not self._branch_deleter(manifest.branch):
+            return _receipt(
+                "delete_branch", "noop", "branch_absent", path, manifest.branch
+            )
+        return _receipt("delete_branch", "ok", "branch_deleted", path, manifest.branch)
+
+    def release_workspace(
+        self,
+        manifest: WorkspaceManifest,
+        *,
+        branch_authorization: Optional[BranchDeletionAuthorization] = None,
+    ) -> tuple:
+        """Run the three steps in order, without ever chaining them implicitly.
+
+        Returns the three receipts. Branch deletion is attempted only when
+        removal did not hold; when removal held, the branch receipt is itself a
+        HOLD (reason ``removal_blocked``) and no deletion is attempted even if
+        authorized.
+        """
+        manifest = self._require_manifest(manifest)
+        lease = self.release_lease(manifest)
+        removal = self.remove_worktree(manifest)
+        if removal.outcome == "hold":
+            branch = _hold(
+                "delete_branch", "removal_blocked", self._path(manifest), manifest.branch
+            )
+        else:
+            branch = self.delete_branch(manifest, authorization=branch_authorization)
+        return (lease, removal, branch)
+
+
 __all__ = [
     "WORKTREES_DIRNAME",
     "LEGACY_SW_WORKTREES_DIRNAME",
@@ -359,4 +726,14 @@ __all__ = [
     "is_outside_primary_checkout",
     "legacy_sw_worktrees_path",
     "discover_legacy_worktree_locations",
+    "RELEASE_OUTCOMES",
+    "RELEASE_REASONS",
+    "WORKTREE_EVIDENCE",
+    "LEASE_EVIDENCE",
+    "PROCESS_EVIDENCE",
+    "WorkspaceReleaseError",
+    "WorkspaceEvidence",
+    "BranchDeletionAuthorization",
+    "ReleaseReceipt",
+    "WorkspaceReleasePolicy",
 ]
