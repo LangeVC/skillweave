@@ -42,7 +42,7 @@ Bei Fehlschlag wird das Deployment blockiert.
 - [ ] Alle Tests grün (CI-Pipeline)
 - [ ] CHANGELOG.md aktualisiert und versioniert
 - [ ] README.md aktualisiert (Version-Badge, Features, Getting Started)
-- [ ] Release-Naming-Convention: exakt `SkillWeave vX.Y.Z` — kein zusätzlicher Text im Titel (Beschreibungstext gehört in die Release Notes Body). Regex: `^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$`. Bei Verstoß: Release blockieren.
+- [ ] Release-Naming-Convention: exakt das Muster aus `.version.yaml` `release_title_policy` — der Titel darf nur den Product-Namen (aus `product_name`) gefolgt von `vX.Y.Z` enthalten, kein zusätzlicher Text. Bei Verstoß: Release blockieren.
 - [ ] Git-Flow-Check: Release-Branch wurde über `dev` → `main` gemerged (kein direkter Feature-Branch → `main` Merge). Falls `dev` nicht existiert: Warnung ausgeben und empfehlen.
 - [ ] Release-Tag existiert (git tag vX.Y.Z)
 - [ ] Secrets/ENVs in Ziel-Umgebung gesetzt
