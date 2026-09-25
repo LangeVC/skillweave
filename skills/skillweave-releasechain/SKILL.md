@@ -271,7 +271,7 @@ Build distributable artifacts:
 
 Generate changelog entries and release notes:
 - Parse `CHANGELOG.md`
-- Enforce naming convention: `SkillWeave vX.Y.Z`
+- Enforce naming convention from `.version.yaml` `release_title_policy` — the pattern defines the allowed title format with the product name; do not hardcode a product literal here.
 
 ### 4. Artifact Signing and Publishing
 
@@ -324,7 +324,7 @@ git_flow:
 
 ## Release Naming Convention
 
-Release titles must be exactly `SkillWeave vX.Y.Z` — no additional text. Regex: `^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+$`. Descriptive text goes into release notes body. Block release creation if violated.
+Release titles must follow the convention declared in `.version.yaml` `release_title_policy` — the pattern defines the allowed format with the product name. Descriptive text goes into release notes body. Block release creation if violated.
 
 ## Workflow with Execute and Launch
 
