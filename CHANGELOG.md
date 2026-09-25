@@ -1,4 +1,40 @@
 # SkillWeave Changelog
+## v1.5.5 (2026-09-25) — Workspaces and dispatches you can inspect before they act
+
+SkillWeave can now prepare multi-repository workspaces and operator dispatches
+without hiding the ownership, lifecycle, or exact acceptance criteria behind
+them. The release makes those boundaries inspectable before an ops worker is
+allowed to write, and rejects incomplete or ambiguous contracts instead of
+guessing.
+
+### Highlights
+- Workspace manifests are validated strictly, provisioned from exact base
+  revisions, and released or cleaned up only with explicit ownership receipts.
+  Foreign, dirty, or currently active worktrees are refused rather than removed.
+- A read-only multi-repository inventory exposes worktree state before cleanup,
+  including the reason an entry cannot be touched.
+- Operator dispatches now have a preview and observer surface before ops starts,
+  criterion-aware events, and consistent heartbeat and terminal semantics for
+  both inline and fan-out execution.
+- Dispatch contracts require every requested acceptance criterion exactly once.
+  Missing, duplicate, empty, or out-of-range criterion groups fail closed, while
+  valid non-empty regrouping remains supported.
+
+### Reliability
+- Workspace lifecycle, cleanup receipts, observer previews, profile effects,
+  event streams, and exact-once dispatch criteria are covered by unit,
+  integration, contract, and release-gate tests.
+- The reviewed release candidate passed the complete 1.5.5 product and planning
+  gates before entering the release branch.
+
+### Upgrade
+`pip install --upgrade skillweave`. Existing profiles remain compatible; use the
+new preview and workspace inventory surfaces to inspect generated work before an
+operator dispatch begins.
+
+**Full changelog:** [CHANGELOG.md](https://github.com/LangeVC/skillweave/blob/v1.5.5/CHANGELOG.md) · **Diff:** [v1.5.4...v1.5.5](https://github.com/LangeVC/skillweave/compare/v1.5.4...v1.5.5)
+
+
 ## v1.5.4 (2026-09-10) — A Capacium publication that actually authenticates
 
 The path that publishes a tagged release to the Capacium Exchange was wired for

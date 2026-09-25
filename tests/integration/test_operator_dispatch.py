@@ -543,3 +543,93 @@ def test_missing_profile_location_is_a_precise_error(tmp_path):
         app.dry_run(str(_SEQUENCE), str(missing), wave="0")
     assert "does-not-exist" in str(exc.value)
     assert exc.value.path == str(missing)
+
+
+# ── Correction: typed live lifecycle wired into the real dispatch path ──────
+
+def test_full_dispatch_orders_typed_lifecycle_and_emits_heartbeat(tmp_path):
+    """A slow real child observed through full ``dispatch()`` emits its
+    configured heartbeat, then exactly one process terminal, in strict order.
+
+    The profile declares an explicit ``heartbeat_interval`` shorter than the
+    child's real sleep. The application, not a side-channel, drives the typed
+    stream: ``lane_started`` -> criterion-aware ``dispatch_started`` ->
+    heartbeat(s) -> exactly one ``process_terminal`` -> ``evidence_recorded`` ->
+    ``lane_terminal``, all with strictly increasing sequence numbers.
+    """
+    import yaml
+
+    base = "9" * 40
+    prof = tmp_path / "lifecycle-profile.yaml"
+    prof.write_text(yaml.safe_dump({
+        "name": "lifecycle-fixture",
+        "tier": "balanced",
+        "limits": {
+            "timeout": 30.0,
+            "max_retries": 1,
+            "min_models_required": 2,
+            "on_model_failure": "skip",
+            "heartbeat_interval": 0.3,
+        },
+        "roles": {
+            "ops": {
+                "model": "faigate/dispatch-fixture-model",
+                "tool": {
+                    "name": "marker",
+                    "launch_command": "python3 -c \"import time; time.sleep(1.2)\"",
+                    "args": [],
+                },
+                "capabilities": {"can_mutate_run_state": True},
+            },
+        },
+    }))
+    seq = tmp_path / "lifecycle-sequence.yaml"
+    seq.write_text(yaml.safe_dump({
+        "session_boundary": "batch",
+        "profile": {"path": str(prof), "required": True},
+        "execution_model": "cold",
+        "max_correction_rounds_per_wave": 0,
+        "max_parallel": 1,
+        "lanes": [{
+            "id": "lane-a", "role": "ops", "repo": "skillweave/repo-a",
+            "base": base, "execution_model": "cold", "mutating": True,
+            "depends_on": [],
+            "write_scope": ["skillweave/repo-a/**"],
+            "worktree": "/tmp/lane-a",
+            "branch": "branch-lane-a",
+            "integration_policy": "independent",
+            "criterion_groups": [{"criteria": [1]}],
+        }],
+    }))
+
+    sink = io.StringIO()
+    app = OperatorDispatchApplication(workspace_seam=_FakeWorkspace())
+    run = app.dispatch(str(seq), str(prof), wave="0", sink=sink)
+
+    assert run.halted is False
+    events = [json.loads(ln) for ln in sink.getvalue().splitlines() if ln.strip()]
+
+    # Strictly increasing sequence numbers across the whole run.
+    seqs = [e["sequence"] for e in events]
+    assert seqs == sorted(seqs)
+    assert len(seqs) == len(set(seqs))
+
+    types = [e["event_type"] for e in events]
+    heartbeats = [e for e in events if e["event_type"] == "heartbeat"]
+    terminals = [e for e in events if e["event_type"] == "process_terminal"]
+
+    # The slow child emits at least one heartbeat.
+    assert heartbeats, "a slow real child must emit a heartbeat"
+    # Exactly one process terminal (idempotent terminal emission).
+    assert len(terminals) == 1
+
+    # Strict ordered lifecycle for the active lane.
+    idx = {t: types.index(t) for t in types}
+    assert idx["lane_started"] < idx["dispatch_started"] < idx["heartbeat"]
+    assert idx["heartbeat"] < idx["process_terminal"]
+    assert idx["process_terminal"] < idx["evidence_recorded"]
+    assert idx["evidence_recorded"] < idx["lane_terminal"]
+
+    # The dispatch_started event is criterion-aware.
+    dispatched = events[idx["dispatch_started"]]
+    assert dispatched.get("criterion_group") == [1]

@@ -172,6 +172,59 @@ def test_no_heartbeat_within_the_configured_interval():
     assert _lines(sink) == []
 
 
+# ── HeartbeatPump: live cadence, no spurious heartbeat, deterministic stop ──
+
+def test_heartbeat_pump_emits_while_alive_then_stops_deterministically():
+    from skillweave.dispatch.events import HeartbeatPump
+
+    stream, sink = _stream()
+    state = {"alive": True}
+    pump = HeartbeatPump(
+        stream,
+        is_alive=lambda: state["alive"],
+        interval_seconds=0.05,
+        wave="w", lane_id="l", dispatch_id="d",
+    )
+    pump.start()
+    # Give the cadence thread a moment to emit while alive.
+    deadline = time.time() + 1.0
+    while not _lines(sink) and time.time() < deadline:
+        time.sleep(0.01)
+    assert len(_lines(sink)) >= 1, "a live child must emit a heartbeat"
+
+    # The child dies; the thread stops emitting and exits on its own.
+    state["alive"] = False
+    before = len(_lines(sink))
+    time.sleep(0.15)
+    after = len(_lines(sink))
+    assert after == before, "no heartbeat may be emitted once the child is dead"
+
+    # Deterministic stop: after this no thread remains and nothing more emits.
+    pump.stop()
+    stopped = len(_lines(sink))
+    time.sleep(0.1)
+    assert len(_lines(sink)) == stopped
+
+    # No background thread leaks: the daemon thread is not alive after stop.
+    assert pump._thread is None
+
+
+def test_heartbeat_pump_fast_child_emits_no_spurious_heartbeat():
+    from skillweave.dispatch.events import HeartbeatPump
+
+    stream, sink = _stream()
+    # A child that is already dead before the first cadence tick emits nothing.
+    pump = HeartbeatPump(
+        stream,
+        is_alive=lambda: False,
+        interval_seconds=60.0,
+        wave="w", lane_id="l", dispatch_id="d",
+    )
+    pump.start()
+    pump.stop()
+    assert _lines(sink) == []
+
+
 # ── Criterion 4: exactly one terminal per child across retries ─────────────
 
 def test_exactly_one_terminal_per_child_even_when_retried():

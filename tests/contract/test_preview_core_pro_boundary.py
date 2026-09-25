@@ -68,6 +68,7 @@ CORE_OWNED_SCHEMA_FILENAMES = (
     "run-state.schema.json",
     "transfer-entry.schema.json",
     "workflow-context.schema.json",
+    "workspace-manifest.schema.json",
 )
 
 # CMS / provider / business authorities must live in packs-pro, not Core. A

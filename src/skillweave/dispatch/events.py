@@ -38,6 +38,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import RLock
+import threading
 from typing import Any, List, Optional, TextIO
 
 from .contracts import (
@@ -426,6 +427,11 @@ class HeartbeatMonitor:
         self._interval = interval_seconds
         self._last_activity: dict[str, str] = {}
 
+    @property
+    def interval(self) -> float:
+        """The configured interval (seconds)."""
+        return self._interval
+
     def _elapsed(self, child_key: str, now_str: str) -> float:
         last = self._last_activity.get(child_key)
         if last is None:
@@ -435,6 +441,16 @@ class HeartbeatMonitor:
         return (now - then).total_seconds()
 
     def note_activity(self, child_key: str, timestamp: Optional[str] = None) -> None:
+        self._last_activity[child_key] = timestamp or _now()
+
+    def reset_for(self, child_key: str, timestamp: Optional[str] = None) -> None:
+        """(Re)start the interval clock for ``child_key``.
+
+        Marks the child as freshly active at ``timestamp`` (default now). Used
+        at the dispatch-start observation point so a dispatch that just gave the
+        child a live handle starts counting from its actual start, never from an
+        earlier event. A later reset is safe: it only advances the clock.
+        """
         self._last_activity[child_key] = timestamp or _now()
 
     def maybe_heartbeat(
@@ -460,7 +476,91 @@ class HeartbeatMonitor:
         return event
 
 
+class HeartbeatPump:
+    """Emit a heartbeat for one live child on a fixed cadence until it dies.
+
+    The passive :class:`HeartbeatMonitor` is caller-driven at observation
+    points; this helper adds the one piece the real dispatch path needs to
+    meet "heartbeat while still alive": a single daemon thread that, while
+    ``is_alive()`` is true, emits a ``heartbeat`` on the shared stream every
+    ``interval_seconds``. The thread stops deterministically either the first
+    time ``is_alive()`` reports the child is gone, or when :meth:`stop` is
+    called — so no background thread leaks on success or exception.
+
+    Heartbeats are emitted strictly *before* the child's terminal because the
+    terminal is only ever emitted by the reap path after the fan-out's ``wait``
+    returns (the child is no longer alive), while this pump only emits while
+    ``is_alive()`` is still true. Sequence assignment and locking stay with the
+    stream, which is already serialized across threads.
+    """
+
+    def __init__(
+        self,
+        stream: DispatchEventStream,
+        *,
+        is_alive: Any,
+        interval_seconds: float,
+        wave: str,
+        lane_id: str,
+        dispatch_id: str,
+    ) -> None:
+        if interval_seconds <= 0:
+            raise EventStreamError("heartbeat interval must be positive")
+        self._stream = stream
+        self._is_alive = is_alive
+        self._interval = interval_seconds
+        self._wave = wave
+        self._lane_id = lane_id
+        self._dispatch_id = dispatch_id
+        self._stop = threading.Event()
+        self._thread: Optional[Any] = None
+        self._started = False
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self._stop.wait(timeout=self._interval)
+            if self._stop.is_set():
+                break
+            try:
+                alive = bool(self._is_alive())
+            except Exception:  # noqa: BLE001 - a lost handle is not alive
+                alive = False
+            if not alive:
+                break
+            self._stream.heartbeat(
+                wave=self._wave,
+                lane_id=self._lane_id,
+                dispatch_id=self._dispatch_id,
+            )
+
+    def start(self) -> "HeartbeatPump":
+        """Start the cadence thread (idempotent)."""
+        if self._started:
+            return self
+        self._started = True
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"sw-heartbeat-{self._dispatch_id}",
+            daemon=True,
+        )
+        self._thread.start()
+        return self
+
+    def stop(self) -> None:
+        """Stop the cadence thread deterministically (idempotent).
+
+        Signals the loop and joins the thread, so after this returns no
+        heartbeat thread remains and no further heartbeat can be emitted.
+        """
+        self._stop.set()
+        thread = self._thread
+        self._thread = None
+        if thread is not None and thread.is_alive():
+            thread.join()
+
+
 # -- metadata-only payload plumbing ------------------------------------------
+
 
 def _append_metadata(event: DispatchEvent, fields: dict[str, Any]) -> None:
     """Attach metadata-only extras to an event without a dedicated field.
@@ -519,5 +619,6 @@ def _looks_like_polling_payload(payload: Optional[dict[str, Any]]) -> None:
 __all__ = [
     "DispatchEventStream",
     "HeartbeatMonitor",
+    "HeartbeatPump",
     "EventStreamError",
 ]

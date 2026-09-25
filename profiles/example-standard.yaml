@@ -24,6 +24,9 @@ limits:
   max_retries: 1
   min_models_required: 2
   on_model_failure: skip
+  # heartbeat_interval is dispatch config data, distinct from timeout: a child
+  # may run longer than this before being killed. Omitted here, so the positive
+  # backward-compatible default (5.0 seconds) applies.
 roles:
   observer:
     # In place: no tool spec, so this role runs in the current harness and is

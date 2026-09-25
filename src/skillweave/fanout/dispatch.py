@@ -21,7 +21,7 @@ import hashlib
 import importlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
 from skillweave.routing.modelspec import ModelSpec, from_value
 
@@ -55,6 +55,17 @@ class ChildOutcomeError(ValueError):
     ``timed_out`` / ``launch_failed``; a result whose terminal fields contradict
     each other (both an exit code and a signal, or a termination that does not
     match its fields) is rejected here, never silently folded into one outcome.
+    """
+
+
+class LifecycleObservationError(ValueError):
+    """A passive child-lifecycle observation callback raised.
+
+    The ``on_child_lifecycle`` seam is passive: its failure must never abort the
+    fan-out before a started child is reaped. The fan-out therefore runs the
+    callback best-effort, reaps every started child regardless, and only then
+    surfaces this typed error — chained from the original callback exception —
+    so observation noise is never converted into a leaked child.
     """
 
 
@@ -339,6 +350,7 @@ def fan_out_dispatch(
     launch_contexts: Optional[Sequence[FanOutLaunchContext]] = None,
     timeout: Optional[float] = None,
     artifact_store: Optional[Any] = None,
+    on_child_lifecycle: Optional[Callable[..., None]] = None,
 ) -> FanOutResult:
     """Start every command as a real process, then wait for all.
 
@@ -382,6 +394,25 @@ def fan_out_dispatch(
     the store (digest, byte length, declared encoding). A returned reference is
     therefore immediately resolvable from the store by a caller that received
     no bytes out-of-band.
+
+    ``on_child_lifecycle`` (optional) is a safe child-lifecycle observation
+    seam. When supplied it is invoked as ``on_child_lifecycle(child_key,
+    dispatch_id, phase, handle)`` around each child: ``phase=="started"``
+    immediately after the child is started (with the live handle and the child
+    in-flight, so a heartbeat can be observed *while alive*), and
+    ``phase=="terminal"`` immediately after the child is reaped. A launch-failed
+    child (no handle) is signalled only via ``started`` with handle ``None``.
+    This callback is a passive observation seam, not the transition authority:
+    it is never handed a writable stream/store/gate, and it cannot alter the
+    children, the outcome, or the fan-out's own lifecycle. Wiring the *typed*
+    live event stream (heartbeat-before-terminal) onto the real dispatch path
+    goes through this seam, so no state is inferred from logs, PIDs, ANSI text
+    or wrapper completion.
+
+    A callback exception is passive too: it is caught, every started child is
+    still reaped, and after the fan-out has finished the exception surfaces as a
+    :class:`LifecycleObservationError` — never as an unreaped child and never as
+    a silently dropped success.
     """
     created_at = created_at or datetime.now(timezone.utc).isoformat()
 
@@ -411,6 +442,20 @@ def fan_out_dispatch(
 
     resolved_models = [_resolve_spec(spec) for spec in specs]
     _launch_failures: dict[int, str] = {}
+    _observation_errors: List[BaseException] = []
+
+    def _notify_lifecycle(child_key: str, dispatch_id: str, phase: str, handle: Any) -> None:
+        if on_child_lifecycle is None:
+            return
+        try:
+            on_child_lifecycle(
+                child_key=child_key,
+                dispatch_id=dispatch_id,
+                phase=phase,
+                handle=handle,
+            )
+        except Exception as exc:  # noqa: BLE001 - observation is passive
+            _observation_errors.append(exc)
 
     def _child_identity(index: int) -> Tuple[str, str, str, Optional[str]]:
         if contexts is not None:
@@ -448,6 +493,12 @@ def fan_out_dispatch(
     for index, handle, argv in handles:
         repo, commit, child_tool, child_cwd = _child_identity(index)
         if handle is None:
+            _notify_lifecycle(
+                child_key=f"{run_id}-{index}",
+                dispatch_id=f"{run_id}-{index}",
+                phase="started",
+                handle=None,
+            )
             result = _launch_failed_result(
                 argv,
                 run_id=f"{run_id}-{index}",
@@ -480,6 +531,12 @@ def fan_out_dispatch(
                 _store_child_bytes(artifact_store, children[-1])
             continue
 
+        _notify_lifecycle(
+            child_key=f"{run_id}-{index}",
+            dispatch_id=f"{run_id}-{index}",
+            phase="started",
+            handle=handle,
+        )
         result = handle.wait(timeout=timeout)
         outcome = _resolve_outcome(result)
         children.append(
@@ -501,10 +558,22 @@ def fan_out_dispatch(
         )
         if artifact_store is not None:
             _store_child_bytes(artifact_store, children[-1])
+        _notify_lifecycle(
+            child_key=f"{run_id}-{index}",
+            dispatch_id=f"{run_id}-{index}",
+            phase="terminal",
+            handle=handle,
+        )
 
     # Overlap is structurally guaranteed when more than one worker was launched
     # and all started before any wait; record it as a measured fact.
     overlapped = len(commands) > 1
+
+    if _observation_errors:
+        raise LifecycleObservationError(
+            "child-lifecycle observation failed: "
+            f"{_observation_errors[0]}"
+        ) from _observation_errors[0]
 
     return FanOutResult(children=children, overlapped=overlapped)
 
