@@ -1,0 +1,60 @@
+"""Shared entry contract (SW-156-ENTRY-001).
+
+The single seam a front-end shares when a run starts, continues, is inspected,
+or a new operator is onboarded. See :mod:`skillweave.entry.service` for the
+contract itself.
+"""
+
+from .service import (
+    ENTRY_CONTRACT_VERSION,
+    CONTRADICTION_CODES,
+    Contradiction,
+    ContinueIntent,
+    Decision,
+    Disposition,
+    EntryAdapter,
+    EntryIntent,
+    EntryService,
+    EntryState,
+    InspectIntent,
+    IntentKind,
+    MappingEntryAdapter,
+    ObjectEntryAdapter,
+    OnboardIntent,
+    Severity,
+    StartIntent,
+    adapter_digests,
+    canonical_digest,
+    contradiction_guidance,
+    intent_digest,
+    observe,
+    state_digest,
+    validate,
+)
+
+__all__ = [
+    "ENTRY_CONTRACT_VERSION",
+    "CONTRADICTION_CODES",
+    "Contradiction",
+    "ContinueIntent",
+    "Decision",
+    "Disposition",
+    "EntryAdapter",
+    "EntryIntent",
+    "EntryService",
+    "EntryState",
+    "InspectIntent",
+    "IntentKind",
+    "MappingEntryAdapter",
+    "ObjectEntryAdapter",
+    "OnboardIntent",
+    "Severity",
+    "StartIntent",
+    "adapter_digests",
+    "canonical_digest",
+    "contradiction_guidance",
+    "intent_digest",
+    "observe",
+    "state_digest",
+    "validate",
+]
