@@ -1,12 +1,137 @@
-# Changelog
+# SkillWeave Changelog
+## v1.5.4 (2026-09-10) — A Capacium publication that actually authenticates
 
-## 1.3.13 — Dynamic Routing and Anti-Masking
+The path that publishes a tagged release to the Capacium Exchange was wired for
+Trusted Publishing but never asked for a token, so every tag since v1.3.12
+reached the CLI with an empty credential and refused. This release turns that
+path on. No runtime or skill code changes.
+
+### Fixed
+- The Capacium publication step now requests a short-lived publish token through
+  OIDC (`id-token: write` plus `use_oidc: true`) instead of arriving with an
+  empty `CAPACIUM_API_TOKEN`. No long-lived Capacium secret is stored in the
+  repository; the Exchange derives the publisher owner from the OIDC claims and
+  issues a token scoped to exactly that owner and repository.
+
+### Changed
+- The version-sync helper fetched by the release gate is pinned to ops-engine
+  `v3.4.2`, the same release the release workflow installs as its engine, so the
+  repository names one ops-engine version rather than two. The helper is
+  byte-identical across `v3.0.0`, `v3.4.0` and `v3.4.2`, so the gate's verdict is
+  unchanged.
+- The `check-manifest` diagnostic output is English, matching the rest of the
+  repository's tracked files. Only strings moved; its exit-code contract is
+  unchanged.
+
+### Upgrade
+`pip install --upgrade skillweave`. `src/` and `skills/` are identical to 1.5.3,
+so nothing you call changes.
+
+**Full changelog:** [CHANGELOG.md](https://github.com/LangeVC/skillweave/blob/v1.5.4/CHANGELOG.md) · **Diff:** [v1.5.3...v1.5.4](https://github.com/LangeVC/skillweave/compare/v1.5.3...v1.5.4)
+
+
+## v1.5.3 (2026-09-08) — Releases that reach both forges, and a history that is whole
+
+Every release from 1.3.12 to 1.5.2 was tagged on both forges while only Forgejo
+carried a release object, so the public "latest release" stood at 1.3.11 for nine
+days, and the notes that did exist were raw commit dumps. This release replaces
+the machinery that produced that and repairs the history it damaged. No runtime
+or skill code changes.
+
+### Highlights
+- A release is published to every declared forge, or the run goes red. There is no
+  longer a path where one forge succeeds quietly and the other is skipped.
+- The release body is the changelog entry for the tag. A version with no entry is
+  refused, instead of falling back to commit subjects.
+- The changelog carries all 41 released versions again, each with a date.
+
+### Added
+- `.ops.yaml` declares the release destinations and this repository's tracker
+  prefixes. No forge repository, API host or CI variable survives as a literal in
+  the workflow layer.
+- Three gates that run before any release object exists on either forge: the
+  release title, the presence of a changelog entry, and whether that entry still
+  addresses an internal tracker rather than a reader.
+- The canonical tag is pushed onto the mirror before publication, and both tags
+  are peeled and compared after it, so the release API cannot invent a tag at the
+  mirror's default-branch head.
+
+### Changed
+- Publication is handed to the ops-engine release handler, pinned to 3.4.2 and
+  version-gated after install. The workflow no longer reimplements it.
+- The mirror destination is read from repository variables with a double match and
+  an existence and permission preflight, instead of being assumed reachable.
+
+### Fixed
+- Release notes are no longer a commit-log dump assembled with `printf`, which
+  left every line separator as a literal backslash-n: the 1.5.2 body was 4356
+  characters rendering as four lines.
+- The release history deleted at the 1.4.0 bump is restored — 597 lines, covering
+  everything at or below 1.3.13.
+- Six tagged versions that never carried a changelog entry have one.
+- `pytest-asyncio` is declared. Without it a clean environment runs the async
+  suites as unknown marks and 32 tests fail without the code being at fault.
+
+### Upgrade
+`pip install --upgrade skillweave`. `src/` and `skills/` are identical to 1.5.2,
+so nothing you call changes. Installing from source also needs the sibling SDK
+checkout installed first; the dependency on it has never resolved from an index.
+
+**Full changelog:** [CHANGELOG.md](https://github.com/LangeVC/skillweave/blob/v1.5.3/CHANGELOG.md) · **Diff:** [v1.5.2...v1.5.3](https://github.com/LangeVC/skillweave/compare/v1.5.2...v1.5.3)
+
+
+## v1.5.2 (2026-09-02)
+
+### Substrate
+- **Three-tier model**: package defaults (shipped under `skillweave/assets/`), durable input under `skillweave.config/`, and generated output under `.skillweave/`, which is git-excluded. A team's tuned catalogue lives in `skillweave.config/` and survives upgrades; generated state never ships and never tracks.
+- **Generic substrate contract**: `direction` (input/output), `durability` (authored/generated, with `ephemeral` as a first-class value), and `disclosure` (public/private) declared per area, plus a backing-store seam that resolves an area's store from its declaration rather than from a `.git` directory. Durable areas in a non-git workspace sync through the configured org planning repository and are reported at-risk (not silently accepted) when no store is reachable.
+
+### Mirror
+- **Single mirror workflow**: the visibility-gate, the release-tag version-gate, and the mirror job are one workflow ordered by `needs`, with a destination guard that proves the GitHub destination is reachable before any push instead of failing inside one.
+
+### Version topology
+- **`decoupled_member_pins`**: the bundle and the runtime carry the train version; the `capabilities[]` member pins and the 13 skill capability files are informational and may lag the bundle together. A bundle bump can be packaging alone, so a plain bump moves only the two required locations (`pyproject.toml` and `capability.yaml`) and leaves the pins and member files where they are. The pin never diverges from its own member file — that consistency is owned by `scripts/check-manifest.py`, not by the release gate.
+
+### Testing
+- **Hermetic suite**: tests that depended on untracked local state (sibling checkouts, the git-excluded `.skillweave/` tree) now skip with an explicit reason when that state is absent, so a fresh `git archive` clone reproduces a green suite.
+
+### Onboarding
+- **Substrate rule taught**: onboarding states the substrate rule, writes the anchored `/.skillweave/` gitignore exclusion, records the private planning-repository answer, and refuses to leave substrate content tracked when the origin remote is public.
+
+
+## v1.5.0 (2026-09-01)
+
+### Features (Production Agent-Native)
+- **Crash Recovery**: Orphan-, Worker-, and Coordinator-Crash-Recovery that reconstructs execution DAGs from persistent context without brittle transcript parsing.
+- **Context Limits & Checkpointing**: Configurable token profiles (e.g., 120k `no_new_task`, 150k `checkpoint`, 170k `stop`) to bound AI execution budgets safely.
+- **Operator Agent Escalation**: `operator_agent` with strict deterministic decision scopes. Irreversible choices automatically escalate before mutating state.
+- **Persistent Policy**: Idempotent compensation, backoff, and retry budgets ensuring a crash loop doesn't double-charge tokens.
+- **Remote Workspace Sandbox**: Distributed execution honoring the precise `skillweave-workspace` contract without leaking orchestration state.
+- **Soak & Langlauf**: Added extensive multi-hour degradation limits and `DoubleStartGuard` process protection.
+
+
+## v1.4.0 (2026-08-31)
+
+### Features
+- **Public Control Plane**: Complete separation of integration tests and host-neutral API paths.
+- **MCP Guard Rails**: Full enforcement of negative authority limits in the MCP server.
+- **Skill Portability**: All 13 skills audited and refactored for host-neutral Command/Intent contracts (experimental).
+- **Harness Provenance**: Hermetic Fakes and OpenCode-DeepSeek proofs with append-only receipts.
+- **Faigate Diversity**: Expanded ops, review, and comparison routing profiles with Anti-Masking detection.
+- **Dispatchability**: Explicit execution queues, topological phase batching, and metadata validation.
+
+### Deprecations
+- **SW-DEPR-001**: `skillweave.executor` is deprecated. Test doubles moved to `skillweave.legacy.test_double`.
+
+---
+
+## v1.3.13 (2026-08-31) — Dynamic Routing and Anti-Masking
 
 - **Dynamic Routing Policy Engine:** Added support for capability-based routing and scoring (DR-002, DR-004).
 - **Anti-Masking:** Faigate adapter now parses `served_by` headers to detect and flag silent fallbacks (DR-003).
 - **Council Deduplication:** The council engine drops duplicated models and triggers the Routing Policy Engine for dynamic replacement (DR-005, DR-006).
 
-## 1.3.12 — Forgejo-first release provenance
+## v1.3.12 (2026-08-30) — Forgejo-first release provenance
 
 1.3.11 shipped with an ambiguity at the release seam: the visible GitHub release
 object was created by a GitHub-side workflow, not delivered by the mirror from
@@ -44,7 +169,7 @@ same commit. Zero Forgejo release objects, or more than one, fail the contract.
 The 1.3.8, 1.3.9 and 1.3.10 entries were reconstructed from the immutable tags,
 not backfilled from memory, and are listed below.
 
-## 1.3.11 — Dispatch operations, and a gate that can fail
+## v1.3.11 (2026-08-30) — Dispatch operations, and a gate that can fail
 
 1.3.10 closed the Council namespace. This release closes the operational gap
 underneath it: structured jobs, strict review, harness adherence, model
@@ -97,21 +222,21 @@ subject. Criteria that a test process cannot observe are controller-attested,
 and the attestation now binds the candidate SHA: a dual pass recorded against
 any other subject fails closed inside the repository, not only in tooling.
 
-## 1.3.10 — Council profiles revert the provider prefix
+## v1.3.10 (2026-08-28) — Council profiles revert the provider prefix
 
 Reconstructed from the immutable `v1.3.10` tag. A version-only release: the
 `faigate/` model-id prefix introduced in 1.3.9 was reverted, because the council
 provider talks to Faigate natively and must not carry the prefix. Runtime,
 bundle and all thirteen skill capabilities move to 1.3.10 in step.
 
-## 1.3.9 — Council profiles carry the Faigate prefix
+## v1.3.9 (2026-08-28) — Council profiles carry the Faigate prefix
 
 Reconstructed from the immutable `v1.3.9` tag. Council profile model ids were
 prefixed with `faigate/` (`faigate/gpt-4o`, `faigate/deepseek-v4-pro`, and the
 chairman ids likewise) across the four council tiers. Runtime, bundle and all
 thirteen skill capabilities move to 1.3.9 in step.
 
-## 1.3.8 — Lazy runtime imports and capability sync
+## v1.3.8 (2026-08-28) — Lazy runtime imports and capability sync
 
 Reconstructed from the immutable `v1.3.8` tag. Top-level runtime imports in the
 routing and fanout layers were made lazy so the engine core imports without
@@ -119,7 +244,7 @@ routing and fanout layers were made lazy so the engine core imports without
 `ObserverRuntime` resolve on first use rather than at module import. Runtime,
 bundle and all thirteen skill capabilities move to 1.3.8 in step.
 
-## 1.3.7 — Self-hosting comes home, and the gate holds it to its word
+## v1.3.7 (2026-08-22) — Self-hosting comes home, and the gate holds it to its word
 
 1.3.6 closed the dispatch seam and taught the council to verify who answered.
 This release closes a different gap: the pipeline that ships SkillWeave could
@@ -153,7 +278,42 @@ All fourteen manifests (root plus thirteen skills) move to 1.3.7 in step. The
 prose changelog remains a hand-written history and is not an auto-bumped
 location.
 
-## 1.3.6 — The seam closes, and the council learns who answered
+### The core imports without `runtime`
+
+Recorded 2026-08-13, before this release was cut. It is the consumer-facing
+detail behind the lazy-surface restoration named above.
+
+
+`import skillweave` used to fail with `ModuleNotFoundError` as soon as `runtime/`
+was physically absent: `__init__.py` imported `.execution` and `.observation`
+eagerly, and those pulled in `runtime` through `state_machine.py`,
+`gate_policy.py` and `event_logger.py`. A consumer embedding the engine could
+therefore embed nothing less than all of it.
+
+Resolved through PEP 562: fourteen runtime-reachable names resolve on first
+access. `OPTIONAL_SUBPACKAGES = ("runtime",)` is declared explicitly rather than
+left implicit.
+
+**A behaviour change that can affect consumers.** The public API is unchanged
+character for character — `__all__` still carries the same 50 names, and
+`from skillweave import *` yields the same set. What goes away is the eager
+binding of the submodule names:
+
+```python
+hasattr(skillweave, "execution")              # True  -> False
+hasattr(skillweave, "observation")            # True  -> False
+hasattr(skillweave, "execution_integration")  # True  -> False
+dir(skillweave)                               # 16 entries fewer
+
+import skillweave.execution                   # unchanged
+from skillweave.execution.batch_planner import BatchPlanner   # unchanged
+```
+
+That lies outside the `__all__` contract and is nowhere attribute-chained inside
+this repository. Anyone using `hasattr` for feature detection should switch to
+`importlib.util.find_spec("skillweave.execution")`.
+
+## v1.3.6 (2026-08-18) — The seam closes, and the council learns who answered
 
 1.3.5 shipped every part of a dispatch except the seam that joins them: a
 profile could name a target tool and its launch command, and nothing started
@@ -210,7 +370,7 @@ toward the documented contract: an empty completion raises, and a collapsed
 council fails its minimum. Code importing `dispatch` from the package root must
 use `dispatch_role`.
 
-## 1.3.5 — Contracts worth trusting, and a dispatcher on top
+## v1.3.5 (2026-08-17) — Contracts worth trusting, and a dispatcher on top
 
 Ten runtime contracts existed since 1.3.0 but did not hold what they promised.
 Each defect below was proven by a test that fails against 1.3.0 and passes
@@ -286,40 +446,7 @@ The thirteen member versions in `capability.yaml` stay at 1.3.0. No skill
 changed in this release; only the runtime and the new routing layer did, and the
 bundle version moves because its composition did.
 
-## Unveroeffentlicht
-
-### Der Kern laesst sich ohne `runtime` importieren
-
-`import skillweave` scheiterte bisher mit `ModuleNotFoundError`, sobald
-`runtime/` physisch fehlte — `__init__.py` importierte `.execution` und
-`.observation` eager und zog `runtime` ueber `state_machine.py`,
-`gate_policy.py` und `event_logger.py` nach. Ein Consumer, der die Engine
-einbettet, konnte damit nicht weniger als alles einbetten.
-
-Aufgeloest ueber PEP 562: 14 runtime-erreichbare Namen werden erst beim
-ersten Zugriff aufgeloest. `OPTIONAL_SUBPACKAGES = ("runtime",)` ist
-ausdruecklich deklariert statt implizit.
-
-**Verhaltensaenderung, die Konsumenten betreffen kann.** Die oeffentliche
-API ist zeichengleich — `__all__` unveraendert bei 50 Namen, `from
-skillweave import *` liefert dasselbe. Aber die Eager-Bindungen der
-Submodulnamen entfallen:
-
-```python
-hasattr(skillweave, "execution")              # True  -> False
-hasattr(skillweave, "observation")            # True  -> False
-hasattr(skillweave, "execution_integration")  # True  -> False
-dir(skillweave)                               # 16 Eintraege weniger
-
-import skillweave.execution                   # unveraendert
-from skillweave.execution.batch_planner import BatchPlanner   # unveraendert
-```
-
-Das liegt ausserhalb des `__all__`-Vertrags und wird im Repo nirgends
-attributverkettet genutzt. Wer `hasattr` zur Feature-Erkennung einsetzt,
-muss auf `importlib.util.find_spec("skillweave.execution")` wechseln.
-
-## 1.3.0 — Runtime Foundation
+## v1.3.0 (2026-08-12) — Runtime Foundation
 
 Der dokumentierte Lifecycle war bis hierher nicht durchsetzbar: `executor.py`
 war laut eigenem Kommentar eine Simulation, die State Machine lag im
@@ -351,7 +478,7 @@ Bekannte Einschraenkung: Der GNF-Gegenbeweis dokumentiert die Abwesenheit des
 Schutzes auf `v1.2.0`, demonstriert aber nicht, dass die Fixtures den Defekt
 fangen. Verfolgt als `SW-SCOPE-003`.
 
-## 1.2.0 — Branch Topology Consolidation
+## v1.2.0 (2026-08-11) — Branch Topology Consolidation
 
 Consolidates three previously unintegrated development lines onto a single baseline.
 Wave `CP-OPT-2026-08-05-W1`, session S02, iteration I00. Independently reviewed and
@@ -382,7 +509,7 @@ best-effort. Runtime integrity (authoritative run state, event journal, role
 authority, typed handoffs, checkpoints, evidence registry, observer cursor) is the
 subject of the next PRD, not of this consolidation.
 
-## 1.1.0 — Studio Hook Binding Engine
+## v1.1.0 (2026-05-26) — Studio Hook Binding Engine
 
 - **FEATURE**: Hook binding engine with 4 execution types (Python HookAdapter, shell, SKILL.md injection, Capacium capability)
 - **FEATURE**: YAML binding config with 3-source resolution (project > user > auto-discovered), dedup by capability+phase+position, priority sorting
@@ -394,13 +521,13 @@ subject of the next PRD, not of this consolidation.
 - **FEATURE**: 2 reference capabilities — `ci-gate` (post_test HookAdapter) + `lean-startup` SKILL.md (pre_discovery)
 - **TESTS**: 195 tests across hooks, binding, engine, discovery, licensing, CLI, and reference modules
 
-## 1.0.2
+## v1.0.2 (2026-05-21)
 
 - **FIX**: Capacium manifests now stay synchronized across the root bundle and all individual SkillWeave skill manifests.
 - **FEATURE**: Release gates now block releases when the requested release/tag version differs from any `capability.yaml` version.
 - **FEATURE**: Published GitHub releases trigger the Capacium Exchange publish workflow.
 
-## 1.0.1
+## v1.0.1 (2026-05-17)
 
 - **FEATURE**: Git Flow Convention — skills enforce minimum branching discipline (feature/fix/chore branches, dev → main merge path, preflight detection)
 - **FEATURE**: Forgejo → GitHub mirror workflow (`.forgejo/workflows/mirror.yml`) — auto-push to GitHub on main push
@@ -409,7 +536,7 @@ subject of the next PRD, not of this consolidation.
 - **IMPROVEMENT**: launch Pre-Launch-Checklist includes git flow check (dev → main merge path verified)
 - **IMPROVEMENT**: Skill SKILL.md files synced between user-level and repo-level copies
 
-## 1.0.0 — Forever Free
+## v1.0.0 (2026-05-17) — Forever Free
 - **RELEASE**: SkillWeave v1.0.0 "Forever Free" — production-stable AI skill orchestration
 - **FEATURE**: 5-level test pyramid (Lint → Unit → E2E Smoke → Acceptance → Evidence/Groundedness) with 3-state gate (PROMOTE/HOLD/ROLLBACK)
 - **FEATURE**: File-based planning system (beans-pattern) — directory-as-state Kanban with YAML frontmatter tickets in `.skillweave/planning/{backlog,doing,done}/`
@@ -427,7 +554,68 @@ subject of the next PRD, not of this consolidation.
 - **DOCS**: Complete reference docs for plan commands, testing flow, navigator detection, meta-commands, wizard flow
 - **LICENSE**: Copyright updated to LangeVC.com, Apache 2.0 confirmed
 
-## 0.7.0
+## v0.8.5 (2026-05-08) — Search providers consolidated
+
+Reconstructed from the immutable `v0.8.5` tag.
+
+### Added
+- SerpApi search provider (`SERPAPI_API_KEY`).
+- Perplexity MCP support, falling back to the API key when no cookie jar is present.
+
+### Changed
+- The `FAIGNITE_*` environment variables are named `FAIGATE_*`, completing the provider rename.
+
+### Removed
+- The Google CSE provider. Google deprecated the API it used.
+
+### Fixed
+- Manifest normalisation uses the `pyproject.toml` version for skill manifests instead of preserving a stale one.
+
+
+## v0.8.3 (2026-05-04) — More providers, fewer round trips
+
+Reconstructed from the immutable `v0.8.3` tag.
+
+### Added
+- OmniRoute and 9router as council providers, kept separate from Faigate rather than folded into it.
+- Perplexity as a search provider.
+
+### Fixed
+- Faigate availability is checked with one `GET /models` instead of one call per model.
+- Faigate reads its token from the local token file, and its base URL points at the local gateway.
+- The DuckDuckGo parser matches the result link directly, so search works without an external package.
+
+
+## v0.8.2 (2026-04-30) — Capacium validation compatibility
+
+Reconstructed from the immutable `v0.8.2` tag. Rolls up 0.8.1.
+
+### Added
+- Capacium validate auto-patch and manifest sync (0.8.1).
+
+### Removed
+- The `opencode-command` framework, from the default framework set, the bundle and every sub-skill. It failed Capacium validation.
+
+
+## v0.8.0 (2026-04-30) — Council, multi-provider routing, and the Capacium bundle
+
+Reconstructed from the immutable `v0.8.0` tag.
+
+### Added
+- `skillweave-council` — the LLM council skill, with web search and lifecycle integration.
+- A root `capability.yaml` of kind `bundle`, which is what the Capacium Exchange indexes.
+- A Capacium publish step on the release workflow, submitting to the Exchange on release.
+- Multi-provider council routing: Faigate, OpenRouter, Kilo, Claw and LlmAI are detected, with a single-model fallback.
+
+### Changed
+- `FaigniteProvider` is `FaigateProvider`. The old name was a branding error.
+
+### Fixed
+- Capacium sync respects a skill's own version instead of forcing the `pyproject.toml` version onto it.
+- The bundle manifest and the installer's skill list both carry `skillweave-council`.
+
+
+## v0.7.0 (2026-04-27)
 - **FEATURE**: 6 new agent-facing skills after promptchain pattern (SKILL.md + capability.yaml + sequence_type)
   - `skillweave-lifecycle` (plan): Bundle-Navigator, Phasen-Status, Entry-Point-Detection
   - `skillweave-discovery` (plan): Problemdefinition, User Research, Empathy Mapping, 11 Prompts
@@ -460,7 +648,7 @@ subject of the next PRD, not of this consolidation.
 - **IMPROVEMENT**: Legacy prompt-chain aus Installer-Tabelle entfernt (nie existiert, kein Effekt)
 - **IMPROVEMENT**: Release-Naming-Convention in auto-tag-release.yml enforced (SkillWeave vX.Y.Z)
 
-## 0.6.0
+## v0.6.0 (2026-04-27)
 - **FEATURE**: 7-phase lifecycle model with entry/exit conditions and bundle system (Initiative 01)
 - **FEATURE**: Discovery prompt library (11 prompts) and Design Thinking Lens (Initiative 02)
 - **FEATURE**: Release readiness assessment, premature invocation detection, Launch skill separation (Initiative 03)
@@ -478,12 +666,25 @@ subject of the next PRD, not of this consolidation.
 - **IMPROVEMENT**: promptchain-execute redefined as orchestration substrate (release logic moved to releasechain)
 - **IMPROVEMENT**: All 510 tests passing across full system
 
-## 0.5.6
+## v0.5.6 (2026-04-26)
 - **FEATURE**: Capacium badge and install section in README
 - **FEATURE**: Content boundary enforcement for release artifacts (AGENTS.md + prerelease.yml)
 - **IMPROVEMENT**: Version bump to 0.5.6 with updated documentation
 
-## 0.5.0
+## v0.5.5 (2026-04-26) — Scoring and validation fixes
+
+Reconstructed from the immutable `v0.5.5` tag.
+
+### Fixed
+- Confidence scoring, parameter validation, and the test expectations that had drifted from both.
+
+
+## v0.5.1 (2026-04-23) — Cleanup release
+
+Reconstructed from the immutable `v0.5.1` tag. It finalises the 0.5.0 changes and adds no capability of its own.
+
+
+## v0.5.0 (2026-04-21)
 - **RELEASE**: SkillWeave Next Level Features v0.5.0
 - **FEATURE**: Three risk modes (conservative, medium, unicorn) across all skills
 - **FEATURE**: .skillweave folder structure with config, tracking, manifesto
@@ -501,7 +702,7 @@ subject of the next PRD, not of this consolidation.
 - **FEATURE**: Capacium packaging for all skills - each skill ships as a self-contained capability.yaml for cap install
 - **IMPROVEMENT**: All Next Level features fully tested and integrated
 
-## 0.4.4
+## v0.4.4 (2026-04-10)
 - **FEATURE**: Execute Skill v2 – Ralph Loop state machine with binary gates, batch planning, and safe parallelization
 - **FEATURE**: Two-axis model for generate – separates `sequence_type` (plan/build/mixed) from `execution_mode` (rex/ralph_attended/ralph_overnight)
 - **FEATURE**: Enhanced validate – checks parallelization readiness and separation of critical path vs sidecar lanes
@@ -510,7 +711,7 @@ subject of the next PRD, not of this consolidation.
 - **IMPROVEMENT**: Generate includes mode mapping table with 9 combinations (plan/build/mixed × rex/ralph_attended/ralph_overnight)
 - **IMPROVEMENT**: Validate now identifies single-owner surfaces and integration gate requirements
 
-## 0.4.3
+## v0.4.3 (2026-04-09)
 - **FIX**: Installed `skillweave-blueprint` for supported agents so Codex and related tools see the full five-skill SkillWeave set
 - **FIX**: Cleaned up legacy SkillWeave duplicates under `~/.agents/skills` to prevent duplicate promptchain entries with stale descriptions
 - **FIX**: Source/Target directory separation – installer now copies skills from development repo to `~/.skillweave` installation directory
@@ -520,21 +721,21 @@ subject of the next PRD, not of this consolidation.
 - **IMPROVEMENT**: Installer automatically copies skills from source to target when run from development repository
 - **IMPROVEMENT**: Better logging and dry-run output for copying operations
 
-## 0.4.2
+## v0.4.2 (2026-04-09)
 - **FEATURE**: Interactive installer with agent selection modes (`--interactive`, `--uninstall`, `--update`, `--troubleshoot`)
 - **FIX**: Correct agent paths for Gemini CLI (`~/.gemini/skills`) and Qwen Code (`~/.qwen/skills`)
 - **FIX**: Prevent creating directories for non-existent agents (no "file-leichen")
 - **IMPROVEMENT**: Smart agent detection with numeric selection, `all`, or `none` options
 - **DOCS**: Updated README with interactive installation section and corrected agent paths
 
-## 0.4.1
+## v0.4.1 (2026-04-09)
 - **DOCS**: Complete README overhaul with "Product development flow on steroids" branding
 - **DOCS**: Added DEVELOPMENT_WORKFLOW.md with standardized release process
 - **DOCS**: Release conventions and "SkillWeave vX.Y.Z" naming standardization
 - **IMPROVEMENT**: ASCII workflow diagram and enhanced architecture documentation
 - **IMPROVEMENT**: Repository structure updates and clearer onboarding guidance
 
-## 0.4.0
+## v0.4.0 (2026-04-09)
 - **FEATURE**: Blueprint Skill (`/skillweave-blueprint`) for structured PRD creation
 - **FEATURE**: Enhanced Execute Skill with parallel execution and dependency analysis
 - **FEATURE**: Enhanced ReleaseChain Skill with dual-mode (REX/Ralph Loop) execution
@@ -543,7 +744,7 @@ subject of the next PRD, not of this consolidation.
 - **DOCS**: Full workflow example and comprehensive testing suite
 - **PERFORMANCE**: Optimizations for large projects (50+ tasks)
 
-## 0.3.5
+## v0.3.5 (2026-04-07)
 - **FEATURE**: Intelligent `skillweave-promptchain-execute` with plan/build/mixed mode detection
 - **NEW**: `skillweave-releasechain` development pipeline skill
 - Execute skill now detects sequence type and adapts outputs accordingly
@@ -552,7 +753,7 @@ subject of the next PRD, not of this consolidation.
 - Releasechain handles: review, testing, iteration, commit, push, PR, release, changelog
 - Better integration between execute and releasechain skills
 
-## 0.3.4
+## v0.3.4 (2026-04-07)
 - **IMPROVEMENT**: Enhanced `skillweave-promptchain-validate` with better output handling
 - Added user prompts for output format: Validation Report, Improved sequence only, Both separate files
 - Added sequence type detection: plan mode, build mode, mixed
@@ -560,19 +761,19 @@ subject of the next PRD, not of this consolidation.
 - Output format adaptation based on sequence type
 - Better documentation of validation interaction process
 
-## 0.3.3
+## v0.3.3 (2026-04-07)
 - **FEATURE**: Attachment detection for `skillweave-promptchain-execute` and `skillweave-promptchain-validate`
 - Skills now accept prompt sequences as .md/.txt file attachments
 - Updated descriptions, usage examples, and parameters
 - Added attachment detection logic description
 - Clarified that generate uses parameters only (no attachments)
 
-## 0.3.2
+## v0.3.2 (2026-04-07)
 - **FIX**: YAML parsing in `skillweave-promptchain-execute` argument-hint
 - Changed `inputs='{\"key\": \"value\"}'` to `inputs=\"[JSON]\"` to avoid YAML parser errors
 - Fixes Codex and other agent compatibility issues
 
-## 0.3.1
+## v0.3.1 (2026-04-07)
 - **FIX**: Multi-agent installer with correct paths and formats for all agents
 - **FIX**: Opencode installation as single `.md` files to `~/.config/opencode/commands/`
 - **FIX**: Claude Code/Codex/Antigravity paths to correct locations (`~/.claude/skills/`, `~/.codex/skills/`, `~/.antigravity/skills/`)
@@ -580,19 +781,19 @@ subject of the next PRD, not of this consolidation.
 - **FIX**: Updated README with correct manual installation instructions
 - **IMPROVEMENT**: Better error handling and logging in installer script
 
-## 0.3.0
+## v0.3.0 (2026-04-07)
 - separate skill directories for each command: `skillweave-promptchain-generate`, `-validate`, `-execute`
 - initial multi-agent installer script (had incorrect paths for some agents)
 - license changed from MIT to Apache 2.0
 - initial README updates for multi-agent installation
 
-## 0.2.0
+## v0.2.0 (2026-04-06)
 - new `skillweave-promptchain` skill with direct `/skillweave-*` commands
 - `/skillweave-promptchain-generate`, `-validate`, `-execute` commands
 - improved README with new installation instructions
 - updated multi-agent quickstart section
 
-## 0.1.0
+## v0.1.0 (2026-04-06)
 - initial repository structure
 - first `prompt-chain` skill
 - initial docs

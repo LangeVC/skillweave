@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-repo-health
 description: "Assess repository health, classify files, detect duplicates, and produce safe cleanup plans."
 argument-hint: 'command="[scan|report|classify|archive|duplicates|cleanup|manifest]" path="[path]"'

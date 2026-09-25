@@ -75,7 +75,7 @@ def _top_level_imports(path):
     with open(path, "r", encoding="utf-8") as fh:
         tree = ast.parse(fh.read(), filename=path)
     targets = []
-    for node in ast.walk(tree):
+    for node in tree.body:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name.startswith(_PKG_PREFIX):

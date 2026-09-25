@@ -15,9 +15,10 @@ were measured stale (SW-SKILL-001):
   ``gate_pass_requires``/``session_boundary``.
 
 The two named production PRDs (ops-002 mirror-rollout, Forgejo-first) are
-treated as unchanged fixtures under ``tests/fixtures/prd-schema/``. They are
-verbatim copies of the documents produced in ``lvc-planning``; do not edit
-them to make tests pass.
+treated as fixtures under ``tests/fixtures/prd-schema/``. They are real
+production artifacts with their structure preserved intact and their prose
+redacted; do not simplify them to make tests pass — flattening that structure
+destroys the only check that catches a stale schema.
 """
 
 from pathlib import Path
@@ -85,17 +86,54 @@ def _sequence_fail_closed(prd):
     return any(key not in cfg for key in _SEQUENCE_REQUIRED_KEYS)
 
 
-def _dispatch_count(prd):
-    """Number of dispatch briefs regen-sequence.py would write for a PRD.
+def _tasks_with_dispatch_order(doc):
+    return [t for t in doc["tasks"] if (t.get("lane") or {}).get("dispatch_order")]
 
-    Mirrors planning/scripts/regen-sequence.py: one dispatch (one brief) is
-    one invocation, capped at ``MAX_CRITERIA_PER_DISPATCH`` acceptance
-    criteria; a lane with explicit ``dispatch_order`` emits one brief per
-    entry instead of chunking. A task without ``acceptanceCriteria`` cannot
-    be dispatched at all — regen-sequence.py raises ``KeyError`` and zero
-    briefs are written. A ``sequence`` block missing any generator-required
-    key also fails closed with zero, because ``_sequence``/``_briefs`` read
-    them before any brief exists.
+
+def _dispatch_order_errors(prd):
+    """Exact-once errors in every task's ``dispatch_order``.
+
+    This is a *structural* check, not a generation proof: for each task that
+    declares ``dispatch_order``, the criteria it covers must be exactly
+    ``1..len(acceptanceCriteria)`` with no missing, duplicate or out-of-range
+    entry. It shadows regen-sequence.py ``validate_dispatch_orders`` so the
+    exact-once contract is pinned in the product tests independently of a
+    live generator run.
+    """
+    errors = []
+    for task in prd["tasks"]:
+        lane = task.get("lane")
+        if not (lane and lane.get("dispatch_order")):
+            continue
+        seen = []
+        for dispatch in lane["dispatch_order"]:
+            if not dispatch.get("criteria"):
+                errors.append(
+                    f"{task['id']}: dispatch_order group is empty; every dispatch"
+                    f" must name at least one criterion")
+            else:
+                seen.extend(dispatch["criteria"])
+        n = len(task["acceptanceCriteria"])
+        if len(seen) != n or sorted(seen) != list(range(1, n + 1)):
+            missing = [c for c in range(1, n + 1) if c not in seen]
+            dupes = sorted({c for c in seen if seen.count(c) > 1})
+            out = sorted({c for c in seen if c < 1 or c > n})
+            errors.append(
+                f"{task['id']}: dispatch_order must cover criteria 1..{n} exactly once"
+                f" (missing {missing}, duplicates {dupes}, out-of-range {out})")
+    return errors
+
+
+def _structural_dispatch_estimate(prd):
+    """Structural dispatch estimate — a local helper, never a generation proof.
+
+    Replica/chunk arithmetic is used ONLY to bound the synthetic red/corrected
+    regression pair below. It is not presented as evidence that a production
+    PRD generates briefs; realise the real generator or run it instead. For a
+    lane with explicit ``dispatch_order`` one brief is emitted per entry; for a
+    lane-less task criteria are chunked at ``MAX_CRITERIA_PER_DISPATCH``. A task
+    without ``acceptanceCriteria`` (the red, snake_case shape) fails closed with
+    zero, as does a ``sequence`` block missing any generator-required key.
     """
     if _sequence_fail_closed(prd):
         return 0
@@ -105,10 +143,6 @@ def _dispatch_count(prd):
         if lane.get("dispatch_order"):
             total += len(lane["dispatch_order"])
             continue
-        # A task written to the OLD schema uses acceptance_criteria
-        # (snake_case), which regen-sequence.py does not read. It raises
-        # KeyError on the first such task and writes ZERO briefs for the
-        # whole PRD. Match that: any missing acceptanceCriteria aborts.
         try:
             n_acs = len(task["acceptanceCriteria"])
         except KeyError:
@@ -194,15 +228,111 @@ class TestValidateDetectsBuildSequence:
         assert "promptchain-execute" in skill
 
 
+class TestExactOnceDispatchCoverage:
+    """Criterion: every task with ``dispatch_order`` in both production PRDs
+    covers its acceptance criteria exactly once, and missing / duplicate /
+    out-of-range coverage is a focused, rejected mutation."""
+
+    PROD_PRDS = ("ops-002-mirror-rollout.json", "forgejo-first.json")
+
+    def test_prod_prds_have_exact_once_coverage(self):
+        for name in self.PROD_PRDS:
+            assert _dispatch_order_errors(_fixture(name)) == [], name
+
+    def test_missing_criterion_is_rejected(self):
+        for name in self.PROD_PRDS:
+            doc = _fixture(name)
+            task = _tasks_with_dispatch_order(doc)[0]
+            disp = task["lane"]["dispatch_order"]
+            # Drop one criterion from the final dispatch so coverage is short.
+            crit = list(disp[-1]["criteria"])
+            dropped = crit.pop()
+            disp[-1] = {"criteria": crit, "focus": "removed one criterion"}
+            errs = _dispatch_order_errors(doc)
+            assert len(errs) == 1, name
+            assert task["id"] in errs[0], name
+            assert "missing" in errs[0] and str(dropped) in errs[0], name
+
+    def test_duplicate_criterion_is_rejected(self):
+        for name in self.PROD_PRDS:
+            doc = _fixture(name)
+            task = _tasks_with_dispatch_order(doc)[0]
+            dup = task["lane"]["dispatch_order"][-1]["criteria"][0]
+            task["lane"]["dispatch_order"].append(
+                {"criteria": [dup], "focus": "duplicate on purpose"})
+            errs = _dispatch_order_errors(doc)
+            assert len(errs) == 1, name
+            assert task["id"] in errs[0], name
+            assert "duplicates" in errs[0], name
+
+    def test_out_of_range_criterion_is_rejected(self):
+        for name in self.PROD_PRDS:
+            doc = _fixture(name)
+            task = _tasks_with_dispatch_order(doc)[0]
+            n = len(task["acceptanceCriteria"])
+            task["lane"]["dispatch_order"].append(
+                {"criteria": [n + 99], "focus": "out of range on purpose"})
+            errs = _dispatch_order_errors(doc)
+            assert len(errs) == 1, name
+            assert task["id"] in errs[0], name
+            assert "out-of-range" in errs[0], name
+
+    def test_schema_rejects_empty_criteria_group(self):
+        for name in self.PROD_PRDS:
+            doc = _fixture(name)
+            task = _tasks_with_dispatch_order(doc)[0]
+            task["lane"]["dispatch_order"].append(
+                {"criteria": [], "focus": "empty group on purpose"})
+            errs = _errors(doc)
+            assert len(errs) == 1, name
+            assert list(errs[0].path) == [
+                "tasks", doc["tasks"].index(task), "lane", "dispatch_order",
+                len(task["lane"]["dispatch_order"]) - 1, "criteria"], name
+
+    def test_helper_rejects_empty_group_despite_remaining_exact_once(self):
+        for name in self.PROD_PRDS:
+            doc = _fixture(name)
+            task = _tasks_with_dispatch_order(doc)[0]
+            # Append an empty group: the remaining nonempty groups still cover
+            # every criterion exactly once, so the exact-once check alone would
+            # pass. The empty group must still be rejected explicitly.
+            task["lane"]["dispatch_order"].append(
+                {"criteria": [], "focus": "empty group on purpose"})
+            errs = _dispatch_order_errors(doc)
+            assert len(errs) == 1, name
+            assert task["id"] in errs[0], name
+            assert "empty" in errs[0], name
+
+    def test_all_nonempty_regrouping_stays_accepted(self):
+        for name in self.PROD_PRDS:
+            doc = _fixture(name)
+            task = _tasks_with_dispatch_order(doc)[0]
+            lane = task["lane"]
+            merged = [c for d in lane["dispatch_order"] for c in d["criteria"]]
+            n = len(task["acceptanceCriteria"])
+            assert sorted(merged) == list(range(1, n + 1)), name
+            # Redistribute the same exact-once coverage into fewer, all-nonempty
+            # groups; original group boundaries are not immutable.
+            midpoint = (len(merged) + 1) // 2
+            lane["dispatch_order"] = [
+                {"criteria": merged[:midpoint], "focus": "first regrouped group"},
+                {"criteria": merged[midpoint:], "focus": "second regrouped group"},
+            ]
+            assert _errors(doc) == [], name
+            assert _dispatch_order_errors(doc) == [], name
+
+
 class TestRedAndCorrectedFixtures:
-    """Criterion 5: a PRD valid under the previous schema yields zero
-    dispatches; the corrected fixture yields at least one brief."""
+    """Criterion 5: a PRD valid under the previous schema has no structurally
+    dispatchable lane; the corrected fixture does. Structural helper only —
+    it does not claim a production PRD generates briefs."""
 
     def test_red_fixture_produces_zero_dispatches(self):
         doc = _fixture("red-old-format.json")
-        assert _dispatch_count(doc) == 0
+        assert _structural_dispatch_estimate(doc) == 0
 
     def test_corrected_fixture_produces_at_least_one_brief(self):
         doc = _fixture("corrected-build-format.json")
         assert _errors(doc) == []
-        assert _dispatch_count(doc) >= 1
+        assert _structural_dispatch_estimate(doc) >= 1
+        assert _dispatch_order_errors(doc) == []

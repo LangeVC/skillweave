@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-promptchain-generate
 description: Generate standardized SkillWeave prompt sequences from PRD (complexity-aware) or topic/domain. Creates execution plans optimized for REX (simple) or Ralph Loop (standard/complex) workflows.
 argument-hint: inputs="[JSON with prd/topic]" mode="[auto/simple/standard/complex]" target="[humanize/machinize/mixed]" risk_mode="[conservative/medium/unicorn]"
@@ -41,14 +43,20 @@ modular_templates: true
 
 Proceed with core skill logic only AFTER these four criteria are met.
 
+## Usage
+
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 **Usage (PRD-based - Recommended):**
 ```
-/skillweave-promptchain-generate inputs='{"prd": "prd.json"}' mode="auto" target="mixed"
+skillweave-promptchain-generate inputs='{"prd": "prd.json"}' mode="auto" target="mixed"
 ```
 
 **Usage (Topic-based):**
 ```
-/skillweave-promptchain-generate inputs='{"topic": "Wellness business evaluation", "domain": "wellness", "goal": "Create evaluation framework"}' mode="auto"
+skillweave-promptchain-generate inputs='{"topic": "Wellness business evaluation", "domain": "wellness", "goal": "Create evaluation framework"}' mode="auto"
 ```
 
 **Parameters:**
@@ -82,12 +90,12 @@ Proceed with core skill logic only AFTER these four criteria are met.
 
 **PRD Input Example:**
 ```
-/skillweave-promptchain-generate inputs='{"prd": "generated/prd.json"}' mode="auto"
+skillweave-promptchain-generate inputs='{"prd": "generated/prd.json"}' mode="auto"
 ```
 
 **Topic Input Example:**
 ```
-/skillweave-promptchain-generate inputs='{"topic": "Market research for AI tools", "domain": "saas", "goal": "Competitive analysis"}'
+skillweave-promptchain-generate inputs='{"topic": "Market research for AI tools", "domain": "saas", "goal": "Competitive analysis"}'
 
 **Output (PRD-based):**
 When generating from PRD, creates optimized execution sequences:
@@ -414,19 +422,19 @@ PromptChain Generate is a key component in the complete SkillWeave development f
 
 ### Complete Workflow: Blueprint → PromptChain → ReleaseChain
 
-1. **Blueprint Skill** (`/skillweave-blueprint`):
+1. **Blueprint Skill** (`skillweave-blueprint`):
    - Creates structured PRD with `execution_recommendation`
    - Output: `prd.json`, `prd.md`, memory system templates
 
-2. **PromptChain Generate** (`/skillweave-promptchain-generate`):
+2. **PromptChain Generate** (`skillweave-promptchain-generate`):
    - Analyzes PRD complexity and generates optimized execution sequences
    - Output: `execution-sequences.yaml`, `agent-assignments.json`
 
-3. **PromptChain Execute** (`/skillweave-promptchain-execute`):
+3. **PromptChain Execute** (`skillweave-promptchain-execute`):
    - Executes sequences with parallel execution and dependency analysis
    - For build components: Offers to invoke ReleaseChain automatically
 
-4. **ReleaseChain** (`/skillweave-releasechain`):
+4. **ReleaseChain** (`skillweave-releasechain`):
    - Executes PRD tasks with Ralph Loop (or REX-style for simple tasks)
    - Uses capability-based agent routing (agent-agnostic)
    - Output: Completed project with memory system updates
@@ -435,16 +443,16 @@ PromptChain Generate is a key component in the complete SkillWeave development f
 
 ```bash
 # Step 1: Create blueprint from idea
-/skillweave-blueprint idea="AI meeting notes summarizer" domain="saas"
+skillweave-blueprint idea="AI meeting notes summarizer" domain="saas"
 
 # Step 2: Generate execution sequences from PRD
-/skillweave-promptchain-generate inputs='{"prd": "generated/prd.json"}' mode="auto"
+skillweave-promptchain-generate inputs='{"prd": "generated/prd.json"}' mode="auto"
 
 # Step 3: Execute sequences (or skip to ReleaseChain)
-/skillweave-promptchain-execute sequence="execution-sequences.yaml" inputs='{"prd": "generated/prd.json"}'
+skillweave-promptchain-execute sequence="execution-sequences.yaml" inputs='{"prd": "generated/prd.json"}'
 
 # Step 4: Execute development pipeline (if build components)
-/skillweave-releasechain inputs='{"prd": "generated/prd.json", "sequences": "execution-sequences.yaml"}' mode="attended"
+skillweave-releasechain inputs='{"prd": "generated/prd.json", "sequences": "execution-sequences.yaml"}' mode="attended"
 ```
 
 ### Agent-Agnostic Design
@@ -475,7 +483,7 @@ as a read-only input and never re-resolves a profile.
 **Invocation (profile path):**
 
 ```
-/skillweave-promptchain-generate profile="path/to/effective-profile.snapshot.json"
+skillweave-promptchain-generate profile="path/to/effective-profile.snapshot.json"
 ```
 
 **How the chain is derived** — the resolver exposes a resolved content mapping and

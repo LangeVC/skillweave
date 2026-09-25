@@ -13,6 +13,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
 SKILLS_DIR = PROJECT_ROOT / "skills"
+# The repository's own .skillweave/ is git-excluded (docs/substrate-map.md,
+# invariant 5); the boundaries policy is read from the checked-in fixture.
+SUBSTRATE = PROJECT_ROOT / "tests" / "fixtures" / "substrate-root" / ".skillweave"
 
 
 # ─── Metadata lint: all skills ──────────────────────────────────────────
@@ -156,7 +159,7 @@ def test_release_workflow_no_deploy_methods():
 
 def test_skill_boundaries_yaml_assigns_deployment_to_launch():
     """Verify boundaries YAML assigns deployment to Launch, not Release."""
-    boundaries_path = PROJECT_ROOT / ".skillweave" / "release" / "skill-boundaries.yaml"
+    boundaries_path = SUBSTRATE / "release" / "skill-boundaries.yaml"
     with open(boundaries_path) as f:
         data = yaml.safe_load(f)
 
@@ -316,7 +319,7 @@ def test_release_workflow_does_not_import_deployment():
 def test_launch_owns_deployment_module():
     """Launch deployment.py must exist and own deployment logic.
 
-    Validates per .skillweave/release/skill-boundaries.yaml:
+    Validates per tests/fixtures/substrate-root/.skillweave/release/skill-boundaries.yaml:
     Launch handles deployment, health checks, and rollout validation.
     Release does not.
 
@@ -358,7 +361,7 @@ def test_launch_owns_deployment_module():
 
 def test_launch_skill_boundary_yaml_owns_deployment():
     """Boundaries YAML must assign deployment to Launch, exclude from Release."""
-    boundaries_path = PROJECT_ROOT / ".skillweave" / "release" / "skill-boundaries.yaml"
+    boundaries_path = SUBSTRATE / "release" / "skill-boundaries.yaml"
     with open(boundaries_path) as f:
         data = yaml.safe_load(f)
 

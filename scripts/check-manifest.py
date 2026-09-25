@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""check-manifest — prueft SkillWeaves capabilities:-Manifest gegen die Mitgliedsdateien.
+"""check-manifest — check SkillWeave's capabilities: manifest against the member files.
 
-Anders als version-sync (Frage: "stimmen alle Orte mit der Quelle ueberein")
-stellt dieses Werkzeug die Frage: "stimmt eine Deklaration mit dem Deklarierten
-ueberein". Der capabilities:-Block der Bundle-capability.yaml ist ein MANIFEST:
-je Eintrag wird zugesichert, welche Fassung eines Mitglieds das Bundle
-ausliefert. Geprueft wird je Mitglied:
+Where version-sync asks "does every location agree with the source", this tool
+asks a different question: "does a declaration agree with what it declares". The
+capabilities: block of the bundle capability.yaml is a MANIFEST: each entry
+promises which version of a member the bundle ships. Per member it checks:
 
-    deklarierter Wert im capabilities:-Block
+    the value declared in the capabilities: block
         == version: in skills/<name>/capability.yaml
 
-Ohne jeden Bezug auf source_of_truth. Abweichende Mitgliedsversionen sind
-erlaubt und muessen erlaubt bleiben (der Normalfall eines Bundles); verboten
-ist nur, dass Manifest und Mitgliedsdatei sich widersprechen.
+with no reference to source_of_truth at all. Member versions that differ from the
+bundle are permitted and must stay permitted — that is the normal state of a
+bundle. The only thing forbidden is a manifest and a member file contradicting
+each other.
 
-Stdlib only, laeuft auf leerem ubuntu-latest-Runner.
+Stdlib only; runs on a bare ubuntu-latest runner.
 
 Usage:
     check-manifest.py [--repo PATH]
-Exit 0 = Manifest und Mitgliedsdateien stimmen ueberein.
-Exit 1 = mindestens ein Mitglied widerspricht seinem Manifest-Eintrag.
+Exit 0 = manifest and member files agree.
+Exit 1 = at least one member contradicts its manifest entry.
 """
 
 from __future__ import annotations
@@ -32,17 +32,16 @@ from typing import NoReturn
 
 BUNDLE_MANIFEST = "capability.yaml"
 
-# In der Bundle-capability.yaml steht ein capabilities:-Block mit Eintraegen
-# der Form:
+# The bundle capability.yaml carries a capabilities: block of entries shaped:
 #   - name: skillweave-blueprint
 #     source: ./skills/skillweave-blueprint
 #     version: 1.3.0
-# Jeder Eintrag ist ein PIN auf das entsprechende Skill-Artefakt auf der Platte,
-# nicht die Versionsautoritaet fuer diesen Skill. Geprueft werden daher drei
-# Felder gegen die Mitgliedsdatei skills/<name>/capability.yaml:
-#   name    == eigener `name:`-Schluessel der Mitgliedsdatei
+# Each entry is a PIN onto the corresponding skill artefact on disk, not the
+# version authority for that skill. Three fields are therefore checked against
+# the member file skills/<name>/capability.yaml:
+#   name    == the member file's own `name:` key
 #   source  == ./skills/<name>
-#   version == eigener `version:`-Schluessel der Mitgliedsdatei
+#   version == the member file's own `version:` key
 ENTRY_NAME_RE = re.compile(r"^-\s+name:\s*(\S+)")
 ENTRY_SOURCE_RE = re.compile(r"^source:\s*(\S+)")
 VERSION_RE = re.compile(r"^version:\s*(\S+)")
@@ -54,7 +53,7 @@ def _die(msg: str) -> NoReturn:
 
 
 def load_member_field(repo: Path, name: str, field: str) -> str | None:
-    """Lies `field:` aus skills/<name>/capability.yaml; None wenn fehlt."""
+    """Read `field:` from skills/<name>/capability.yaml; None when absent."""
     p = repo / "skills" / name / "capability.yaml"
     if not p.exists():
         return None
@@ -63,7 +62,7 @@ def load_member_field(repo: Path, name: str, field: str) -> str | None:
 
 
 def parse_manifest(repo: Path) -> list[tuple[str, str, str]]:
-    """Lies (name, source, version) je capabilities:-Eintrag."""
+    """Read (name, source, version) for each capabilities: entry."""
     p = repo / BUNDLE_MANIFEST
     if not p.exists():
         _die(f"no {BUNDLE_MANIFEST}")
@@ -76,7 +75,7 @@ def parse_manifest(repo: Path) -> list[tuple[str, str, str]]:
             in_caps = True
             continue
         if in_caps and raw.strip() and not raw.startswith((" ", "\t", "-")):
-            # Block zu Ende (naechster Top-Level-Schlüssel).
+            # End of the block: the next top-level key.
             break
         if not in_caps:
             continue
@@ -112,25 +111,25 @@ def main() -> int:
         actual = load_member_field(repo, name, "version")
         expected_source = f"./skills/{name}"
         if on_disk_name is None or actual is None:
-            print(f"  MISSING   {name}: skills/{name}/capability.yaml fehlt (Manifest sagt {declared})")
+            print(f"  MISSING   {name}: skills/{name}/capability.yaml is absent (manifest says {declared})")
             failed = True
             continue
         if on_disk_name != name:
-            print(f"  MISMATCH  {name}: Manifest name {name}, Datei name {on_disk_name}")
+            print(f"  MISMATCH  {name}: manifest name {name}, file name {on_disk_name}")
             failed = True
         if source != expected_source:
-            print(f"  MISMATCH  {name}: Manifest source {source!r}, erwartet {expected_source!r}")
+            print(f"  MISMATCH  {name}: manifest source {source!r}, expected {expected_source!r}")
             failed = True
         if actual != declared:
-            print(f"  MISMATCH  {name}: Manifest sagt {declared}, Datei sagt {actual}")
+            print(f"  MISMATCH  {name}: manifest says {declared}, file says {actual}")
             failed = True
         if on_disk_name == name and source == expected_source and actual == declared:
             print(f"  ok        {name} = {actual}")
 
     if failed:
-        print(f"check-manifest: FAIL — {sum(1 for _ in entries)} Mitglieder, Manifest weicht ab")
+        print(f"check-manifest: FAIL — {sum(1 for _ in entries)} members, manifest disagrees")
         return 1
-    print(f"check-manifest: OK — {len(entries)} Mitglieder, Manifest == Mitgliedsdateien")
+    print(f"check-manifest: OK — {len(entries)} members, manifest == member files")
     return 0
 
 

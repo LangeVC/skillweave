@@ -39,6 +39,7 @@ from skillweave.routing.profile import (
 )
 
 from tests.gate_1312 import _sibling as sib
+from tests.gate_1312._sibling import require
 
 SEVEN_PHASES = [
     "Discovery", "Blueprint", "Design", "Build", "Release", "Launch", "Post-Release",
@@ -80,6 +81,7 @@ def test_criterion_03_profile_precedence_snapshot_parity_and_semantics(tmp_path)
     """Precedence chain, immutable resolved snapshot, basic-software parity, and
     distinct research semantics — positive, conflict, and retroactive fixtures.
     """
+    require(sib.base_profiles_dir, name="skillweave-profiles")
     # --- Precedence: the single documented chain -------------------------------
     default = Limits()
     assert resolve_limits(None, None) == default

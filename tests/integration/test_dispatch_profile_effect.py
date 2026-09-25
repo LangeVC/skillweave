@@ -257,6 +257,33 @@ def test_resolved_dispatch_carries_the_single_resolved_limits():
     assert resolved.limits.max_retries == 1
     assert resolved.limits.min_models_required == 2
     assert resolved.limits.on_model_failure == "skip"
+    # The heartbeat interval is profile data with a positive default (5.0). The
+    # example profile does not declare it, so the default flows through.
+    assert resolved.limits.heartbeat_interval == 5.0
+
+
+def test_heartbeat_interval_is_profile_data_distinct_from_timeout():
+    import tempfile
+
+    import yaml
+
+    raw = yaml.safe_load(_EXAMPLE_PROFILE.read_text(encoding="utf-8"))
+    raw["limits"]["heartbeat_interval"] = 0.25
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tmp:
+        yaml.safe_dump(raw, tmp)
+        tmp_path = tmp.name
+
+    try:
+        altered = resolve_dispatch_profile(tmp_path, REQUIRED_ROLES)
+    finally:
+        Path(tmp_path).unlink()
+
+    # The explicit heartbeat interval is carried as config, independently of the
+    # unchanged process timeout: a child may exceed the heartbeat interval (0.25s)
+    # without being killed (the timeout is still 60.0).
+    assert altered.limits.heartbeat_interval == 0.25
+    assert altered.limits.timeout == 60.0
+    assert altered.limits.heartbeat_interval != altered.limits.timeout
 
 
 # ── Criterion 5: no literal harness/model name in dispatch implementation ──

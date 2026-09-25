@@ -157,31 +157,37 @@ class TestBundlePinsMatchOnDiskSkills:
             )
 
 
-class TestLockstepPolicy:
-    """Under the declared lockstep policy, every surface carries one version."""
+class TestRequiredSurfaces:
+    """Under ``decoupled_member_pins`` only the REQUIRED surfaces are lockstep.
 
-    def test_release_policy_is_lockstep(self):
-        assert _load_topology()["release_policy"] == "lockstep"
+    Runtime and the distribution bundle are ``required: true`` and must equal
+    the runtime version (and therefore the product tag). Every member surface —
+    the bundle's ``capabilities[]`` pins AND each member's own skill_capability
+    file — is informational: a packaging-only bump leaves pins and member files
+    lagging the bundle together, so they are not locked to runtime here. Their
+    pin == member-file consistency is owned by ``scripts/check-manifest.py``,
+    not by this unit test.
+    """
 
-    def test_all_surfaces_share_the_runtime_version(self):
-        topo = _load_topology()
+    def test_release_policy_decouples_member_pins(self):
+        assert _load_topology()["release_policy"] == "decoupled_member_pins"
+
+    def test_required_surfaces_share_the_runtime_version(self):
         runtime = _read_first_match(
             "pyproject.toml", r'^version\s*=\s*"(\d+\.\d+\.\d+)"'
         )
         assert runtime is not None, "pyproject.toml has no version"
         assert re.fullmatch(r"\d+\.\d+\.\d+", runtime), f"not semver: {runtime!r}"
 
-        skill_by_disk = {}
-        for d in _all_skill_dirs():
-            cap = yaml.safe_load((REPO_ROOT / "skills" / d / "capability.yaml").read_text())
-            skill_by_disk[d] = cap
-
         for loc in _locations():
             value = _read_first_match(loc["path"], loc["pattern"])
             assert value is not None, f"no match for {loc['role']} at {loc['path']}"
+            if not loc.get("required", True):
+                # Informational (member pins + member files) may legitimately lag.
+                continue
             assert value == runtime, (
                 f"{loc['role']} at {loc['path']} is {value!r}, not runtime {runtime!r} "
-                f"(lockstep policy violated)"
+                f"(a required surface drifted from the runtime version)"
             )
 
     def test_same_version_cannot_hide_a_different_inventory(self):

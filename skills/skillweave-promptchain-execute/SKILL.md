@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-promptchain-execute
 type: orchestration
 description: Execute SkillWeave sequences with dependency-aware batches, controlled parallelism, retries, evidence, and binary gates.
@@ -13,9 +15,9 @@ This skill is the execution engine for SkillWeave. It owns:
 - **Lane scheduling and Ralph Loop** — iterative build/verify/advance cycles with binary gates
 - **Retry and state management** — automatic retry, state tracking, failure recovery
 - **Batch planning** — dependency-aware batch decomposition with safe parallel lanes
-- **Build completion handoff to Release** — completed, verified outputs hand off to `/skillweave-releasechain`
+- **Build completion handoff to Release** — completed, verified outputs hand off to `skillweave-releasechain`
 
-ReleaseChain receives completed build outputs; it does NOT execute build tasks. Deployment and go-live belong to `/skillweave-launch`.
+ReleaseChain receives completed build outputs; it does NOT execute build tasks. Deployment and go-live belong to `skillweave-launch`.
 
 ## Mandatory Pre-Flight: SkillWeave Sandboxing
 
@@ -50,14 +52,18 @@ Proceed with core skill logic only AFTER these four criteria are met.
 
 ## Usage
 
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```text
-/skillweave-promptchain-execute sequence="[prompt sequence text]" inputs="[JSON inputs]"
+skillweave-promptchain-execute sequence="[prompt sequence text]" inputs="[JSON inputs]"
 ```
 
 Or attach a `.md` / `.txt` sequence file and provide:
 
 ```text
-/skillweave-promptchain-execute inputs='{"key":"value"}'
+skillweave-promptchain-execute inputs='{"key":"value"}'
 ```
 
 ## Parameters
@@ -579,8 +585,8 @@ offer the appropriate downstream skill:
 
 | Downstream need | Skill |
 |-----------------|-------|
-| Release (version, changelog, publish) | `/skillweave-releasechain` |
-| Launch (deploy, communicate, go-live) | `/skillweave-launch` |
+| Release (version, changelog, publish) | `skillweave-releasechain` |
+| Launch (deploy, communicate, go-live) | `skillweave-launch` |
 
 ### Conditions
 

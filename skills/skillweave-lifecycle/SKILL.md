@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-lifecycle
 description: "Navigate SkillWeave lifecycles, profiles, planning state, testing gates, and next-action recommendations."
 argument-hint: command="[status|recommend|switch|phases|plan|test]" bundle="[id]"
@@ -48,30 +50,34 @@ Proceed only after these four criteria are met.
 
 ## Usage
 
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
 # Navigator & Status
-/skillweave-lifecycle command="status"                    # Current phase + bundle + recommendation
-/skillweave-lifecycle command="recommend"                 # Next recommended bundle/action
-/skillweave-lifecycle command="phases"                    # List all 7 phases
-/skillweave-lifecycle command="switch" bundle="full-lifecycle"  # Switch to bundle
+skillweave-lifecycle command="status"                    # Current phase + bundle + recommendation
+skillweave-lifecycle command="recommend"                 # Next recommended bundle/action
+skillweave-lifecycle command="phases"                    # List all 7 phases
+skillweave-lifecycle command="switch" bundle="full-lifecycle"  # Switch to bundle
 
 # Planning Board
-/skillweave-lifecycle command="plan"                      # Show planning board
-/skillweave-lifecycle command="plan" action="create" title="My Task" priority="high" type="feature"
-/skillweave-lifecycle command="plan" action="move" id="FEAT-001" target="doing"
-/skillweave-lifecycle command="plan" action="show" id="FEAT-001"
-/skillweave-lifecycle command="plan" action="seed" prd=".skillweave/prds/v1.0/prd.json"
+skillweave-lifecycle command="plan"                      # Show planning board
+skillweave-lifecycle command="plan" action="create" title="My Task" priority="high" type="feature"
+skillweave-lifecycle command="plan" action="move" id="FEAT-001" target="doing"
+skillweave-lifecycle command="plan" action="show" id="FEAT-001"
+skillweave-lifecycle command="plan" action="seed" prd=".skillweave/prds/v1.0/prd.json"
 
 # Testing
-/skillweave-lifecycle command="test"                      # Run all test levels
-/skillweave-lifecycle command="test" level="unit"         # Run specific level
-/skillweave-lifecycle command="test" action="results"     # Show latest results
+skillweave-lifecycle command="test"                      # Run all test levels
+skillweave-lifecycle command="test" level="unit"         # Run specific level
+skillweave-lifecycle command="test" action="results"     # Show latest results
 
 # Wizard & Reports
-/skillweave-lifecycle command="wizard"                    # 5-question guided entry (Layer 0)
-/skillweave-lifecycle command="report"                    # Show latest release report
-/skillweave-lifecycle command="report" action="generate"  # Generate report from current state
-/skillweave-lifecycle command="report" action="list"      # List all reports
+skillweave-lifecycle command="wizard"                    # 5-question guided entry (Layer 0)
+skillweave-lifecycle command="report"                    # Show latest release report
+skillweave-lifecycle command="report" action="generate"  # Generate report from current state
+skillweave-lifecycle command="report" action="list"      # List all reports
 ```
 
 ## Commands

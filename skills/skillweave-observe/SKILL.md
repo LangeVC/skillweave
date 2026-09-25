@@ -1,4 +1,6 @@
 ---
+facade: true
+experimental: true
 name: skillweave-observe
 description: Execution Reports, Timing, Events, Memory, Summary, Health — Read-Only Observability
 argument-hint: command="[report|timing|events|memory|summary|health]" session="[id]" level="[level]"
@@ -11,11 +13,15 @@ Inspect reports, timing data, event streams, memory drawers, health status, and 
 
 ## Usage
 
+Invoke the skill by its name with arguments. The skill is
+host-neutral; no executable prefix is required — route it through any host on
+any supported transport (Markdown or MCP).
+
 ```
-/skillweave-observe command="report" session="<id>"
-/skillweave-observe command="events" session="<id>" level="WARNING"
-/skillweave-observe command="memory" session="<id>"
-/skillweave-observe command="health"
+skillweave-observe command="report" session="<id>"
+skillweave-observe command="events" session="<id>" level="WARNING"
+skillweave-observe command="memory" session="<id>"
+skillweave-observe command="health"
 ```
 
 ## Commands

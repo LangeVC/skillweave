@@ -4,9 +4,12 @@ Proves the version topology, foreign-cwd discovery, and strict dual-review
 attestation regressions:
 
 * **runtime/bundle/skill-capability version topology** — ``pyproject.toml`` is the
-  bundle source of truth (``.version.yaml``), ``capability.yaml`` carries the
-  same bundle version, and every bundled skill capability is pinned to that same
-  version;
+  bundle source of truth (``.version.yaml``), ``capability.yaml`` carries the same
+  bundle version, while each bundled skill capability is free to carry its own
+  decoupled pin (decision (b), SW152-020). A pin may diverge from the bundle
+  version; the only manifest rule left to the topology gate is that each pin
+  agrees with its own member file, and that check is owned by
+  ``scripts/check-manifest.py``, not duplicated here;
 * **foreign-cwd discovery** — the runtime resolves its own package root from
   ``__file__``, never from ``os.getcwd()``, so a caller in an unrelated directory
   reaches the same profiles/schemas;
@@ -19,6 +22,8 @@ attestation regressions:
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -52,14 +57,26 @@ def test_criterion_05_version_topology_foreign_cwd_dual_review():
 
     capability = _load_yaml(core / "capability.yaml")
     assert capability["kind"] == "bundle"
+    # The bundle manifest's own version tracks pyproject.toml (the bundle is the
+    # versioned object). Decoupled member pins are normal; only the bundle's own
+    # head version is expected to match the source of truth.
     assert capability["version"] == bundle_version
-    # Every bundled capability pins the same bundle version (no mixed topology).
     caps = capability["capabilities"]
     assert caps, "no bundled capabilities declared"
-    for cap in caps:
-        assert cap["version"] == bundle_version, (
-            f"{cap['name']} version {cap['version']} != bundle {bundle_version}"
-        )
+
+    # Manifest pin vs its own member file is owned by scripts/check-manifest.py
+    # and is NOT re-derived here (a pin below the bundle version is permitted, so
+    # bundle-lockstep equality would wrongly gate a legal decoupled release). The
+    # topology gate asserts only that the maintained manifest check passes.
+    check = subprocess.run(
+        [sys.executable, str(core / "scripts" / "check-manifest.py"), "--repo", str(core)],
+        capture_output=True,
+        text=True,
+    )
+    assert check.returncode == 0, (
+        f"scripts/check-manifest.py rejected the tree (rc={check.returncode}):\n"
+        f"{check.stderr or check.stdout}"
+    )
 
     # The bundle version is a released semver (1.3.11 here); read-only assertion
     # that the released object is the one under gate.

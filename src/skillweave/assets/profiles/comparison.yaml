@@ -1,0 +1,26 @@
+name: comparison-profile
+tier: comparison
+limits:
+  timeout: 300.0
+  max_retries: 3
+  min_models_required: 2
+  on_model_failure: skip
+roles:
+  ops:
+    model: faigate/deepseek-v4-pro
+    tool:
+      name: opencode
+      launch_command: opencode run --model faigate/deepseek-v4-pro -
+    capabilities:
+      can_mutate_run_state: true
+  reviewer:
+    model: faigate/deepseek-v4-pro
+    tool:
+      name: opencode
+      launch_command: opencode run --model faigate/deepseek-v4-pro -
+    capabilities:
+      can_approve_gate: true
+  observer:
+    observer: true
+    capabilities:
+      can_observe_run: true

@@ -8,6 +8,7 @@ from skillweave.council.engine import (
     ModelResponse,
     Ranking,
     SynthesisResult,
+    seat_label,
 )
 from skillweave.council.profile_parser import (
     CouncilProfile,
@@ -32,6 +33,7 @@ __all__ = [
     "ModelResponse",
     "Ranking",
     "SynthesisResult",
+    "seat_label",
     "extract_capabilities",
     "extract_capabilities_from_model_id",
     "find_profiles_file",
