@@ -44,7 +44,7 @@ from skillweave.dispatch.contracts import (
     load_sequence,
     validate_for_dispatch,
 )
-from skillweave.dispatch.events import DispatchEventStream
+from skillweave.dispatch.events import DispatchEventStream, HeartbeatPump
 from skillweave.dispatch.observer import (
     DEFAULT_OBSERVER_TIMEOUT,
     DispatchObserver,
@@ -680,17 +680,25 @@ def _default_inline_seam(
     cwd: Optional[str] = None,
     timeout: Optional[float] = None,
     artifact_store: Optional[Any] = None,
+    on_child_lifecycle: Optional[Callable[..., None]] = None,
 ) -> Any:
     """Run a single lane through the single-process seam, never the fan-out path.
 
     This is the default transport for serialized/INLINE lanes: it launches
-    exactly one process via ``runtime.runner_adapter.run_command`` (one blocking
-    child, no start-before-reap overlap) and wraps the resulting
+    exactly one process via ``runtime.runner_adapter.start_process`` (one child,
+    started then waited — no start-before-reap overlap) and wraps the resulting
     :class:`ProcessResult` into the same :class:`FanOutChild` shape the multi-child
     fan-out path produces, so callers record child outcomes and receipt
     references uniformly without the fan-out wiring. The single process is
-    launched synchronously — it is a distinct seam from ``fan_out_dispatch`` and
-    must never be reached for a lane that belongs to a parallel group.
+    launched and reaped synchronously — it is a distinct seam from
+    ``fan_out_dispatch`` and must never be reached for a lane that belongs to a
+    parallel group.
+
+    ``on_child_lifecycle`` (optional) is the same passive child-lifecycle seam
+    the fan-out path honours: ``started`` fires with the live handle immediately
+    after the child is started and *before* the wait, and ``terminal`` fires
+    after the wait in a ``finally``, so a live heartbeat cadence is always
+    bounded by a terminal observation.
     """
     from skillweave.routing.modelspec import from_value
     from skillweave.routing.faigate_adapter import resolve_model_spec
@@ -706,16 +714,31 @@ def _default_inline_seam(
 
     child_run_id = f"{run_id}-0"
     resolved_model = resolve_model_spec(from_value(model))
-    result = runner_adapter.run_command(
+
+    def _notify(phase: str, handle: Any) -> None:
+        if on_child_lifecycle is None:
+            return
+        on_child_lifecycle(
+            child_key=child_run_id,
+            dispatch_id=child_run_id,
+            phase=phase,
+            handle=handle,
+        )
+
+    handle = runner_adapter.start_process(
         list(command),
         run_id=child_run_id,
         subject_repo=subject_repo,
         subject_commit=subject_commit,
         tool=tool,
         model=resolved_model,
-        timeout=timeout,
         cwd=cwd,
     )
+    _notify("started", handle)
+    try:
+        result = handle.wait(timeout=timeout)
+    finally:
+        _notify("terminal", handle)
     outcome = _resolve_outcome(result)
     child = FanOutChild(
         child_run_id=child_run_id,
@@ -1014,9 +1037,10 @@ class OperatorDispatchApplication:
 
         A serialized/INLINE lane runs exactly once through this distinct seam;
         only a parallel, subagent-safe group enters :func:`_fanout`. The default
-        launches a single process through the single-process runner primitive
-        (``run_command``), wrapping it into the same child shape the fan-out
-        path yields, so a recording seam can tell ``inline`` from ``fanout``.
+        starts and waits one process through the single-process runner
+        primitives (``start_process`` + ``handle.wait``), wrapping it into the
+        same child shape the fan-out path yields, so a recording seam can tell
+        ``inline`` from ``fanout``.
         """
         if self._inline_seam is not None:
             return self._inline_seam
@@ -1227,6 +1251,7 @@ class OperatorDispatchApplication:
         self._results: list[dict[str, Any]] = []
         self._failures: list[dict[str, Any]] = []
         self._receipt_log = AppendOnlyReceiptLog()
+        self._active_heartbeat_pumps: dict[str, Any] = {}
 
         caller_sink = sink if sink is not None else sys.stdout
         tee = _TeeSink(caller_sink)
@@ -1528,7 +1553,10 @@ class OperatorDispatchApplication:
         status = TaskStatus.DONE if succeeded else TaskStatus.FAILED
         ps = _process_status_for(outcome, succeeded)
         payload = {"correction_round": round_} if round_ else None
-        stream.process_terminal(
+        # Exactly one terminal per actual child identity: keyed on the dispatch
+        # child identity, so a retried result collection is a no-op (criterion 4).
+        stream.emit_terminal_once(
+            child_key=dispatch_id,
             wave=wave,
             lane_id=lane.id,
             dispatch_id=dispatch_id,
@@ -1536,17 +1564,17 @@ class OperatorDispatchApplication:
             task_status=status,
             payload=payload,
         )
+        if receipt_refs:
+            stream.evidence_recorded(
+                wave=wave, lane_id=lane.id, dispatch_id=dispatch_id,
+                receipt_refs=receipt_refs,
+            )
         stream.lane_terminal(
             wave=wave,
             lane_id=lane.id,
             dispatch_id=dispatch_id,
             task_status=status,
         )
-        if receipt_refs:
-            stream.evidence_recorded(
-                wave=wave, lane_id=lane.id, dispatch_id=dispatch_id,
-                receipt_refs=receipt_refs,
-            )
         self._last_success[lane.id] = succeeded
 
     def _record_child_results(
@@ -1889,54 +1917,71 @@ class OperatorDispatchApplication:
             return False
 
         role = resolved.role(lane.role)
+        dispatch_id = f"{run_id}-{lane.id}-r{round_}"
+        # Criterion-aware dispatch_started: names which criterion group this
+        # dispatch discharges, before any child launch.
+        stream.dispatch_started(
+            wave=wave,
+            lane_id=lane.id,
+            dispatch_id=dispatch_id,
+            criterion_group=lane.criteria_covered() or None,
+        )
         inline = self._inline()
         provisioned = provisioned or {}
-        result = inline(
-            command,
-            run_id=run_id,
-            subject_repo=lane.repo or "",
-            subject_commit=lane.base or "",
-            tool=role.tool.name,
-            model=self._model_for(lane, resolved),
-            cwd=self._lane_cwd(lane, provisioned),
-            timeout=_resolved_timeout(resolved),
-            artifact_store=self._active_store,
+        heartbeat_interval = _resolved_heartbeat_interval(resolved)
+        lifecycle = self._wired_lifecycle(
+            stream, wave, heartbeat_interval,
+            lanes=[(lane, dispatch_id)],
         )
-        children = _fanout_children(result)
-        self._record_child_results(lane, children, round_=round_)
-        self._record_job_attempt(lane, children, round_=round_)
-        received_refs = _receipt_refs_of(children)
-
-        succeeded = _result_succeeded(result)
-        evidence_failed = False
         try:
-            self._gate_required_evidence(lane, received_refs)
-        except RequiredEvidenceError as exc:
-            succeeded = False
-            evidence_failed = True
-            self._record_failure(
-                lane, outcome="missing_evidence", detail=str(exc), round_=round_
+            result = inline(
+                command,
+                run_id=run_id,
+                subject_repo=lane.repo or "",
+                subject_commit=lane.base or "",
+                tool=role.tool.name,
+                model=self._model_for(lane, resolved),
+                cwd=self._lane_cwd(lane, provisioned),
+                timeout=_resolved_timeout(resolved),
+                artifact_store=self._active_store,
+                on_child_lifecycle=lifecycle,
+            )
+            children = _fanout_children(result)
+            self._record_child_results(lane, children, round_=round_)
+            received_refs = _receipt_refs_of(children)
+
+            succeeded = _result_succeeded(result)
+            evidence_failed = False
+            try:
+                self._gate_required_evidence(lane, received_refs)
+            except RequiredEvidenceError as exc:
+                succeeded = False
+                evidence_failed = True
+                self._record_failure(
+                    lane, outcome="missing_evidence", detail=str(exc), round_=round_
+                )
+
+            self._typed_failure[lane.id] = evidence_failed or _typed_process_failure(
+                children
             )
 
-        self._typed_failure[lane.id] = evidence_failed or _typed_process_failure(
-            children
-        )
+            if not succeeded:
+                outcome = _first_outcome(children)
+                self._record_failure(
+                    lane,
+                    outcome=outcome,
+                    detail=_first_failure_message(children),
+                    round_=round_,
+                )
 
-        if not succeeded:
-            outcome = _first_outcome(children)
-            self._record_failure(
-                lane,
-                outcome=outcome,
-                detail=_first_failure_message(children),
-                round_=round_,
+            self._emit_status(
+                stream, run_id, wave, lane, succeeded, round_,
+                outcome=_first_outcome(children),
+                receipt_refs=[r.artifact_id for r in received_refs],
             )
-
-        self._emit_status(
-            stream, run_id, wave, lane, succeeded, round_,
-            outcome=_first_outcome(children),
-            receipt_refs=[r.artifact_id for r in received_refs],
-        )
-        return succeeded
+            return succeeded
+        finally:
+            self._stop_heartbeat_pumps(lifecycle)
 
     def _fanout_group(
         self,
@@ -1951,8 +1996,15 @@ class OperatorDispatchApplication:
     ) -> None:
         # Start every lane in the group at once (overlap), then record per-lane.
         commands = [self._command_for(lane, resolved) for lane in group]
-        for lane in group:
+        dispatch_ids = [f"{run_id}-{lane.id}-r{round_}" for lane in group]
+        for lane, dispatch_id in zip(group, dispatch_ids):
             stream.lane_started(wave=wave, lane_id=lane.id)
+            stream.dispatch_started(
+                wave=wave,
+                lane_id=lane.id,
+                dispatch_id=dispatch_id,
+                criterion_group=lane.criteria_covered() or None,
+            )
 
         provisioned = provisioned or {}
 
@@ -2012,52 +2064,137 @@ class OperatorDispatchApplication:
             )
             for lane in group
         ]
-        fanout = self._fanout()
-        result = fanout(
-            commands,
-            run_id=run_id,
-            subject_repo=group[0].repo or "",
-            subject_commit=group[0].base or "",
-            tool=resolved.role(group[0].role).tool.name,
-            models=models,
-            cwd=self._cwd,
-            launch_contexts=contexts,
-            timeout=_resolved_timeout(resolved),
-            artifact_store=self._active_store,
+        heartbeat_interval = _resolved_heartbeat_interval(resolved)
+        lifecycle = self._wired_lifecycle(
+            stream, wave, heartbeat_interval,
+            lanes=list(zip(group, dispatch_ids)),
         )
-        children = getattr(result, "children", None) or []
-        for lane, child in zip(group, children):
-            child_list = [child]
-            self._record_child_results(lane, child_list, round_=round_)
-            self._record_job_attempt(lane, child_list, round_=round_)
-            refs = _receipt_refs_of(child_list)
-            succeeded = _child_succeeded(child)
-            evidence_failed = False
-            try:
-                self._gate_required_evidence(lane, refs)
-            except RequiredEvidenceError as exc:
-                succeeded = False
-                evidence_failed = True
-                self._record_failure(
-                    lane, outcome="missing_evidence", detail=str(exc), round_=round_
+        fanout = self._fanout()
+        try:
+            result = fanout(
+                commands,
+                run_id=run_id,
+                subject_repo=group[0].repo or "",
+                subject_commit=group[0].base or "",
+                tool=resolved.role(group[0].role).tool.name,
+                models=models,
+                cwd=self._cwd,
+                launch_contexts=contexts,
+                timeout=_resolved_timeout(resolved),
+                artifact_store=self._active_store,
+                on_child_lifecycle=lifecycle,
+            )
+            children = getattr(result, "children", None) or []
+            for lane, child, dispatch_id in zip(group, children, dispatch_ids):
+                child_list = [child]
+                self._record_child_results(lane, child_list, round_=round_)
+                refs = _receipt_refs_of(child_list)
+                succeeded = _child_succeeded(child)
+                evidence_failed = False
+                try:
+                    self._gate_required_evidence(lane, refs)
+                except RequiredEvidenceError as exc:
+                    succeeded = False
+                    evidence_failed = True
+                    self._record_failure(
+                        lane, outcome="missing_evidence", detail=str(exc), round_=round_
+                    )
+
+                self._typed_failure[lane.id] = evidence_failed or _typed_process_failure(
+                    child_list
                 )
 
-            self._typed_failure[lane.id] = evidence_failed or _typed_process_failure(
-                child_list
-            )
-
-            if not succeeded:
-                self._record_failure(
-                    lane,
+                if not succeeded:
+                    self._record_failure(
+                        lane,
+                        outcome=_child_outcome(child),
+                        detail=_first_failure_message(child_list),
+                        round_=round_,
+                    )
+                self._emit_status(
+                    stream, run_id, wave, lane, succeeded, round_,
                     outcome=_child_outcome(child),
-                    detail=_first_failure_message(child_list),
-                    round_=round_,
+                    receipt_refs=[r.artifact_id for r in refs],
                 )
-            self._emit_status(
-                stream, run_id, wave, lane, succeeded, round_,
-                outcome=_child_outcome(child),
-                receipt_refs=[r.artifact_id for r in refs],
-            )
+        finally:
+            self._stop_heartbeat_pumps(lifecycle)
+
+    # -- child-lifecycle observation: heartbeat-while-alive ------------------
+
+    def _wired_lifecycle(
+        self,
+        stream: DispatchEventStream,
+        wave: str,
+        heartbeat_interval: float,
+        lanes: Sequence[tuple[Lane, str]],
+    ) -> Callable[..., None]:
+        """Build the fan-out observation seam that drives the typed heartbeat.
+
+        On the ``started`` phase a live handle is available, so a per-child
+        :class:`HeartbeatPump` starts a cadence thread that emits ``heartbeat``
+        while the child is still alive (``handle.process.poll() is None``). The
+        ``terminal`` phase fires after the child is reaped, so the final
+        ``process_terminal`` — emitted later in :meth:`_emit_status` via
+        ``emit_terminal_once`` — is always strictly after the last heartbeat.
+
+        :param lanes: the ordered ``(lane, dispatch_id)`` pairs aligned to the
+            fan-out children' launch order (single-lane = one entry; group =
+            one entry per child). The child index is recovered from the fan-out
+            ``child_key``/``dispatch_id`` suffix so each pump binds to its own
+            lane identity.
+        """
+        pumps: dict[str, Any] = {}
+        if not hasattr(self, "_active_heartbeat_pumps"):
+            self._active_heartbeat_pumps: dict[str, Any] = {}
+
+        def _index(child_key: str) -> Optional[int]:
+            try:
+                return int(str(child_key).rsplit("-", 1)[-1])
+            except (ValueError, TypeError):
+                return None
+
+        def callback(child_key: str, dispatch_id: str, phase: str, handle: Any) -> None:
+            idx = _index(child_key)
+            if idx is None or idx < 0 or idx >= len(lanes):
+                return
+            lane, did = lanes[idx]
+            if phase == "started":
+                if handle is None:
+                    return
+                pump = HeartbeatPump(
+                    stream,
+                    is_alive=lambda h=handle: h.process.poll() is None,
+                    interval_seconds=heartbeat_interval,
+                    wave=wave,
+                    lane_id=lane.id,
+                    dispatch_id=did,
+                )
+                pump.start()
+                pumps[child_key] = pump
+                self._active_heartbeat_pumps[child_key] = pump
+            elif phase == "terminal":
+                pump = pumps.pop(child_key, None)
+                self._active_heartbeat_pumps.pop(child_key, None)
+                if pump is not None:
+                    pump.stop()
+
+        return callback
+
+    def _stop_heartbeat_pumps(self, lifecycle: Callable[..., None] = None) -> None:
+        """Deterministically stop any heartbeat pump still running.
+
+        Reached after each fan-out (normal and corrected) and on any exceptional
+        exit while a fan-out owned a live child, so no cadence thread leaks.
+        Heartbeat pumps for children whose ``terminal`` phase already ran are
+        already stopped and removed; this drains the rest.
+        """
+        active = getattr(self, "_active_heartbeat_pumps", None)
+        if not active:
+            return
+        remaining = list(active.values())
+        self._active_heartbeat_pumps = {}
+        for pump in remaining:
+            pump.stop()
 
     # -- correction budget reconciliation ------------------------------------
 
@@ -2213,6 +2350,26 @@ def _resolved_timeout(resolved: ResolvedDispatch) -> Optional[float]:
     if limits is None:
         return None
     return getattr(limits, "timeout", None)
+
+
+def _resolved_heartbeat_interval(resolved: ResolvedDispatch) -> float:
+    """The resolved heartbeat interval (seconds), or a positive default.
+
+    The interval is profile/config data carried on ``limits.heartbeat_interval``
+    (backward-compatible positive default), distinct from the process timeout so
+    a child can exceed the heartbeat interval without being killed. Validation
+    happens at profile load/resolution (:func:`Limits.from_dict` and
+    :func:`resolve_limits`): an invalid explicit interval (zero, negative,
+    ``NaN`` or infinite) is refused there, never silently coerced here. An
+    absent limit falls back to the documented ``Limits`` default (5.0).
+    """
+    limits = getattr(resolved, "limits", None)
+    if limits is None:
+        return 5.0
+    interval = getattr(limits, "heartbeat_interval", None)
+    if interval is None:
+        return 5.0
+    return float(interval)
 
 
 def _failure_policy_of(resolved: ResolvedDispatch) -> Optional[str]:
