@@ -1,7 +1,7 @@
 # SkillWeave
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.3.11-blue)](https://github.com/LangeVC/skillweave/releases/tag/v1.3.11)
+[![Version](https://img.shields.io/badge/version-1.5.5-blue)](https://github.com/LangeVC/skillweave/releases/tag/v1.5.5)
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 [![Skills](https://img.shields.io/badge/skills-13-blue)](skills/)
 [![Status](https://img.shields.io/badge/status-production--stable-green)](https://github.com/LangeVC/skillweave)
@@ -10,6 +10,17 @@
 **Multi-agent AI skill orchestration — 13 skills, 7 lifecycle phases, any AI coding agent.**
 
 SkillWeave orchestrates AI-assisted product development from idea to post-release. It works with Claude Code, Codex, Gemini CLI, Cursor, Windsurf, OpenCode, and any agent that reads Markdown or speaks MCP.
+
+---
+
+## What's new in 1.5.5
+
+- Inspect multi-repository worktrees and their ownership before cleanup.
+- Provision exact-base workspaces and release them through explicit receipts.
+- Preview and observe operator dispatches before an ops worker can write.
+- Reject dispatch plans that omit, duplicate, or misassign acceptance criteria.
+
+See the [1.5.5 changelog](CHANGELOG.md#v155-2026-09-25--workspaces-and-dispatches-you-can-inspect-before-they-act) for the full release contract.
 
 ---
 

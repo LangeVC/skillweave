@@ -8,7 +8,7 @@ This document outlines the standard development workflow, release process, and n
 - **Format**: `SkillWeave vX.Y.Z`
 - **Example**: `SkillWeave v0.4.0`
 - **Tag**: `vX.Y.Z` (Git tag)
-- **Release Title**: `SkillWeave vX.Y.Z` (GitHub release title)
+- **Release Title**: `SkillWeave vX.Y.Z` (identical on Forgejo and its mirror)
 
 ### Semantic Versioning (SemVer)
 - **MAJOR** (`X`): Breaking changes, major feature additions
@@ -19,9 +19,9 @@ This document outlines the standard development workflow, release process, and n
 
 ### 1. Feature Development
 ```bash
-# Create feature branch from main
-git checkout main
-git pull origin main
+# Create feature branch from dev
+git checkout dev
+git pull origin dev
 git checkout -b feature/descriptive-name
 
 # Example branch names:
@@ -48,13 +48,15 @@ git commit -m "feat: Add parallel execution engine
 - Update tests for parallel execution"
 ```
 
-### 3. Create Pull Request
+### 3. Create Pull Request to `dev`
 ```bash
 # Push branch to remote
 git push origin feature/descriptive-name
 
-# Create PR using GitHub CLI
-gh pr create \
+# Create the pull request on the canonical Forgejo repository
+# with base branch dev.
+tea pr create \
+  --base dev \
   --title "feat: Add parallel execution engine" \
   --body "$(cat <<'EOF'
 ## Summary
@@ -78,7 +80,7 @@ Adds parallel execution engine with dependency analysis and subagent triggering.
 EOF
 )"
 
-# Or create PR via GitHub web interface
+# Or create the PR through the Forgejo web interface.
 ```
 
 ### 4. PR Review & Merge
@@ -88,11 +90,8 @@ EOF
 - **Commit Message**: Use PR title as squash commit message
 
 ```bash
-# After approval, merge via GitHub UI or CLI
-gh pr merge <pr-number> --squash
-
-# Or rebase and merge for linear history
-gh pr merge <pr-number> --rebase
+# After approval, merge through canonical Forgejo.
+tea pr merge <pr-number> --style squash
 ```
 
 ## Release Process
@@ -100,17 +99,18 @@ gh pr merge <pr-number> --rebase
 ### 1. Release Preparation
 ```bash
 # Ensure main is up to date
-git checkout main
-git pull origin main
+# Promote the tested integration branch through a release PR: dev -> main.
+# Never tag a feature branch or dev directly.
+git checkout dev
+git pull origin dev
 
 # Verify tests pass
 python3 -m pytest tests/ -v
 
 # --- Version bump (REQUIRED — see "Version bump contract" below) ---
 # Fetch the canonical, tag-pinned version-sync helper and write the new version
-# into every location declared in .version.yaml (16 locations: pyproject.toml,
-# capability.yaml — both its own version: and the 13 capabilities[] member pins —
-# and all 13 skills/*/capability.yaml).
+# into every required location declared in .version.yaml. Informational member
+# pins are intentionally not moved by a packaging-only bundle release.
 # This MUST happen before the tag is created, or the tag gate rejects the push.
 curl -fsSL \
   "https://raw.githubusercontent.com/LangeVC/ops-engine/v3.4.2/scripts/version-sync.py" \
@@ -120,7 +120,7 @@ python3 /tmp/version-sync.py bump X.Y.Z --repo .
 
 # Commit the written versions; the tag gate compares the tag against
 # source_of_truth (pyproject.toml) at the commit the tag points at.
-git add pyproject.toml capability.yaml skills/
+git add pyproject.toml capability.yaml
 git commit -m "chore: bump version to X.Y.Z"
 
 # Sync Capacium manifests to the new version (distribution-bundle step)
@@ -150,52 +150,19 @@ carries the `bump` subcommand before use. Do not hand-edit version strings: the
 `.version.yaml` `locations` list is the single inventory, and the bump writes it
 in full.
 
-### 2. Create Release
+### 2. Promote and create the release
 ```bash
+# Open and merge the reviewed dev -> main PR on canonical Forgejo first.
+git checkout main
+git pull --ff-only origin main
+
 # Create and push tag
 git tag -a vX.Y.Z -m "SkillWeave vX.Y.Z"
 git push origin vX.Y.Z
 
-# Create GitHub release
-gh release create vX.Y.Z \
-  --title "SkillWeave vX.Y.Z" \
-  --notes "$(cat <<'EOF'
-# SkillWeave vX.Y.Z
-
-## 🎯 Summary
-Brief description of release highlights.
-
-## 🚀 New Features
-- Feature 1: Description
-- Feature 2: Description
-
-## 🐛 Bug Fixes
-- Fix 1: Description
-
-## 🔧 Technical Improvements
-- Improvement 1: Description
-
-## 📚 Documentation
-- Updated documentation for new features
-
-## 🧪 Testing
-- Added/updated tests for new functionality
-
-## 📦 Installation
-```bash
-git clone https://github.com/LangeVC/skillweave.git
-cd skillweave
-cap install skillweave --source .
-# or use the compatibility wrapper
-./scripts/install-skills.sh
-```
-
-## 🔗 Links
-- [Full Documentation](https://github.com/LangeVC/skillweave/blob/main/README.md)
-- [Examples](https://github.com/LangeVC/skillweave/tree/main/examples)
-- [Changelog](https://github.com/LangeVC/skillweave/blob/main/CHANGELOG.md)
-EOF
-)"
+# The canonical Forgejo tag workflow validates the title and changelog, mirrors
+# the tag, publishes both release objects, and distributes the bundle. Do not
+# create a GitHub release by hand.
 ```
 
 ### 3. Post-Release
@@ -209,7 +176,8 @@ EOF
 
 ### Main Branches
 - **`main`**: Production-ready code, always deployable
-- **`develop`** (optional): Integration branch for features
+- **`dev`**: Required integration branch; reviewed feature branches land here
+  before a separate reviewed promotion to `main`
 
 ### Supporting Branches
 - **`feature/*`**: New features, enhancements
