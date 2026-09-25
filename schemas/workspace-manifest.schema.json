@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillweave.dev/schemas/workspace-manifest/v1",
+  "title": "Workspace Manifest Schema",
+  "description": "SkillWeave workspace manifest — the machine-readable facts of one acquired worktree: repo, full base/head SHAs, branch, run/lane/session identifiers, write scope, lease, heartbeat, lifecycle state and retention class.",
+  "type": "object",
+  "required": [
+    "repo",
+    "base_sha",
+    "head_sha",
+    "branch",
+    "run",
+    "lane",
+    "session",
+    "write_scope",
+    "lease",
+    "heartbeat",
+    "state",
+    "retention"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "Repository name (a single path component)."
+    },
+    "base_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Full 40-hex SHA of the pinned starting commit."
+    },
+    "head_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Full 40-hex SHA of the workspace's current head."
+    },
+    "branch": {
+      "type": "string",
+      "description": "The exclusive branch checked out in the workspace."
+    },
+    "run": {
+      "type": "string",
+      "description": "Run identifier owning the workspace."
+    },
+    "lane": {
+      "type": "string",
+      "description": "Lane identifier owning the workspace."
+    },
+    "session": {
+      "type": "string",
+      "description": "Session identifier owning the workspace."
+    },
+    "write_scope": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      },
+      "description": "Non-empty list of paths the workspace may write."
+    },
+    "lease": {
+      "type": "object",
+      "required": ["lease_until"],
+      "additionalProperties": false,
+      "properties": {
+        "lease_until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Lease expiry timestamp."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Holder of the lease, when recorded."
+        }
+      }
+    },
+    "heartbeat": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last heartbeat timestamp."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["provisioned", "active", "leased", "released", "expired"],
+      "description": "Workspace lifecycle state."
+    },
+    "retention": {
+      "type": "string",
+      "enum": ["permanent", "temporary", "project_lifetime"],
+      "description": "Retention class for workspace artifacts."
+    }
+  }
+}
