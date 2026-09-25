@@ -45,6 +45,12 @@ from skillweave.dispatch.contracts import (
     validate_for_dispatch,
 )
 from skillweave.dispatch.events import DispatchEventStream
+from skillweave.dispatch.observer import (
+    DEFAULT_OBSERVER_TIMEOUT,
+    DispatchObserver,
+    ObserverEventSource,
+    resolve_observer_mode,
+)
 from skillweave.dispatch.harness_contract import (
     HarnessAdapterProfile,
     StrictController,
@@ -731,6 +737,34 @@ def _default_inline_seam(
     return FanOutResult(children=[child], overlapped=False)
 
 
+# ── Tee sink (observer replay) ──────────────────────────────────────────────
+
+
+class _TeeSink:
+    """A text sink that forwards to a caller sink while recording emitted lines.
+
+    The observer replay is the *real* teed dispatch events — the very stream the
+    wave produced — not a copy owned by the observer. The tee is transparent to
+    the caller: every write and flush is forwarded immediately, so the live
+    consumer still sees ``wave_started`` before the first worker launch.
+    """
+
+    def __init__(self, caller_sink: Any) -> None:
+        self._caller = caller_sink
+        self._lines: list[str] = []
+
+    def write(self, s: str) -> int:
+        self._lines.append(s)
+        return self._caller.write(s)
+
+    def flush(self) -> None:
+        self._caller.flush()
+
+    @property
+    def lines(self) -> list[str]:
+        return list(self._lines)
+
+
 # ── The application ─────────────────────────────────────────────────────────
 
 
@@ -761,6 +795,8 @@ class DispatchRun:
     artifact_store: Optional[Any] = None
     receipt_log: Optional[Any] = None
     integrator_assignment: Optional[Any] = None
+    observer: Optional[dict[str, Any]] = None
+    observer_mode: Optional[str] = None
 
     @property
     def job_records(self) -> list[dict[str, Any]]:
@@ -911,6 +947,8 @@ class DispatchRun:
             # nature of this command and makes no stable-transport claim.
             "experimental": True,
             "scope": "wave",
+            "observer": self.observer,
+            "observer_mode": self.observer_mode,
             "transport_compatibility": "none (no stable 1.4 contract)",
         }
 
@@ -942,6 +980,8 @@ class OperatorDispatchApplication:
         artifact_store: Optional[Any] = None,
         namespace_registry: Optional[StateNamespaceRegistry] = None,
         strict_controller: Optional[StrictController] = None,
+        observer_continue_on_failure: bool = True,
+        observer_launch_seam: Optional[Callable[..., Any]] = None,
     ):
         self._workspace_seam = workspace_seam
         self._fanout_seam = fanout_seam
@@ -955,6 +995,8 @@ class OperatorDispatchApplication:
         self._typed_failure: dict[str, bool] = {}
         self._namespace_registry: Optional[StateNamespaceRegistry] = namespace_registry
         self._claimed_namespaces: dict[str, JobStateNamespace] = {}
+        self._observer_continue_on_failure = observer_continue_on_failure
+        self._observer_launch_seam = observer_launch_seam
 
     def _generate_run_id(self) -> str:
         """Generate the run identifier (overridable in tests)."""
@@ -991,6 +1033,7 @@ class OperatorDispatchApplication:
         profile_path: str,
         *,
         required_criteria: Optional[Sequence[int]] = None,
+        extra_roles: Optional[Sequence[str]] = None,
     ) -> tuple[SequenceDeclaration, ResolvedDispatch, DispatchReport]:
         """Parse and resolve a sequence + profile fail-closed.
 
@@ -1031,9 +1074,12 @@ class OperatorDispatchApplication:
             )
 
         try:
+            roles = [lane.role for lane in declaration.lanes]
+            if extra_roles:
+                roles = list(roles) + list(extra_roles)
             resolved = resolve_dispatch_profile(
                 profile_path,
-                [lane.role for lane in declaration.lanes],
+                roles,
             )
         except (ProfileResolutionError, HarnessError) as exc:
             # A precise product error for a missing/un-loadable profile path,
@@ -1149,7 +1195,8 @@ class OperatorDispatchApplication:
         import sys
 
         declaration, resolved, report = self.load(
-            sequence_path, profile_path, required_criteria=required_criteria
+            sequence_path, profile_path, required_criteria=required_criteria,
+            extra_roles=["observer"],
         )
         enforcement = enforce_topology(declaration, gate_input=gate_input)
         removed = set(enforcement.removed_lane_ids)
@@ -1180,30 +1227,100 @@ class OperatorDispatchApplication:
         self._results: list[dict[str, Any]] = []
         self._failures: list[dict[str, Any]] = []
         self._receipt_log = AppendOnlyReceiptLog()
-        stream = DispatchEventStream(run_id, sink if sink is not None else sys.stdout)
+
+        caller_sink = sink if sink is not None else sys.stdout
+        tee = _TeeSink(caller_sink)
+        stream = DispatchEventStream(run_id, tee)
         stream.wave_started(wave=wave)
+
+        # ── Observer: constructed and started before provisioning ──────────
+        observer: Optional[DispatchObserver] = None
+        observer_receipt: Optional[dict[str, Any]] = None
+        observer_mode: Optional[str] = None
+        observer_role = resolved.role("observer")
+        if observer_role is not None:
+            observer_mode = resolve_observer_mode(observer_role)
+            heartbeat_interval = _heartbeat_interval_of(resolved)
+            observer_command = self._command_for_role("observer", resolved)
+            observer_model = (
+                observer_role.model.resolved
+                if (observer_role is not None and observer_role.model is not None)
+                else ""
+            )
+            observer_timeout = _resolved_timeout(resolved) or DEFAULT_OBSERVER_TIMEOUT
+            launch_seam = self._observer_launch_seam
+            observer = DispatchObserver(
+                run_id=run_id,
+                wave=wave,
+                mode=observer_mode,
+                event_source=ObserverEventSource(
+                    run_id=run_id,
+                    replay=lambda: _replay_tee_events(tee),
+                    heartbeat_interval_seconds=heartbeat_interval,
+                ),
+                command=observer_command,
+                tool_name=getattr(observer_role.tool, "name", None)
+                if observer_role is not None
+                else None,
+                model=observer_model,
+                timeout=observer_timeout,
+                launch=launch_seam,
+            )
+            self._observer = observer
+            observer.start()
+            if observer.launch_failed and not self._observer_continue_on_failure:
+                observer_receipt = {
+                    "active": True,
+                    "observed": False,
+                    "mode": observer_mode,
+                    "outcome": "launch_failed",
+                    "error": observer._launch_error,
+                }
+                # Halt before any provisioning or fan-out.
+                return DispatchRun(
+                    run_id=run_id,
+                    wave=wave,
+                    report=report,
+                    halted=True,
+                    halt_reason=HALT_REQUIRES_OPERATOR,
+                    correction_rounds=0,
+                    results=[],
+                    failures=[],
+                    failure_policy=_failure_policy_of(resolved),
+                    artifact_store=self._active_store,
+                    receipt_log=self._receipt_log,
+                    integrator_assignment=enforcement.integrator_assignment,
+                    observer=observer_receipt,
+                    observer_mode=observer_mode,
+                )
+
+        halted = False
+        halt_reason: Optional[str] = None
+        rounds = 0
+        cleanup_error: Optional[Exception] = None
 
         ws = self._workspace()
         mutating = [
             lane for lane in declaration.mutating_lanes() if lane.id not in removed
         ]
-
-        # Provision + attest every mutating lane; a base mismatch blocks before
-        # any child starts (criterion 4). The materialised path is retained
-        # per lane so the worker runs *inside* its attested worktree.
+        # Track only successfully materialised lanes: a partial provisioning run
+        # (or a base mismatch) must release exactly the lanes it created, never a
+        # lane whose ``provision`` never returned.
         provisioned: dict[str, ProvisionedWorkspace] = {}
-        for lane in mutating:
-            pw = ws.provision(lane, run_id)
-            provisioned[lane.id] = pw
-            if (lane.base or "") != pw.base_sha:
-                raise WorkspaceMismatchError(lane.id, lane.base or "", pw.base_sha)
-
-        groups = _group_for_launch(mutating, declaration.max_parallel, enforcement)
-        halted = False
-        halt_reason: Optional[str] = None
-        rounds = 0
+        provisioned_lanes: list[Lane] = []
 
         try:
+            # Provision + attest every mutating lane; a base mismatch blocks before
+            # any child starts (criterion 4). The materialised path is retained
+            # per lane so the worker runs *inside* its attested worktree.
+            for lane in mutating:
+                pw = ws.provision(lane, run_id)
+                provisioned[lane.id] = pw
+                provisioned_lanes.append(lane)
+                if (lane.base or "") != pw.base_sha:
+                    raise WorkspaceMismatchError(lane.id, lane.base or "", pw.base_sha)
+
+            groups = _group_for_launch(mutating, declaration.max_parallel, enforcement)
             for group in groups:
                 if len(group) == 1:
                     self._run_lane(
@@ -1299,9 +1416,49 @@ class OperatorDispatchApplication:
                     task_status=TaskStatus.FAILED,
                     payload={"halt_reason": HALT_REQUIRES_OPERATOR},
                 )
+
+            # ── Observer: observe after lane execution ─────────────────────
+            if observer is not None:
+                try:
+                    receipt = observer.observe()
+                    observer_receipt = receipt.to_dict()
+                except Exception as exc:  # noqa: BLE001
+                    observer_receipt = {
+                        "active": observer._active,
+                        "observed": False,
+                        "error": str(exc),
+                        "mode": observer_mode,
+                    }
+                if (
+                    not observer_receipt.get("observed", True)
+                    and not self._observer_continue_on_failure
+                ):
+                    halted = True
+                    halt_reason = HALT_REQUIRES_OPERATOR
+
+        except Exception:
+            if observer is not None:
+                try:
+                    observer.close()
+                except Exception:
+                    pass
+            raise
         finally:
-            for lane in mutating:
-                ws.release(lane, run_id)
+            try:
+                for lane in provisioned_lanes:
+                    ws.release(lane, run_id)
+            except Exception as exc:  # noqa: BLE001
+                if cleanup_error is None:
+                    cleanup_error = exc
+            try:
+                if observer is not None:
+                    observer.close()
+            except Exception as exc:  # noqa: BLE001
+                if cleanup_error is None:
+                    cleanup_error = exc
+
+        if cleanup_error is not None:
+            raise cleanup_error
 
         return DispatchRun(
             run_id=run_id,
@@ -1316,6 +1473,8 @@ class OperatorDispatchApplication:
             artifact_store=self._active_store,
             receipt_log=self._receipt_log,
             integrator_assignment=enforcement.integrator_assignment,
+            observer=observer_receipt,
+            observer_mode=observer_mode,
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -1324,6 +1483,19 @@ class OperatorDispatchApplication:
         self, lane: Lane, resolved: ResolvedDispatch
     ) -> Optional[list[str]]:
         role = resolved.role(lane.role)
+        if role is None or not role.is_launch():
+            return None
+        from skillweave.routing.dispatch import tokenize_launch
+
+        return tokenize_launch(role.tool.launch_command) + [
+            str(a) for a in role.tool.args
+        ]
+
+    def _command_for_role(
+        self, role_name: str, resolved: ResolvedDispatch
+    ) -> Optional[list[str]]:
+        """Return the tokenised command for a named role, or ``None``."""
+        role = resolved.role(role_name)
         if role is None or not role.is_launch():
             return None
         from skillweave.routing.dispatch import tokenize_launch
@@ -2049,6 +2221,35 @@ def _failure_policy_of(resolved: ResolvedDispatch) -> Optional[str]:
     if limits is None:
         return None
     return getattr(limits, "on_model_failure", None)
+
+
+def _heartbeat_interval_of(resolved: ResolvedDispatch) -> float:
+    """The configured heartbeat interval (profile ``limits.heartbeat``).
+
+    Defaults to 5.0 when the profile declares no interval.
+    """
+    limits = getattr(resolved, "limits", None)
+    if limits is None:
+        return 5.0
+    interval = getattr(limits, "heartbeat", None)
+    if interval is None:
+        return 5.0
+    return float(interval)
+
+
+def _replay_tee_events(tee: _TeeSink) -> list[dict[str, Any]]:
+    """Replay the teed dispatch events as typed dicts for observer replay."""
+    import json
+
+    events: list[dict[str, Any]] = []
+    for line in tee.lines:
+        stripped = line.strip()
+        if stripped:
+            try:
+                events.append(json.loads(stripped))
+            except json.JSONDecodeError:
+                continue
+    return events
 
 
 def _max_retries_of(resolved: ResolvedDispatch) -> int:
