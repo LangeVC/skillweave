@@ -49,6 +49,7 @@ validate ``execution_model``: it resolves the profile, nothing more.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence
 
@@ -182,10 +183,22 @@ def resolve_limits(
     """
     base = profile_limits if profile_limits is not None else Limits()
     if override is None:
-        return base
+        validated = _validate_heartbeat_interval(base.heartbeat_interval)
+        return Limits(
+            timeout=base.timeout,
+            max_retries=base.max_retries,
+            min_models_required=base.min_models_required,
+            on_model_failure=base.on_model_failure,
+            heartbeat_interval=validated,
+        )
     # Prefer the override field when it is meaningfully set, else the base. The
     # ``on_model_failure`` name is validated upstream by ``Limits.from_dict``;
     # here we only carry whichever value won the chain.
+    heartbeat = (
+        override.heartbeat_interval
+        if _is_set(override.heartbeat_interval)
+        else base.heartbeat_interval
+    )
     return Limits(
         timeout=override.timeout if _is_set(override.timeout) else base.timeout,
         max_retries=override.max_retries if _is_set(override.max_retries) else base.max_retries,
@@ -197,7 +210,33 @@ def resolve_limits(
         on_model_failure=(
             override.on_model_failure if _is_set(override.on_model_failure) else base.on_model_failure
         ),
+        heartbeat_interval=_validate_heartbeat_interval(heartbeat),
     )
+
+
+def _validate_heartbeat_interval(value: Any) -> float:
+    """Enforce a finite, strictly-positive heartbeat interval at resolution.
+
+    The heartbeat interval is profile/config data; a value that is zero,
+    negative, ``NaN`` or infinite is invalid and is refused synchronously before
+    any workspace is provisioned or worker is launched, never silently coerced
+    to the positive default. Reached for both the profile's own ``limits`` and
+    any per-dispatch override, so neither path can smuggle an invalid interval
+    past resolution into :class:`HeartbeatPump`.
+    """
+    try:
+        interval = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ProfileResolutionError(
+            f"heartbeat_interval must be a finite positive number, got {value!r}",
+            field="limits.heartbeat_interval",
+        ) from exc
+    if not math.isfinite(interval) or interval <= 0:
+        raise ProfileResolutionError(
+            f"heartbeat_interval must be a finite positive number, got {value!r}",
+            field="limits.heartbeat_interval",
+        )
+    return interval
 
 
 def _is_set(value: Any) -> bool:
