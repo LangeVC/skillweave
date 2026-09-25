@@ -222,6 +222,23 @@ class TestAutoTagger:
 
 
 class TestCapaciumManifestSync:
+    def test_bundle_bump_preserves_decoupled_member_versions(self, temp_project_full):
+        pyproject = temp_project_full / "pyproject.toml"
+        pyproject.write_text(pyproject.read_text().replace('version = "0.2.0"', 'version = "0.3.0"'))
+
+        syncer = CapaciumManifestSync(repo_root=str(temp_project_full))
+        issues = syncer.write()
+
+        assert issues
+        assert syncer.check() == []
+        root = syncer.load_manifest(temp_project_full / "capability.yaml")
+        member = syncer.load_manifest(
+            temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml"
+        )
+        assert root["version"] == "0.3.0"
+        assert member["version"] == "0.2.0"
+        assert root["capabilities"][0]["version"] == member["version"]
+
     def test_check_detects_drift(self, temp_project_full):
         mismatch = (temp_project_full / "skills" / "skillweave-blueprint" / "capability.yaml").read_text().replace(
             "version: 0.2.0", "version: 0.1.0"

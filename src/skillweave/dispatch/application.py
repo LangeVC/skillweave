@@ -1948,6 +1948,7 @@ class OperatorDispatchApplication:
             )
             children = _fanout_children(result)
             self._record_child_results(lane, children, round_=round_)
+            self._record_job_attempt(lane, children, round_=round_)
             received_refs = _receipt_refs_of(children)
 
             succeeded = _result_succeeded(result)
@@ -2088,6 +2089,7 @@ class OperatorDispatchApplication:
             for lane, child, dispatch_id in zip(group, children, dispatch_ids):
                 child_list = [child]
                 self._record_child_results(lane, child_list, round_=round_)
+                self._record_job_attempt(lane, child_list, round_=round_)
                 refs = _receipt_refs_of(child_list)
                 succeeded = _child_succeeded(child)
                 evidence_failed = False
