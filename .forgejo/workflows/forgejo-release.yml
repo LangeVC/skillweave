@@ -42,37 +42,89 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The release title is a gate, not an agreement. It must be exactly
-      # "SkillWeave vX.Y.Z"; a tag whose rendered title does not conform is
-      # refused here, before any release object exists on either forge. Forge
-      # default behaviour names a release after the bare tag — that is not the
-      # convention, and v1.5.2's title had to be corrected by hand because of it.
+      # The release title is a gate, not an agreement. It must conform to the
+      # release_title_policy declared in .version.yaml — not a hardcoded product
+      # name. A tag whose rendered title does not conform is refused here,
+      # before any release object exists on either forge. Forge default behaviour
+      # names a release after the bare tag — that is not the convention, and
+      # v1.5.2's title had to be corrected by hand because of it.
       - name: Gate the release title
         id: title
         env:
           TAG_NAME: "${{ github.event.inputs.tag_name || github.ref_name }}"
         run: |
           set -euo pipefail
-          RELEASE_NAME="SkillWeave ${TAG_NAME}"
-          python3 - "${RELEASE_NAME}" <<'TITLE_GATE_PY'
+
+          python3 - "${TAG_NAME}" <<'TITLE_GATE_PY'
+          import os
           import re
           import sys
+          from pathlib import Path
 
-          NAME_RE = re.compile(
-              r"^SkillWeave v[0-9]+\.[0-9]+\.[0-9]+(?:-rc[0-9]+)?$"
-          )
-          name = sys.argv[1]
-          if not NAME_RE.match(name):
+          yaml_path = Path(".version.yaml")
+          if not yaml_path.exists():
               sys.stderr.write(
-                  "ReleaseTitleError: release name %r does not match the required "
-                  "convention ^SkillWeave v[0-9]+\\.[0-9]+\\.[0-9]+$ or its "
-                  "prerelease form ...-rc[0-9]+$. Refusing before any release "
-                  "object exists on either forge.\n" % name
+                  "ReleaseTitlePolicyError: .version.yaml not found\n"
               )
               sys.exit(2)
-          sys.stdout.write("title gate: %r conforms\n" % name)
+
+          text = yaml_path.read_text("utf-8")
+
+          m = re.search(r"^\s+product_name:\s*(.+)$", text, re.MULTILINE)
+          product_name = m.group(1).strip().strip("\"'") if m else ""
+          if not product_name:
+              sys.stderr.write(
+                  "ReleaseTitlePolicyError: product_name not found or empty "
+                  "in release_title_policy\n"
+              )
+              sys.exit(2)
+
+          m = re.search(r"^\s+pattern:\s*(.+)$", text, re.MULTILINE)
+          pattern_raw = m.group(1).strip() if m else ""
+          if (
+              len(pattern_raw) >= 2
+              and pattern_raw[0] == pattern_raw[-1]
+              and pattern_raw[0] in ("'", '"')
+          ):
+              pattern_raw = pattern_raw[1:-1]
+          if not pattern_raw:
+              sys.stderr.write(
+                  "ReleaseTitlePolicyError: pattern not found or empty "
+                  "in release_title_policy\n"
+              )
+              sys.exit(2)
+
+          full_pattern = pattern_raw.replace("{product}", product_name)
+          try:
+              NAME_RE = re.compile(full_pattern)
+          except re.error as exc:
+              sys.stderr.write(
+                  "ReleaseTitlePolicyError: invalid regex %r: %s\n"
+                  % (full_pattern, exc)
+              )
+              sys.exit(2)
+
+          tag_name = sys.argv[1]
+          release_name = "%s %s" % (product_name, tag_name)
+
+          if not NAME_RE.match(release_name):
+              sys.stderr.write(
+                  "ReleaseTitleError: release name %r does not match the "
+                  "required convention %r. Refusing before any release "
+                  "object exists on either forge.\n"
+                  % (release_name, full_pattern)
+              )
+              sys.exit(2)
+
+          sys.stdout.write("title gate: %r conforms\n" % release_name)
+
+          # GITHUB_OUTPUT is the GitHub Actions mechanism; always set in CI.
+          output_path = os.environ.get("GITHUB_OUTPUT")
+          if output_path:
+              with open(output_path, "a") as fh:
+                  fh.write("release_name=%s\n" % release_name)
+                  fh.write("product_name=%s\n" % product_name)
           TITLE_GATE_PY
-          echo "release_name=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
 
       # The release body is the CHANGELOG entry for this version, never commit
       # subjects. A tag whose version has no section fails here, before any
@@ -239,7 +291,7 @@ jobs:
         env:
           TAG_NAME: "${{ github.event.inputs.tag_name || github.ref_name }}"
           NOTES: "${{ steps.notes.outputs.notes }}"
-          NAME_TEMPLATE: "SkillWeave {tag_name}"
+          NAME_TEMPLATE: "${{ steps.title.outputs.product_name }} {tag_name}"
           FORGEJO_REPOSITORY: "${{ github.repository }}"
           FORGEJO_BASE_URL: "${{ github.server_url }}"
           FORGEJO_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
