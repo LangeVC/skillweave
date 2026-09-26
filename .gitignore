@@ -43,4 +43,4 @@ release-gate-report.md
 .cursor/
 
 # Coverage
-.coverage
+.coverage.worktrees/
