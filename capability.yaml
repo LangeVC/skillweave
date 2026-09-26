@@ -44,6 +44,9 @@ capabilities:
 - name: skillweave-lifecycle
   source: ./skills/skillweave-lifecycle
   version: 1.3.11
+- name: skillweave-onboarding
+  source: ./skills/skillweave-onboarding
+  version: 1.3.11
 - name: skillweave-observe
   source: ./skills/skillweave-observe
   version: 1.3.11
