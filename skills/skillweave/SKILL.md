@@ -6,7 +6,7 @@ description: "Entry-point facade for SkillWeave — start, continue, inspect, or
 argument-hint: command="[start|continue|inspect|onboard]" run_id="[id]"
 ---
 
-# /skillweave
+# /skillweave-entry
 
 > Canonical metadata is English. User-facing artifacts follow the output language setting.
 
