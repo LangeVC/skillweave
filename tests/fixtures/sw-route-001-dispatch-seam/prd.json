@@ -1,0 +1,530 @@
+{
+  "projectName": "Neutral placeholder wording describing the wor",
+  "version": "1.0",
+  "status": "ready",
+  "created": "2026-08-17",
+  "initiative": "Neutral plac",
+  "repo": "Neutral placeholder wording d",
+  "scope": "Neutral placeholder wording describi",
+  "operator_gebunden": false,
+  "sequence": {
+    "sequence_id": "sw-route",
+    "sequence_type": "build",
+    "execution_mode": "ralph_attended",
+    "worktree": "Neutral placeholder wording d",
+    "branch": "Neutral placeholder wording",
+    "base": "Neutral pla",
+    "state_file": ".swroute-state.md",
+    "runner_shell": "bash -eo pipefail",
+    "phase_names": {
+      "0": "Neut",
+      "1": "Neut"
+    },
+    "exclusive": [
+      {
+        "surface": "src/skillweave/routing/faigate_adapter.py",
+        "tasks": [
+          "SW-RT-002",
+          "SW-RT-004"
+        ]
+      }
+    ]
+  },
+  "streams": [
+    {
+      "id": "seam",
+      "title": "Neutral placeholder wording describ",
+      "tasks": [
+        "SW-RT-001",
+        "SW-RT-002",
+        "SW-RT-003",
+        "SW-RT-004"
+      ]
+    },
+    {
+      "id": "gate",
+      "title": "Neutral placeholder wording descr",
+      "tasks": [
+        "SW-RT-R"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "SW-RT-001",
+      "title": "launch_command Neutral placeholder wording describing the work item in general terms",
+      "description": "launch_command Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder",
+      "acceptanceCriteria": [
+        "launch_command Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produc",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produc",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or str",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placehol"
+      ],
+      "priority": "P0",
+      "points": 5,
+      "dependsOn": [],
+      "type": "feature",
+      "passes": false,
+      "lane": {
+        "creates": "src/skillweave/routing/dispatch.py",
+        "tests": "tests/unit/test_routing_dispatch.py",
+        "reads": [
+          "src/skillweave/routing/profile.py",
+          "src/skillweave/runtime/runner_adapter.py",
+          "src/skillweave/runtime/errors.py"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/faigate_adapter.py",
+          "src/skillweave/routing/profile.py"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project, organiz"
+          },
+          {
+            "criteria": [
+              3,
+              4
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without n"
+          }
+        ],
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder wordi"
+      }
+    },
+    {
+      "id": "SW-RT-002",
+      "title": "Neutral placeholder wording describing the work item in general",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing th",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral place",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general term"
+      ],
+      "priority": "P0",
+      "points": 2,
+      "dependsOn": [],
+      "type": "bug",
+      "passes": false,
+      "lane": {
+        "modifies": "src/skillweave/routing/faigate_adapter.py",
+        "tests": "tests/unit/test_model_availability.py",
+        "reads": [
+          "src/skillweave/routing/profile.py",
+          "src/skillweave/council/engine.py"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/dispatch.py",
+          "src/skillweave/routing/harness.py",
+          "tests/unit/test_routing_profile.py"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2,
+              3
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any proj"
+          }
+        ],
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder word"
+      }
+    },
+    {
+      "id": "SW-RT-003",
+      "title": "Neutral placeholder wording describing the work item in g",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strate",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organizat",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without nami",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any p"
+      ],
+      "priority": "P0",
+      "points": 3,
+      "dependsOn": [],
+      "type": "feature",
+      "passes": false,
+      "lane": {
+        "creates": "src/skillweave/routing/harness.py",
+        "tests": "tests/unit/test_harness_selection.py",
+        "reads": [
+          "src/skillweave/routing/profile.py",
+          "src/skillweave/runtime/store.py"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/dispatch.py",
+          "src/skillweave/routing/faigate_adapter.py"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any project,"
+          },
+          {
+            "criteria": [
+              3
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any"
+          }
+        ],
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder word"
+      }
+    },
+    {
+      "id": "SW-RT-004",
+      "title": "Neutral placeholder wording describing the work item in general term",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organi",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy det",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy de"
+      ],
+      "priority": "P0",
+      "points": 3,
+      "dependsOn": [],
+      "type": "bug",
+      "passes": false,
+      "lane": {
+        "modifies": "src/skillweave/routing/faigate_adapter.py",
+        "tests": "tests/unit/test_provider_transport.py",
+        "reads": [
+          "src/skillweave/council/engine.py"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/dispatch.py",
+          "src/skillweave/routing/harness.py",
+          "tests/unit/test_model_availability.py"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2,
+              3
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any projec"
+          }
+        ],
+        "worktree": "Neutral placeholder wording d",
+        "branch": "Neutral placeholder word"
+      }
+    },
+    {
+      "id": "SW-RT-R",
+      "title": "Neutral placeholder wording describing the work item in general terms",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming an",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describ",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in gene",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy d",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wo",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization"
+      ],
+      "priority": "P0",
+      "points": 3,
+      "dependsOn": [
+        "SW-RT-001",
+        "SW-RT-002",
+        "SW-RT-003",
+        "SW-RT-004"
+      ],
+      "type": "verification",
+      "passes": false,
+      "lane": {
+        "worktree": "Neutral placeholder wordin",
+        "branch": "Neutral placeholder wording describing the work item in general terms without",
+        "reads": [
+          "src/skillweave/routing/",
+          "tests/unit/"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/dispatch.py",
+          "src/skillweave/routing/harness.py",
+          "src/skillweave/routing/faigate_adapter.py",
+          "src/skillweave/routing/profile.py"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without na"
+          },
+          {
+            "criteria": [
+              3,
+              4
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general te"
+          },
+          {
+            "criteria": [
+              5,
+              6
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general ter"
+          },
+          {
+            "criteria": [
+              7,
+              8
+            ],
+            "focus": "Neutral placeholder wording describing the work item in g"
+          }
+        ]
+      }
+    },
+    {
+      "id": "SW-RT-005",
+      "title": "Neutral placeholder wording describing the work item in g",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder word",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without na",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy det",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, produc"
+      ],
+      "priority": "P0",
+      "points": 2,
+      "dependsOn": [
+        "SW-RT-R"
+      ],
+      "type": "feature",
+      "passes": false,
+      "lane": {
+        "worktree": "Neutral placeholder wording de",
+        "branch": "Neutral placeholder w",
+        "modifies": "src/skillweave/routing/__init__.py",
+        "tests": "tests/unit/test_routing_exports.py",
+        "reads": [
+          "src/skillweave/routing/dispatch.py",
+          "src/skillweave/routing/harness.py"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/dispatch.py",
+          "src/skillweave/routing/harness.py",
+          "src/skillweave/routing/faigate_adapter.py",
+          "src/skillweave/routing/profile.py"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2,
+              3
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without na"
+          }
+        ]
+      }
+    },
+    {
+      "id": "SW-RT-006",
+      "title": "Neutral placeholder wording describing the work item in general te",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutra",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wordin",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, produ",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or str"
+      ],
+      "priority": "P0",
+      "points": 2,
+      "dependsOn": [
+        "SW-RT-005"
+      ],
+      "type": "feature",
+      "passes": false,
+      "lane": {
+        "worktree": "Neutral placeholder wording desc",
+        "branch": "Neutral placeholder word",
+        "creates": "profiles/example-standard.yaml",
+        "tests": "tests/unit/test_standard_profile.py",
+        "reads": [
+          "src/skillweave/routing/harness.py",
+          "src/skillweave/routing/profile.py"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/harness.py",
+          "src/skillweave/routing/profile.py",
+          "src/skillweave/routing/dispatch.py"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2,
+              3
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without"
+          }
+        ]
+      }
+    },
+    {
+      "id": "SW-RT-007",
+      "title": "Neutral placeholder wording describing the work item",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detai",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeh",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, prod",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the"
+      ],
+      "priority": "P0",
+      "points": 3,
+      "dependsOn": [
+        "SW-RT-006"
+      ],
+      "type": "feature",
+      "passes": false,
+      "lane": {
+        "worktree": "Neutral placeholder wording descr",
+        "branch": "Neutral placeholder wordin",
+        "creates": "docs/dispatching-from-your-harness.md",
+        "tests": "tests/unit/test_harness_declaration.py",
+        "reads": [
+          "src/skillweave/routing/harness.py",
+          "profiles/example-standard.yaml"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/",
+          "profiles/example-standard.yaml"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1
+            ],
+            "focus": "Neutral placeholder wording describing the work item in genera"
+          },
+          {
+            "criteria": [
+              2,
+              3
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general"
+          }
+        ]
+      }
+    },
+    {
+      "id": "SW-RT-008",
+      "title": "Neutral placeholder wording describing the work item in general terms",
+      "description": "launch_command Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization,",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral plac",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any pr"
+      ],
+      "priority": "P0",
+      "points": 2,
+      "dependsOn": [
+        "SW-RT-006"
+      ],
+      "type": "bug",
+      "passes": false,
+      "lane": {
+        "worktree": "Neutral placeholder wording descr",
+        "branch": "Neutral placeholder word",
+        "modifies": "src/skillweave/routing/dispatch.py",
+        "tests": "tests/unit/test_dispatch_timeout.py",
+        "reads": [
+          "src/skillweave/runtime/runner_adapter.py"
+        ],
+        "must_not_touch": [
+          "src/skillweave/runtime/runner_adapter.py",
+          "src/skillweave/routing/harness.py",
+          "profiles/example-standard.yaml"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2,
+              3
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any pr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "SW-RT-V",
+      "title": "Neutral placeholder wording describing the wor",
+      "description": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization",
+      "acceptanceCriteria": [
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work",
+        "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describin",
+        "Neutral placeholder wording describing the wo"
+      ],
+      "priority": "P0",
+      "points": 3,
+      "dependsOn": [
+        "SW-RT-005",
+        "SW-RT-006",
+        "SW-RT-007",
+        "SW-RT-008"
+      ],
+      "type": "verification",
+      "passes": false,
+      "lane": {
+        "worktree": "Neutral placeholder wording descr",
+        "branch": "Neutral placeholder wording describing the work item in general terms without naming",
+        "reads": [
+          "src/skillweave/routing/",
+          "profiles/example-standard.yaml",
+          "docs/"
+        ],
+        "must_not_touch": [
+          "src/skillweave/routing/dispatch.py",
+          "src/skillweave/routing/harness.py",
+          "src/skillweave/routing/faigate_adapter.py",
+          "profiles/example-standard.yaml"
+        ],
+        "dispatch_order": [
+          {
+            "criteria": [
+              1,
+              2
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms without naming any projec"
+          },
+          {
+            "criteria": [
+              3,
+              4,
+              5
+            ],
+            "focus": "Neutral placeholder wording describing the work item in general terms with"
+          }
+        ]
+      }
+    }
+  ],
+  "totals": {
+    "tasks": 10,
+    "points": 28
+  },
+  "execution_recommendation": {
+    "mode": "standard",
+    "reason": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without namin",
+    "suggested_workflow": "ralph-loop-attended",
+    "parallel_opportunities": 3,
+    "note": "Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeholder wording describing the work item in general terms without naming any project, organization, product or strategy detail. Neutral placeho"
+  }
+}

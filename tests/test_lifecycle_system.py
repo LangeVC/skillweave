@@ -1,9 +1,19 @@
 import os
+import subprocess
 import sys
 import tempfile
 import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+# The repository's own .skillweave/ is git-excluded (docs/substrate-map.md,
+# invariant 5). These tests read the checked-in substrate fixture, and by an
+# absolute path: the previous relative form silently depended on the caller's
+# working directory.
+SUBSTRATE_ROOT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "fixtures", "substrate-root"
+)
+SUBSTRATE = os.path.join(SUBSTRATE_ROOT, ".skillweave")
 
 from skillweave.phase_detection import detect_phase, detect_phase_with_detail, phase_from_config
 from skillweave.workflow_recommendation import recommend
@@ -99,6 +109,99 @@ class TestOnboardingFlow:
         with tempfile.TemporaryDirectory() as td:
             assert load_onboarding_state(td) is None
 
+    def _drive(self, monkeypatch, answers):
+        """Feed ``answers`` to whichever ``input()`` prompts onboarding asks."""
+        it = iter(answers)
+
+        def fake_input(prompt=""):
+            return next(it)
+
+        monkeypatch.setattr("builtins.input", fake_input)
+
+    def test_substrate_rule_is_stated_and_gitignore_written_for_git_project(
+        self, monkeypatch
+    ):
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["git", "init", "-q"], cwd=td, check=True)
+            # A git project with an empty .gitignore: onboarding must teach the
+            # substrate rule and write the exclusion without being asked.
+            monkeypatch.chdir(td)
+            self._drive(monkeypatch, ["build an app", "n"])
+
+            printed = []
+            monkeypatch.setattr(
+                "builtins.print", lambda *a, **k: printed.append(" ".join(map(str, a)))
+            )
+            result = run_onboarding(td)
+
+            # Rule text was printed (criterion 1: "states the substrate rule").
+            stdout = "\n".join(printed)
+            assert ".skillweave/" in stdout
+            assert "IP boundary" in stdout
+            assert "planning repository" in stdout
+
+            # The correct .gitignore entry was written (criterion 1).
+            with open(os.path.join(td, ".gitignore")) as f:
+                content = f.read()
+            assert "/.skillweave/" in content
+
+            # The answer to the planning-repository question was recorded
+            # (criterion 2), not assumed.
+            assert result["planning_repo_exists"] is False
+
+    def test_planning_repository_question_is_asked_and_recorded(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as td:
+            monkeypatch.chdir(td)
+            prompts = []
+
+            def fake_input(prompt=""):
+                prompts.append(prompt)
+                if "goal" in prompt:
+                    return "build an app"
+                if "planning repository" in prompt:
+                    return "y"
+                return ""
+
+            monkeypatch.setattr("builtins.input", fake_input)
+            result = run_onboarding(td)
+
+            # Criterion 2: the question is asked, not assumed…
+            assert any("planning repository" in p for p in prompts)
+
+            # …and the answer is recorded.
+            state = load_onboarding_state(td)
+            assert state["planning_repo_exists"] is True
+            assert result["planning_repo_exists"] is True
+
+    def test_public_repository_refuses_to_leave_substrate_tracked(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run(["git", "init", "-q"], cwd=td, check=True)
+            subprocess.run(
+                ["git", "remote", "add", "origin", "git@github.com:LangeVC/skillweave.git"],
+                cwd=td,
+                check=True,
+            )
+            # Track substrate content, as a controller committing PRDs would.
+            os.makedirs(os.path.join(td, ".skillweave", "prds"))
+            with open(os.path.join(td, ".skillweave", "prds", "leaked.md"), "w") as f:
+                f.write("# PRD")
+            subprocess.run(
+                ["git", "add", ".skillweave"],
+                cwd=td,
+                check=True,
+            )
+
+            monkeypatch.chdir(td)
+            self._drive(monkeypatch, ["build an app", "n"])
+
+            result = run_onboarding(td)
+
+            # Criterion 3: it refuses to leave substrate content tracked, and
+            # says why.
+            assert result.get("substrate_refused") is True
+            assert "public" in result["substrate_reason"].lower()
+            assert "git rm -r --cached .skillweave" in result["substrate_reason"]
+
 
 class TestPhaseEnforcement:
     def test_override_flag_bypasses_check(self):
@@ -125,13 +228,13 @@ class TestPhaseEnforcement:
 
 class TestIntegration:
     def test_enrich_config_adds_lifecycle(self):
-        config = enrich_config(".")
+        config = enrich_config(SUBSTRATE_ROOT)
         assert config is not None
         assert "lifecycle" in config
         assert config["lifecycle"]["current_phase"] is not None
 
     def test_get_lifecycle_context(self):
-        ctx = get_lifecycle_context(".")
+        ctx = get_lifecycle_context(SUBSTRATE_ROOT)
         assert ctx["phase_system_configured"] is True
         assert ctx["current_phase"] is not None
 
@@ -141,7 +244,7 @@ class TestIntegration:
             assert ctx["phase_system_configured"] is False
 
     def test_config_yaml_structure_preserved(self):
-        with open(".skillweave/config.yaml") as f:
+        with open(os.path.join(SUBSTRATE, "config.yaml")) as f:
             config = yaml.safe_load(f)
         assert config["mode"] == "medium"
         assert "features" in config
@@ -160,17 +263,17 @@ class TestIntegration:
 
 class TestBundleYAML:
     def test_bundles_yaml_exists(self):
-        assert os.path.exists(".skillweave/bundles.yaml")
+        assert os.path.exists(os.path.join(SUBSTRATE, "bundles.yaml"))
 
     def test_phases_yaml_exists(self):
-        assert os.path.exists(".skillweave/phases.yaml")
+        assert os.path.exists(os.path.join(SUBSTRATE, "phases.yaml"))
 
     def test_phases_yaml_has_7_phases(self):
-        with open(".skillweave/phases.yaml") as f:
+        with open(os.path.join(SUBSTRATE, "phases.yaml")) as f:
             data = yaml.safe_load(f)
         assert len(data["phases"]) == 7
 
     def test_bundles_yaml_has_5_bundles(self):
-        with open(".skillweave/bundles.yaml") as f:
+        with open(os.path.join(SUBSTRATE, "bundles.yaml")) as f:
             data = yaml.safe_load(f)
         assert len(data["bundles"]) == 5

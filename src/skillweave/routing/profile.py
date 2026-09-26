@@ -55,6 +55,7 @@ finding to be reported, not a value to be invented alongside.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
@@ -206,12 +207,19 @@ class Limits:
     ``on_model_failure`` is one of: ``skip`` (drop the failed model and
     continue with the rest), ``retry`` (retry up to ``max_retries``), or
     ``abort`` (raise once ``min_models_required`` can no longer be met).
+
+    ``heartbeat_interval`` is the configured interval (seconds) at which a live
+    dispatch child emits a ``heartbeat``. It is profile/config data, distinct
+    from ``timeout``: a child may exceed the heartbeat interval without being
+    killed. The default is positive and backward compatible — a profile that
+    does not declare it keeps the default rather than gaining a new kill bound.
     """
 
     timeout: float = 60.0
     max_retries: int = 1
     min_models_required: int = 2
     on_model_failure: str = "skip"
+    heartbeat_interval: float = 5.0
 
     _VALID_FAILURE_BEHAVIOUR = frozenset({"skip", "retry", "abort"})
 
@@ -223,12 +231,37 @@ class Limits:
                 f"unknown on_model_failure '{behaviour}' "
                 f"(expected one of {sorted(cls._VALID_FAILURE_BEHAVIOUR)})"
             )
+        heartbeat_interval = cls._validate_heartbeat_interval(
+            data.get("heartbeat_interval", 5.0)
+        )
         return cls(
             timeout=float(data.get("timeout", 60.0)),
             max_retries=int(data.get("max_retries", 1)),
             min_models_required=int(data.get("min_models_required", 2)),
             on_model_failure=behaviour,
+            heartbeat_interval=heartbeat_interval,
         )
+
+    @staticmethod
+    def _validate_heartbeat_interval(value: Any) -> float:
+        """Parse and enforce a finite, strictly-positive heartbeat interval.
+
+        The heartbeat interval is profile/config data. An explicit value that is
+        zero, negative, ``NaN`` or infinite is invalid configuration and is
+        refused synchronously here (before any workspace is provisioned or worker
+        launched), never silently coerced to the positive default.
+        """
+        try:
+            interval = float(value)
+        except (TypeError, ValueError) as exc:
+            raise RoutingProfileError(
+                f"heartbeat_interval must be a finite positive number, got {value!r}"
+            ) from exc
+        if not math.isfinite(interval) or interval <= 0:
+            raise RoutingProfileError(
+                f"heartbeat_interval must be a finite positive number, got {value!r}"
+            )
+        return interval
 
 
 @dataclass
@@ -299,6 +332,7 @@ class RoutingProfile:
                 "max_retries": self.limits.max_retries,
                 "min_models_required": self.limits.min_models_required,
                 "on_model_failure": self.limits.on_model_failure,
+                "heartbeat_interval": self.limits.heartbeat_interval,
             },
             "roles": {
                 key: _role_to_dict(role) for key, role in self.roles.items()

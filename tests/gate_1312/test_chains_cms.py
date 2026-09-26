@@ -22,6 +22,7 @@ import pytest
 import yaml
 
 from tests.gate_1312 import _sibling as sib
+from tests.gate_1312._sibling import require
 
 SCENARIOS = (
     "cms-landing-page",
@@ -50,6 +51,8 @@ def test_criterion_04_chains_and_cms_through_1_3_11_contracts():
     receipt / review / observer / replay / authority contracts, with no CMS
     special-casing in Core.
     """
+    require(sib.cms_scenarios_dir, name="skillweave-packs-pro")
+    require(sib.cms_pack_dir, name="skillweave-packs-pro")
     # --- Receipt contract -------------------------------------------------------
     from skillweave.trace import contracts as C
 
@@ -136,6 +139,8 @@ def test_criterion_04_chains_and_cms_through_1_3_11_contracts():
 
 def test_both_profile_chains_validate_against_preview_schema():
     """Both OSS profile chains stay valid previews against the pinned SDK schema."""
+    require(sib.base_profiles_dir, name="skillweave-profiles")
+    require(sib.sdk_validator_module, name="skillweave-sdk")
     validator = sib.sdk_validator_module()
     schemas = sib.sdk_schemas_dir()
     work = "https://skillweave.dev/schemas/work-profile/0.1.0"
@@ -149,6 +154,7 @@ def test_both_profile_chains_validate_against_preview_schema():
 
 def test_cms_pack_is_not_a_third_base_profile():
     """The CMS pack declares itself special/domain, never a third base profile."""
+    require(sib.cms_pack_dir, name="skillweave-packs-pro")
     pack = _load(sib.cms_pack_dir() / "pack.yaml")["pack"]
     assert pack["declaresNot"]["lifecycleProfile"] is True
     assert pack["declaresNot"]["coreExtension"] is True

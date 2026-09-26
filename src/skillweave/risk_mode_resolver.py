@@ -93,9 +93,16 @@ class RiskModeResolver:
         return None
     
     def _load_project_config(self) -> Optional[SkillWeaveConfig]:
-        """Load project configuration if it exists."""
-        config_path = self.project_root / ".skillweave" / "config.yaml"
-        if config_path.exists():
+        """Load project configuration if it exists.
+
+        Project config now lives in the durable tier (skillweave.config/config.yaml)
+        after SW152-010; the legacy .skillweave/config.yaml is only a migration source.
+        Gate on EITHER path existing so a project configured via ModeManager/save_config
+        is honoured, while a project with no config still resolves to None.
+        """
+        durable = self.project_root / "skillweave.config" / "config.yaml"
+        legacy = self.project_root / ".skillweave" / "config.yaml"
+        if durable.exists() or legacy.exists():
             return self.project_persistence.load_config()
         return None
     

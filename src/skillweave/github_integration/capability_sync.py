@@ -1,7 +1,9 @@
 """Capacium capability manifest synchronization helpers.
 
-Keeps the root bundle manifest and all SkillWeave skill manifests aligned
-with the package version declared in pyproject.toml.
+The runtime product and root distribution bundle follow the version declared in
+``pyproject.toml``.  Member skills are independent artifacts: their manifest
+versions may lag a packaging-only bundle release, while the corresponding root
+bundle pins must continue to match those member manifests exactly.
 """
 
 from __future__ import annotations
@@ -77,16 +79,19 @@ class CapaciumManifestSync:
             raise ValueError(f"Manifest {path} does not contain a YAML object")
         return data
 
-    def build_bundle_capabilities(self, version: str) -> list[dict[str, str]]:
+    def build_bundle_capabilities(self) -> list[dict[str, str]]:
         capabilities = []
         for path in self.skill_manifest_paths():
             manifest = self.load_manifest(path)
             name = manifest.get("name") or path.parent.name
+            member_version = manifest.get("version")
+            if not member_version:
+                raise ValueError(f"Missing version in member manifest {path}")
             capabilities.append(
                 {
                     "name": name,
                     "source": f"./skills/{path.parent.name}",
-                    "version": version,
+                    "version": str(member_version),
                 }
             )
         return capabilities
@@ -126,13 +131,15 @@ class CapaciumManifestSync:
                 "homepage": DEFAULT_HOMEPAGE,
                 "frameworks": list(DEFAULT_FRAMEWORKS),
                 "keywords": list(DEFAULT_BUNDLE_KEYWORDS),
-                "capabilities": self.build_bundle_capabilities(version),
+                "capabilities": self.build_bundle_capabilities(),
             }
         else:
             normalized = {
                 "kind": "skill",
                 "name": current.get("name", path.parent.name),
-                "version": version,
+                # A member capability owns its own version.  A product/bundle
+                # bump must not silently turn every member into a new release.
+                "version": current.get("version", version),
                 "description": current.get("description", ""),
                 "author": DEFAULT_AUTHOR,
                 "license": DEFAULT_LICENSE,

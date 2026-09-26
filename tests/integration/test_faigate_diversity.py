@@ -54,7 +54,7 @@ def test_comparison_run_documents_models_and_limits():
     import os
     
     # Load comparison profile
-    profile_path = os.path.join(os.path.dirname(__file__), '../../config/profiles/comparison.yaml')
+    profile_path = os.path.join(os.path.dirname(__file__), '../../src/skillweave/assets/profiles/comparison.yaml')
     if not os.path.exists(profile_path):
         pytest.skip("Comparison profile not found")
         

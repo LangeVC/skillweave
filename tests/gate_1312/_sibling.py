@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 #: The tests/gate_1312 directory (where this helper lives).
 GATE_ROOT = Path(__file__).resolve().parent
 
@@ -23,6 +25,23 @@ CORE_ROOT = GATE_ROOT.parents[1]
 
 class RepoResolutionError(FileNotFoundError):
     """A required read-only repository surface could not be resolved."""
+
+
+def require(resolver, *, name: str):
+    """Resolve a required read-only sibling repository, or skip the test.
+
+    The gate suite reads sibling repositories (skillweave-sdk, skillweave-
+    profiles, skillweave-packs-pro) that are *not* part of this repository's
+    tracked tree — a fresh ``git archive``/clone does not carry them. When a
+    required sibling is absent we ``pytest.skip`` with a named reason so the
+    hermetic suite produces the same result from a clone and a dev checkout,
+    rather than failing on untracked local state. When the sibling IS present
+    the full native gate runs.
+    """
+    try:
+        return resolver()
+    except RepoResolutionError as exc:
+        pytest.skip(f"sibling {name} is not carried by git: {exc}")
 
 
 def _require_file(candidates, *, env_var: str, what: str, anchor: str) -> Path:
