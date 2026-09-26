@@ -136,6 +136,10 @@ locations:
     role: skill_capability
     pattern: '^version:\s*(\S+)'
     required: false
+  - path: skills/skillweave-onboarding/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: false
   - path: skills/skillweave-repo-health/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
