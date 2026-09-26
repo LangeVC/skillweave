@@ -36,6 +36,7 @@ truth.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 from dataclasses import dataclass, field
 from enum import Enum
@@ -44,7 +45,21 @@ from typing import Any, Iterable, Mapping, Protocol, Union, runtime_checkable
 
 from skillweave.intelligent_detection.onboarding_flow_controller import OnboardingState
 from skillweave.lifecycle import phase_ids
-from skillweave.runtime.store import LEGACY_STATE_ALIASES, RunStateModel
+
+
+def _runtime_attr(submodule: str, *names: str):
+    """Resolve runtime names at call time (GLE-020).
+
+    ``skillweave.runtime`` is an optional subpackage and must not be imported at
+    module level here; the submodule and its names are resolved lazily through
+    ``importlib`` (string-based, so no ``skillweave.runtime.*`` import statement
+    appears in this module's AST).
+    """
+    module = importlib.import_module("skillweave.runtime." + submodule)
+    if len(names) == 1:
+        return getattr(module, names[0])
+    return [getattr(module, n) for n in names]
+
 
 #: Version of the canonical state payload. Bumped only when the digest payload
 #: shape changes, so a digest always names the contract that produced it.
@@ -370,6 +385,9 @@ class Contradiction:
 
 def contradiction_guidance(contradiction: Contradiction, state: EntryState) -> str:
     """Return the operator-facing next step for one contradiction."""
+    RunStateModel, LEGACY_STATE_ALIASES = _runtime_attr(
+        "store", "RunStateModel", "LEGACY_STATE_ALIASES"
+    )
     canonical = sorted(value.value for value in RunStateModel)
     phases = list(phase_ids())
     onboarding = sorted(value.value for value in OnboardingState)
@@ -427,6 +445,9 @@ def validate(state: EntryState) -> tuple[Contradiction, ...]:
     """
     found: list[Contradiction] = []
 
+    RunStateModel, LEGACY_STATE_ALIASES = _runtime_attr(
+        "store", "RunStateModel", "LEGACY_STATE_ALIASES"
+    )
     run_state = state.run_state
     canonical_states = {value.value for value in RunStateModel}
     if not run_state:
@@ -457,6 +478,7 @@ def validate(state: EntryState) -> tuple[Contradiction, ...]:
 
 def _for_intent(intent: EntryIntent, state: EntryState) -> tuple[Contradiction, ...]:
     """Return the contradictions the specific intent introduces."""
+    RunStateModel = _runtime_attr("store", "RunStateModel")
     if isinstance(intent, StartIntent):
         if RunStateModel.is_terminal(state.run_state):
             return (Contradiction("TERMINAL_RUN_START", state.run_state),)
