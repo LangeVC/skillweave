@@ -43,6 +43,7 @@ from typing import Any, Mapping, Optional, Sequence
 
 from skillweave.cli import run
 from skillweave.cli import rework
+from skillweave.cli import onboard as onboard_mod
 from skillweave.dispatch import cli as dispatch
 from skillweave.cli import observe as observe_mod
 from skillweave.cli import planning_sync as planning_sync_mod
@@ -104,6 +105,14 @@ def _build_parser(prog: str = "skillweave") -> argparse.ArgumentParser:
         description="SkillWeave Multi-agent AI Orchestration",
     )
     subparsers = parser.add_subparsers(title="commands", dest="command")
+
+    # `onboard` subcommand -- operator onboarding
+    subparsers.add_parser(
+        "onboard",
+        help="Run operator onboarding — collect profile, detect phase, persist state",
+        parents=[onboard_mod.build_onboard_parser()],
+        add_help=False,
+    )
 
     # `entry` subcommand -- interactive / JSON entry through the shared contract
     subparsers.add_parser(
@@ -174,7 +183,9 @@ def main(
     parser = _build_parser()
     args = parser.parse_args(args_list)
 
-    if args.command == "entry":
+    if args.command == "onboard":
+        return onboard_mod.main(subcommand_argv(args_list))
+    elif args.command == "entry":
         return run_entry(
             subcommand_argv(args_list), adapter=adapter, stdin=stdin, stdout=stdout
         )
@@ -199,7 +210,7 @@ def subcommand_argv(args_list: Sequence[str]) -> list:
     from the subcommand's own index is correct for both call styles.
     """
     for index, token in enumerate(args_list):
-        if token in ("entry", "dispatch", "run", "rework", "planning-sync"):
+        if token in ("onboard", "entry", "dispatch", "run", "rework", "planning-sync"):
             return list(args_list[index + 1:])
     return []
 
