@@ -28,6 +28,24 @@ source_of_truth: pyproject.toml
 # These are flat top-level scalars (not a nested map) because the canonical
 # version-sync parser accepts only a restricted YAML subset: flat scalar keys
 # and the `locations` list. A nested `changelog:` map would be unparseable.
+# Release title policy — single declarative source for the release-naming
+# convention consumed by releasechain and launch. The pattern MUST start with
+# the product name (derived from pyproject.toml [project].name) followed by
+# the version tag. Any skill, gate or agent that needs to validate a release
+# title reads this pattern; the product name is NOT hardcoded in skill text.
+# Missing or malformed policy must fail closed before any release object is
+# created.
+release_title_policy:
+  # The product name for release titles. This MUST match pyproject.toml's
+  # [project].name, title-cased (first letter uppercase, rest lowercase).
+  # To rebrand, change only this value — no skill edits required.
+  product_name: SkillWeave
+  # Full regex that every release title must match. {product} is replaced
+  # at consumption time with product_name above. The version comes from the
+  # release tag (vX.Y.Z, optionally with -rcN prerelease suffix).
+  pattern: '^{product} v[0-9]+\.[0-9]+\.[0-9]+(?:-rc[0-9]+)?$'
+  description: "Release titles must be exactly '<product> vX.Y.Z' with no extra text. Prerelease suffixes (-rcN) are accepted."
+
 changelog_path: CHANGELOG.md
 changelog_managed: false
 changelog_responsibility: manual
@@ -66,6 +84,10 @@ locations:
   # the two stay consistent and both may lag the bundle version (OPS decision
   # 2026-09-02). version-sync must NOT force a skill file equal to
   # source_of_truth; its own version surface is its capability.yaml.
+  - path: skills/skillweave/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: false
   - path: skills/skillweave-blueprint/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
@@ -111,6 +133,10 @@ locations:
     pattern: '^version:\s*(\S+)'
     required: false
   - path: skills/skillweave-releasechain/capability.yaml
+    role: skill_capability
+    pattern: '^version:\s*(\S+)'
+    required: false
+  - path: skills/skillweave-onboarding/capability.yaml
     role: skill_capability
     pattern: '^version:\s*(\S+)'
     required: false

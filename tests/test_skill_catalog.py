@@ -43,9 +43,9 @@ def _parse_frontmatter_name(skill_md: Path) -> str | None:
 
 
 class TestSkillCatalogCount:
-    """Verify exactly 13 canonical skills in capability.yaml and installer.py."""
+    """Verify exactly 15 canonical skills in capability.yaml and installer.py."""
 
-    EXPECTED_COUNT = 13
+    EXPECTED_COUNT = 15
 
     def test_capability_yaml_has_13_skills(self):
         names = _parse_capability_names()

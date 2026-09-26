@@ -58,6 +58,8 @@ SKILLS = [
     "skillweave-repo-health",
     "skillweave-observe",
     "skillweave-council",
+    "skillweave-entry",
+    "skillweave-onboarding",
 ]
 
 CAPACIUM_SPEC = "skillweave"
