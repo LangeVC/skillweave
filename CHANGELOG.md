@@ -1,4 +1,14 @@
 # SkillWeave Changelog
+## v1.5.6 (2026-09-26) — Universal Entry and Onboarding Ecosystem
+
+SkillWeave introduces a universal CLI entry facade and a comprehensive operator onboarding ecosystem. These additions provide a unified interface to start, continue, inspect, or onboard, while securely persisting operator profiles and state contexts. 
+
+### Highlights
+- **Universal CLI Router**: `skillweave start`, `continue`, `inspect`, and `onboard` subcommands are now fully routed and validated through the shared `EntryService` contract.
+- **Onboarding Profile Generation**: Captures and persists operator intent, role, and autonomy boundaries in durable, encrypted YAML profiles.
+- **Strict Integration Testing**: New harnesses test end-to-end integration across entry facades, adapters, profile verification, and CLI router parity.
+- **Product-Neutral Release Gating**: Forgejo release workflows are now entirely decoupled from hardcoded product titles; `release_title_policy` is loaded dynamically from `.version.yaml`.
+
 ## v1.5.5 (2026-09-25) — Workspaces and dispatches you can inspect before they act
 
 SkillWeave can now prepare multi-repository workspaces and operator dispatches
