@@ -1,0 +1,165 @@
+# SkillWeave WorkProfile: research-synthesis.v1
+#
+# SW-160-VERT-002. Provider-neutral research-synthesis lifecycle profile.
+#
+# Resolves into the generic kernel (K0-K6) through the same contract surface
+# and the same run service (RunApplicationService) as the software-delivery
+# profile. No research-specific shortcut bypasses contract, evidence or review
+# gates.
+#
+# This file is DATA, loaded through skillweave.routing.harness.load_profiles_from_location
+# (and, for a dispatch, through skillweave.dispatch.resolve_dispatch_profile at
+# the explicit path profiles/research-synthesis.v1.yaml).
+#
+# The file carries two field groups that split cleanly and are each validated
+# against their own contract:
+#
+#   * WorkProfile contract fields -- contractVersion, id, category,
+#     kernelStages, topology, humanCoupling, changeSurfaces, deliverables,
+#     evidence -- validated against schemas/lifecycle-contracts/work-profile.schema.json.
+#   * RoutingProfile fields -- name, tier, limits, roles -- loaded by
+#     skillweave.routing.profile.RoutingProfile.from_dict.
+#
+# The evidence and review requirements below are RESEARCH-specific. They are
+# deliberately not the software-delivery set (no test run, no build artefact,
+# no code change surface): a research synthesis is accepted on source
+# attribution, contradiction analysis and an independent synthesis review.
+#
+# Adapt before use: the launch command assumes `opencode` is on PATH, and the
+# model id is the one this profile was proven against. Both are yours to change.
+
+# ── WorkProfile contract fields ────────────────────────────────────────────
+contractVersion: "1.0.0"
+id: research-synthesis.v1
+title: "Research Synthesis V1"
+category: research
+kernelStages:
+  - K0
+  - K1
+  - K2
+  - K3
+  - K4
+  - K5
+  - K6
+# Research iterates rather than flows linearly, and it is conducted with the
+# requester in the loop rather than supervised over code: the topology and the
+# human coupling are research properties, not the software-delivery defaults.
+topology: exploratory
+humanCoupling: collaborative
+# Research lands on knowledge artefacts, not on a code surface.
+changeSurfaces:
+  - documents
+  - knowledge
+  - data
+  - external_system
+deliverables:
+  - research-question
+  - source-corpus
+  - claim-evidence-map
+  - synthesis-narrative
+  - open-questions
+evidence:
+  - source-attribution
+  - contradiction-analysis
+  - synthesis-review
+
+# ── RoutingProfile fields ──────────────────────────────────────────────────
+name: research-synthesis-v1
+tier: balanced
+limits:
+  # Research tolerates longer single passes and more retries than a build step,
+  # and a repeated model failure retries rather than silently skipping a source.
+  timeout: 90.0
+  max_retries: 3
+  min_models_required: 2
+  on_model_failure: retry
+roles:
+  observer:
+    observer: true
+    capabilities:
+      can_observe_run: true
+  ops:
+    model: faigate/deepseek-v4-pro
+    tool:
+      name: opencode
+      launch_command: opencode run --model faigate/deepseek-v4-pro -
+    capabilities:
+      can_mutate_run_state: true
+  reviewer:
+    model: faigate/deepseek-v4-pro
+    tool:
+      name: opencode
+      launch_command: opencode run --model faigate/deepseek-v4-pro -
+    capabilities:
+      can_approve_gate: true
+
+# ── Category-specific evidence, deliverable and review requirements ────────
+#
+# The `deliverables` and `evidence` lists above are the WorkProfile contract
+# fields (arrays of ids). `metadata` carries the same ids as full contract
+# instances, each validated against its own SDK-owned schema:
+# `schemas/lifecycle-contracts/evidence-contract.schema.json` and
+# `.../deliverable-contract.schema.json`. The ids here and above are one truth:
+# a test asserts the two sets are equal.
+#
+# Every strength and acceptance condition below states what RESEARCH evidence
+# is worth, which is not what software delivery's evidence is worth: there is
+# no test run and no build artefact, and the synthesis is only accepted when an
+# independent reader can trace each claim to an attributed source.
+metadata:
+  evidence_contract:
+    contractVersion: "1.0.0"
+    id: research-synthesis.evidence
+    title: "Research synthesis evidence"
+    category: research
+    requirements:
+      - id: source-attribution
+        kind: source-citation
+        strength: reproduced
+        kernelStage: K2
+        required: true
+      - id: contradiction-analysis
+        kind: contradiction-analysis
+        strength: reproduced
+        kernelStage: K3
+        required: true
+      - id: synthesis-review
+        kind: independent-review
+        strength: independently_verified
+        kernelStage: K5
+        required: true
+  deliverable_contract:
+    contractVersion: "1.0.0"
+    id: research-synthesis.deliverables
+    title: "Research synthesis deliverables"
+    category: research
+    changeSurfaces:
+      - documents
+      - knowledge
+    entrypoints:
+      - id: research-question
+        surface: documents
+        acceptance: "the question is answerable from sources and the scope is recorded"
+        kernelStage: K0
+      - id: source-corpus
+        surface: data
+        acceptance: "every source is attributed and retrievable"
+        kernelStage: K2
+      - id: claim-evidence-map
+        surface: knowledge
+        acceptance: "every claim links to an attributed source and each contradiction is recorded"
+        kernelStage: K3
+      - id: synthesis-narrative
+        surface: documents
+        acceptance: "the narrative states the answer, its confidence and its unresolved contradictions"
+        kernelStage: K4
+      - id: open-questions
+        surface: knowledge
+        acceptance: "every question the evidence cannot settle is listed"
+        kernelStage: K6
+  review_requirement:
+    id: synthesis-review
+    strength: independently_verified
+    reviewer_role: reviewer
+    subject: knowledge
+    basis: "an independent reader can trace every claim to its attributed source"
