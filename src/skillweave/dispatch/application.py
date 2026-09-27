@@ -685,6 +685,7 @@ def _default_inline_seam(
     timeout: Optional[float] = None,
     artifact_store: Optional[Any] = None,
     on_child_lifecycle: Optional[Callable[..., None]] = None,
+    env: Optional[dict[str, str]] = None,
 ) -> Any:
     """Run a single lane through the single-process seam, never the fan-out path.
 
@@ -703,6 +704,9 @@ def _default_inline_seam(
     after the child is started and *before* the wait, and ``terminal`` fires
     after the wait in a ``finally``, so a live heartbeat cadence is always
     bounded by a terminal observation.
+
+    ``env`` (optional) is forwarded to ``start_process`` so the subprocess
+    inherits extra environment variables (e.g. the message channel path).
     """
     from skillweave.routing.modelspec import from_value
     from skillweave.routing.faigate_adapter import resolve_model_spec
@@ -737,6 +741,7 @@ def _default_inline_seam(
         tool=tool,
         model=resolved_model,
         cwd=cwd,
+        env=env,
     )
     _notify("started", handle)
     try:
@@ -1210,6 +1215,7 @@ class OperatorDispatchApplication:
         gate_input: Optional[TopologyGateInput] = None,
         strict_adapter: Optional[HarnessAdapterProfile] = None,
         strict_skill_digests: Optional[Mapping[str, str]] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> DispatchRun:
         """Execute one wave and return a machine-readable run identifier.
 
@@ -1366,6 +1372,7 @@ class OperatorDispatchApplication:
                         work,
                         round_=0,
                         provisioned=provisioned,
+                        env=env,
                     )
                 else:
                     self._fanout_group(
@@ -1377,6 +1384,7 @@ class OperatorDispatchApplication:
                         work,
                         round_=0,
                         provisioned=provisioned,
+                        env=env,
                     )
 
             # Failure policy applied to typed failures; the legacy/untyped
@@ -1444,6 +1452,7 @@ class OperatorDispatchApplication:
                             work,
                             round_=rounds,
                             provisioned=provisioned,
+                            env=env,
                         )
                     failed = self._reconcile_failed(
                         declaration, resolved, stream, run_id, wave
@@ -1918,6 +1927,7 @@ class OperatorDispatchApplication:
         work: bytes,
         round_: int,
         provisioned: Optional[dict[str, ProvisionedWorkspace]] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> bool:
         stream.lane_started(wave=wave, lane_id=lane.id)
         command = self._command_for(lane, resolved)
@@ -1991,6 +2001,7 @@ class OperatorDispatchApplication:
                 timeout=_resolved_timeout(resolved),
                 artifact_store=self._active_store,
                 on_child_lifecycle=lifecycle,
+                env=env,
             )
             children = _fanout_children(result)
             self._record_child_results(lane, children, round_=round_)
@@ -2040,6 +2051,7 @@ class OperatorDispatchApplication:
         work: bytes,
         round_: int,
         provisioned: Optional[dict[str, ProvisionedWorkspace]] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> None:
         # Start every lane in the group at once (overlap), then record per-lane.
         commands = [self._command_for(lane, resolved) for lane in group]
@@ -2130,6 +2142,7 @@ class OperatorDispatchApplication:
                 timeout=_resolved_timeout(resolved),
                 artifact_store=self._active_store,
                 on_child_lifecycle=lifecycle,
+                env=env,
             )
             children = getattr(result, "children", None) or []
             for lane, child, dispatch_id in zip(group, children, dispatch_ids):

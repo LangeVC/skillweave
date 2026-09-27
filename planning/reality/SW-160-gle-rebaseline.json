@@ -1,0 +1,415 @@
+{
+  "meta": {
+    "task": "SW-160-BASE-001",
+    "description": "GLE Rebaseline — map every old GLE acceptance criterion to delivered, open, superseded or explicitly out-of-scope status",
+    "generated": "2026-09-27",
+    "current_head": "6d877a24fe77dda79c2396c0ab1ea1ec79636bba",
+    "current_version": "v1.5.7",
+    "prd_commit": "32d67fba29aefc4f7fb7e5590f8edd29d7668c3d",
+    "prd_branch": "chore/gle-prd-einchecken",
+    "prd_path": ".skillweave/prds/generic-lifecycle-extension/prd.json",
+    "prd_markdown": ".skillweave/prds/generic-lifecycle-extension/prd.md"
+  },
+
+  "contract_matrix": {
+    "GLE-001": {
+      "title": "Kernschemas im SDK: WorkProfile, Contracts, CategoryPack, LifecycleProfile",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-5"],
+      "acceptance_criteria": [
+        "Die fuenf Schemas liegen in skillweave-sdk, nicht im Core",
+        "skillweave-sdk hat keine Laufzeitabhaengigkeit auf skillweave",
+        "Fuenf Schemas nach Draft 2020-12 liegen vor und validieren gegeneinander",
+        "Pflichtfelder je WorkProfile: Outcome, primaere Kategorie, Topology, Control, Surfaces, Deliverable",
+        "Schema-Version und Migrationshinweise sind Bestandteil jedes Schemas",
+        "Gueltige und ungueltige Beispielprofile sind als Fixtures hinterlegt",
+        "Jedes Profil und jeder Pack traegt eine standardsBaselineRef",
+        "Schemas enthalten keinen woertlichen Normtext, nur Struktur und Referenz-IDs",
+        "Das SDK ist als eigenstaendiges Paket installierbar, ohne die Engine zu ziehen"
+      ],
+      "evidence": "Keine Implementierung. Einziger Code-Beleg: Kommentar in tests/contract/test_preview_core_pro_boundary.py Zeile 43 ('The five preview schemas the SDK owns (GLE-001)'). Kein skillweave-sdk-Repo existiert in diesem Repository."
+    },
+    "GLE-002": {
+      "title": "Lifecycle Kernel State Machine K0 bis K6",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-1"],
+      "acceptance_criteria": [
+        "K0 bis K6 sind implementiert und an die persistierte Run State Machine aus RTF-001 gebunden",
+        "Govern ist ein Querschnittsband, keine achte Phase",
+        "Gate-Entscheidungen PROMOTE, HOLD, ROLLBACK sind getrennt von Laufzeitzustaenden",
+        "Verify-Perform-Schleife, Parallelitaet, Human Wait und Cancel sind testbar"
+      ],
+      "evidence": "Nicht implementiert. Die bestehende Run State Machine (RalphLoopStateMachine) hat 9 Zustaende, keine K0-K6-Architektur."
+    },
+    "GLE-003": {
+      "title": "Category Taxonomy Registry im SDK",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-2"],
+      "acceptance_criteria": [
+        "Die Registry liegt in skillweave-sdk, gemeinsam mit den Schemas",
+        "Elf Kategorien mit stabilen IDs",
+        "Qualifizierte Referenzen trennen kernel:learn von category:learn",
+        "Alias- und Deprecation-Regeln sind definiert und getestet",
+        "Lokalisierte Labels sind von IDs getrennt",
+        "Der Validator weist eine unbekannte Kategoriereferenz zurueck"
+      ],
+      "evidence": "Nicht implementiert. Keine Category Taxonomy Registry existiert im Code."
+    },
+    "GLE-004": {
+      "title": "Repo-Vierteilung und Cross-Repo-Contract-CI",
+      "status": "superseded",
+      "subject_shas": [
+        "1479c8c898a69f977b10189e2455835e4441d918",
+        "e74ada1c58ae29275f5c636bfbe134615c0cf1d5",
+        "bf37366bbc75dcc77371b42a459841283e819bbc",
+        "e34f86be2a27e1309a17bf2be8bf5777cd5306a0",
+        "35217cbaee31a29142f111a71074fb626d7b90b8",
+        "f0897128d840d834cb2da69fc0ac999d7d89f46b",
+        "f92d7a4e73d3c2f04ed70190da4b8ae002c036e3",
+        "defa2b0315c3e088dc4796596bd7aa83e60e4a80"
+      ],
+      "legacy_ids": ["SW-GLE-OBJ-5"],
+      "acceptance_criteria": [
+        "Vier Repositories existieren mit korrekter Lizenz und Sichtbarkeit",
+        "skillweave-sdk ist Vertragsautoritaet; die drei anderen pinnen eine SDK-Version",
+        "skillweave-packs-pro hat keinen GitHub-Mirror",
+        "Jeder Consumer pinnt eine explizite Schema-Version",
+        "Cross-Repo-CI prueft alle Consumer gegen eine Schema-Versionsmatrix",
+        "Ein Contract Drift blockiert den Merge",
+        "Releasegraph ist maschinenlesbar und weist das SDK als Wurzel aus",
+        "Git-Flow mit dev und main ist in allen vier Repos etabliert"
+      ],
+      "evidence": "Acht Commits auf dem chore/gle-prd-einchecken-Zweig (nicht in HEAD). Contract-CI-Mechanik und AST-basierter Waechter wurden entwickelt. Dokumentation in .forgejo/workflows/mirror.yml Zeilen 90-93 als Referenz ('GLE-004 case', 'GLE-004 contract was docs/repo-vierteilung-contract.md'). Die Vierteilung wurde durch die Entscheidung ersetzt, zunaechst im Monorepo zu bleiben — die GLE-004-Commits sind nicht in den Hauptentwicklungszweig eingeflossen."
+    },
+    "GLE-005": {
+      "title": "Pack- und Profile-SDK mit Validator",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-5"],
+      "acceptance_criteria": [
+        "Validator, Test Harness und Doku-Generator liegen im SDK",
+        "Validator prueft ein Pack oder Profil eigenstaendig gegen eine gepinnte Schema-Version",
+        "Test Harness fuehrt ein Pack gegen Golden Scenarios aus",
+        "Dokumentationsgenerator erzeugt Pack-Referenz aus dem Schema",
+        "Ein externer Autor kann ohne Core-Zugriff ein gueltiges Pack bauen",
+        "Das SDK kennt Governance Packs als eigene Pack-Art",
+        "Validator weist Packs zurueck, die woertlichen Normtext enthalten",
+        "Governance Pack kann Gates, Evidenzanforderungen und Rollenpflichten querschnittlich ergaenzen",
+        "Test Harness und Doku-Generator sind optionale Extras"
+      ],
+      "evidence": "Nicht implementiert. Kein Pack-SDK existiert. GLE-005 wird im PRD §2.2 als Begruendung fuer die Taxonomie-Verschiebung ins SDK genannt, aber nie umgesetzt."
+    },
+    "GLE-006": {
+      "title": "Gate Aggregation Policy mit deny-overrides",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-3"],
+      "acceptance_criteria": [
+        "deny-overrides ist implementiert und getestet",
+        "SKIP und ABSTAIN zaehlen nicht als Zustimmung",
+        "Manueller Override traegt Owner, Grund, Scope und Ablaufdatum",
+        "Das heutige Verhalten 'letzter gate_override gewinnt' ist entfernt",
+        "Negative Fixture: ein PASS auf Basis von PARTIAL wird abgewiesen",
+        "Gate-Ergebnisse tragen das evaluationLevel aus RTF-014 durch",
+        "Ein spaeterer positiver Evaluator ueberschreibt keinen ungeklaerten kritischen Fail"
+      ],
+      "evidence": "Nicht implementiert. Die bestehende GatePolicy/BinaryGateResult-Implementierung hat kein deny-overrides."
+    },
+    "GLE-007": {
+      "title": "Elf Category Packs v1",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-2"],
+      "acceptance_criteria": [
+        "Elf Packs liegen vor und validieren gegen das Schema",
+        "Jedes Pack definiert kategoriegerechte Pflicht-Evidenz gemaess Quelldokument 11.3",
+        "Kein Pack verlangt einen konkreten Provider",
+        "Schein-Evidenz wird je Kategorie explizit als unzureichend markiert"
+      ],
+      "evidence": "Nicht implementiert. Keine Category Packs existieren."
+    },
+    "GLE-008": {
+      "title": "Legacy-Profil software-product-delivery.v1",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-4"],
+      "acceptance_criteria": [
+        "Discovery, Blueprint, Design, Build, Release, Launch, Post-Release sind vollstaendig auf Kernel und Profile abgebildet",
+        "phases.yaml und bundles.yaml sind Profilinhalt, nicht mehr Core-Wahrheit",
+        "Ein bestehender Run laeuft unveraendert durch",
+        "Golden Scenario 5 React-Feature erzeugt exakt den heutigen Ablauf"
+      ],
+      "evidence": "Nicht implementiert. Der heutige Sieben-Phasen-Lifecycle ist weiterhin hart verdrahtet."
+    },
+    "GLE-009": {
+      "title": "Acht nichttechnische Lifecycle Profiles",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-6"],
+      "acceptance_criteria": [
+        "Acht Profile liegen vor und validieren",
+        "Alle acht sind providerfrei und damit OSS-konform",
+        "Mindestens vier sind produktiv nutzbar, nicht nur deklariert",
+        "Zusammen mit GLE-008 bilden sie die kanonische Liste der offenen Base Processes"
+      ],
+      "evidence": "Nicht implementiert. Keine Lifecycle Profiles existieren."
+    },
+    "GLE-010": {
+      "title": "Deterministischer und semantischer Classifier",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-2"],
+      "acceptance_criteria": [
+        "Stufe 1 extrahiert explizite Angaben, Dateitypen, Zielsysteme, Deliverables",
+        "Stufe 2 liefert Multi-Label-Klassifikation mit Confidence und Begruendung",
+        "Confidence-Regeln 0.90 und 0.70 sind implementiert",
+        "Pflichtrueckfrage bei irreversibler oder oeffentlicher Aenderung",
+        "Klassifikationsausgabe nennt Signale und offene Fragen"
+      ],
+      "evidence": "Nicht implementiert. Kein Classifier existiert."
+    },
+    "GLE-011": {
+      "title": "Effective Profile Resolver und Tailoring Record",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-6"],
+      "acceptance_criteria": [
+        "Praezedenzkette ist implementiert und getestet",
+        "Jede Ueberschreibung ist im effektiven Profil sichtbar",
+        "Das effektive Profil ist ein unveraenderliches Snapshot-Artefakt pro Run",
+        "Aenderung am Projektprofil veraendert einen laufenden Run nicht rueckwirkend",
+        "Konflikte zwischen Ebenen werden erkannt und gemeldet",
+        "Jede Abweichung von der Baseline traegt Begruendung, Auswirkungsanalyse und freigebende Rolle",
+        "Der Snapshot referenziert die unveraenderte normative Baseline",
+        "Die Ableitung ist reproduzierbar",
+        "Ein angepasstes Profil ist explizit als tailored gekennzeichnet",
+        "Der Resolver erfuellt zugleich die Struktur eines Tailoring Record"
+      ],
+      "evidence": "Nicht implementiert. Kein Profile Resolver existiert."
+    },
+    "GLE-012": {
+      "title": "Querschnittsdimensionen an die Runtime binden",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-1", "SW-GLE-OBJ-8"],
+      "acceptance_criteria": [
+        "Sieben Topologien sind an reale Ausfuehrung gebunden",
+        "Fuenf Human-Coupling-Stufen binden an Wait States und das Human Interaction Gateway",
+        "control_profile mit risk, reversibility, evidence_level, autonomy_budget wird durchgesetzt",
+        "Zwoelf Change Surfaces tragen Lese-, Schreib-, Publikations- und Reversibilitaetsrechte",
+        "Budgetueberschreitung fuehrt zu HOLD, nie zu stillem PASS",
+        "Risiko wird aus der Change Surface abgeleitet, nicht global gesetzt",
+        "Ein globaler risk_mode ist nur noch Default und Obergrenze",
+        "Der effektive Modus je Surface ist im effektiven Profil sichtbar",
+        "Golden Fixture: risk_mode unicorn darf auf irreversibler Surface trotzdem nicht ohne Weiteres agieren"
+      ],
+      "evidence": "Nicht implementiert. Keine Topologien, Human-Coupling-Stufen oder Change-Surface-Berechtigungen existieren."
+    },
+    "GLE-013": {
+      "title": "Skill-Integration der sechs betroffenen Skills",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-6"],
+      "acceptance_criteria": [
+        "discovery gibt standardisierte Frames und Annahmen aus",
+        "blueprint erzeugt Deliverable-, Evidence-, Gate- und Runtime-Contracts",
+        "promptchain-generate leitet Schritte, Skills und Gates aus Kategorie und Topologie ab",
+        "promptchain-validate prueft Evidenz- und Surface-Vertraege",
+        "council waehlt Rollen nach Kategorie und Risiko",
+        "lifecycle zeigt Outcome, Kernel, Kategorien, Reasoning Mode, naechsten Gate-Bedarf",
+        "Die uebrigen sieben Skills bleiben unveraendert nutzbar"
+      ],
+      "evidence": "Nicht implementiert. Keine Skill-Integration fuer die GLE-Dimensionen existiert."
+    },
+    "GLE-014": {
+      "title": "Progressive Disclosure, Explainability und Anti-Pattern-Detektoren",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-6"],
+      "acceptance_criteria": [
+        "Vier Layer von Outcome-Frage bis vollstaendigem Contract sind implementiert",
+        "Jede automatische Empfehlung zeigt Signale, Confidence, verwendete Defaults, Auswirkung und Korrekturmoeglichkeit",
+        "Profile Drift Detector erkennt Abweichung der Arbeit von der Klassifikation",
+        "Fuenf Anti-Pattern-Detektoren sind implementiert"
+      ],
+      "evidence": "Nicht implementiert. Keine Progressive-Disclosure-Layer existieren."
+    },
+    "GLE-015": {
+      "title": "Zehn Golden Scenarios",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-6"],
+      "acceptance_criteria": [
+        "Zehn Szenarien sind implementiert",
+        "Fuer jedes sind erwartete Kategorien, Topologie, Surfaces, Gates und Evidenz festgeschrieben",
+        "Alle zehn bestehen ohne Sonderlogik",
+        "Szenario 5 belegt die verlustfreie Legacy-Abbildung",
+        "Szenario 6 nutzt Elementeer ausschliesslich als optionalen Provider"
+      ],
+      "evidence": "Nicht implementiert. Keine Golden Scenarios existieren."
+    },
+    "GLE-016": {
+      "title": "Migration M1 bis M5 und Deprecation",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-4"],
+      "acceptance_criteria": [
+        "M1: Navigator zeigt sequence_type und work_profile und protokolliert Unterschiede",
+        "M2: mixed ist kein gueltiges Endergebnis mehr, wenn ein Work Profile vorliegt",
+        "M3: Routing laeuft ueber Profil und Kernel",
+        "M4: Kernel-Uebergaenge sind Events und Commands",
+        "M5: plan/build/mixed nur noch als Kompatibilitaetsprojektion",
+        "Kein Migrationsschritt bricht einen bestehenden Flow"
+      ],
+      "evidence": "Nicht implementiert. Keine Migrationsschritte existieren."
+    },
+    "GLE-017": {
+      "title": "Abschlussgate und Release v2.0.0",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-7"],
+      "acceptance_criteria": [
+        "Alle zwoelf Definition-of-Done-Punkte sind unabhaengig reproduziert",
+        "Ein Whitelabel-Consumer bindet skillweave ohne skillweave-profiles ein",
+        "Cross-Repo-Contract-CI ist gruen ueber alle drei Repositories",
+        "Mindestens vier nichttechnische Profile sind produktiv nutzbar",
+        "Changelog, Evidence Envelope und Tag v2.0.0 liegen vor",
+        "Review erfolgt nicht durch den implementierenden Agenten",
+        "Conformance-Andockfaehigkeit nachgewiesen",
+        "Handoffs sind generiert, nicht handgeschrieben",
+        "Risiko ist pro Change Surface aufgeloest"
+      ],
+      "evidence": "Nicht implementiert. Aktuelle Version ist v1.5.7, nicht v2.0.0."
+    },
+    "GLE-018": {
+      "title": "Requirements- und Coverage-Rueckgrat",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-7"],
+      "acceptance_criteria": [
+        "Requirements Registry mit stabilen IDs, Versionierung und Herkunft",
+        "Coverage Record verbindet requirementRef, implementationRefs, roleRefs, informationItemRefs, evidenceRefs",
+        "Coverage-Status nutzt das Modell aus RTF-014",
+        "Fuer jedes verpflichtende Requirement existiert genau ein Coverage Record",
+        "Information Items sind typisiert mit Zweck, Inhalt, Owner, Status, Baseline, Review, Zugriff und Retention",
+        "Pflichtinhalte werden strukturell geprueft",
+        "Artefaktversionierung und Baselines sind Kernbestandteil",
+        "Ein Evidence Plan kann vor Ausfuehrung erwartete Evidenz spezifizieren",
+        "Kein normativer Normtext im Registry"
+      ],
+      "evidence": "Nicht implementiert. Keine Requirements Registry existiert."
+    },
+    "GLE-019": {
+      "title": "Generierte Handoffs aus dem Chain-Vertrag",
+      "status": "open",
+      "subject_shas": [],
+      "legacy_ids": ["SW-GLE-OBJ-7"],
+      "acceptance_criteria": [
+        "Handoff wird vollstaendig aus dem Chain-Vertrag generiert",
+        "Enthaelt automatisch: cold_start_bundle, Digests, erlaubte und verbotene Aktionen, Statusvokabular",
+        "Freitext ist zulaessig als Ergaenzung, nie als Traeger einer Pflichtangabe",
+        "Zwei Handoffs aus derselben Chain unterscheiden sich nur in den variablen Feldern",
+        "Golden Negative Fixture: realer ELM-MUT-Handoff ohne Commit-Anforderung waere nicht generierbar",
+        "Standardbloecke stammen aus einer versionierten Quelle",
+        "Golden Negative Fixture: real verkuerzte Fassung ohne Push-Regel waere nicht generierbar"
+      ],
+      "evidence": "Nicht implementiert. Keine generierten Handoffs existieren."
+    },
+    "GLE-020": {
+      "title": "Importgraph entkoppeln: Kern ohne optionale Subpakete importierbar",
+      "status": "delivered",
+      "subject_shas": [
+        "cf94ed6c3c5f9aab6fd3a5836b1c3396054c60ac",
+        "eb79726ce218eb708a8cb7adb0a9aa960cb73935",
+        "4fb69df2d0145f5a81d8b93312264692166d2519",
+        "872a46d1b6dd46d7c185d56a7bcef914caacc090",
+        "f3b01c9252235cb2ae88d15d74382994f4651eb4",
+        "9aa26ff2cdad99ebf6a1173147859b90b6fbee81",
+        "949967ae253ed6144d171daf6040b48485809875"
+      ],
+      "legacy_ids": ["SW-GLE-OBJ-5"],
+      "acceptance_criteria": [
+        "skillweave/__init__.py enthaelt keine Eager-Importe von .execution und .observation",
+        "Attributaufloesung erfolgt lazy per Modul-__getattr__ nach PEP 562",
+        "Die oeffentliche API bleibt unveraendert: jeder heute exportierte Name ist weiterhin als skillweave.<Name> aufloesbar",
+        "import skillweave gelingt, wenn src/skillweave/runtime/ physisch abwesend ist",
+        "Gleiches gilt fuer jedes weitere als optional deklarierte Subpaket",
+        "Der Degradationsdetektor aus SW-RTF ist danach im Realbetrieb erreichbar",
+        "Ein Zyklustest weist nach, dass kein Modul des Kerns auf Top-Level ein optionales Subpaket importiert",
+        "Die Liste optionaler Subpakete ist deklariert, nicht implizit"
+      ],
+      "evidence": "Vollstaendig implementiert und ausgeliefert seit v1.3.7. PEP 562 __getattr__ in src/skillweave/__init__.py, Degradationsdetektor in src/skillweave_degraded.py, CI-Gate in .github/workflows/full-suite-gate.yml, Zyklustest in tests/integration/test_gle020_import_cycle.py, Frozen-API-Contract in tests/gate_b06/gle020_api.py, Wheel-Beweis in tests/gate_b06/gle020_import_decoupling_proof.py."
+    }
+  },
+
+  "breadth_matrix": {
+    "total_criteria": 20,
+    "delivered": 1,
+    "open": 18,
+    "superseded": 1,
+    "out_of_scope": 0,
+    "delivered_pct": 5.0,
+    "open_pct": 90.0,
+    "superseded_pct": 5.0,
+    "out_of_scope_pct": 0.0,
+    "delivered_list": ["GLE-020"],
+    "open_list": [
+      "GLE-001", "GLE-002", "GLE-003", "GLE-005", "GLE-006",
+      "GLE-007", "GLE-008", "GLE-009", "GLE-010", "GLE-011",
+      "GLE-012", "GLE-013", "GLE-014", "GLE-015", "GLE-016",
+      "GLE-017", "GLE-018", "GLE-019"
+    ],
+    "superseded_list": ["GLE-004"],
+    "out_of_scope_list": []
+  },
+
+  "delivery_details": {
+    "GLE-020": {
+      "status": "delivered",
+      "implementation_shas": [
+        "4fb69df2d0145f5a81d8b93312264692166d2519",
+        "cf94ed6c3c5f9aab6fd3a5836b1c3396054c60ac",
+        "872a46d1b6dd46d7c185d56a7bcef914caacc090",
+        "f3b01c9252235cb2ae88d15d74382994f4651eb4",
+        "9aa26ff2cdad99ebf6a1173147859b90b6fbee81"
+      ],
+      "merge_sha": "949967ae253ed6144d171daf6040b48485809875",
+      "version_introduced": "v1.3.7",
+      "tests": [
+        "tests/gate_b06/gle020_import_decoupling_proof.py",
+        "tests/gate_b06/gle020_api.py",
+        "tests/integration/test_gle020_import_cycle.py",
+        ".github/workflows/full-suite-gate.yml"
+      ],
+      "delivered_criteria": [
+        "skillweave/__init__.py enthaelt keine Eager-Importe von .execution und .observation",
+        "Attributaufloesung erfolgt lazy per Modul-__getattr__ nach PEP 562",
+        "Die oeffentliche API bleibt unveraendert: jeder heute exportierte Name ist weiterhin als skillweave.<Name> aufloesbar",
+        "import skillweave gelingt, wenn src/skillweave/runtime/ physisch abwesend ist",
+        "Gleiches gilt fuer jedes weitere als optional deklarierte Subpaket",
+        "Der Degradationsdetektor aus SW-RTF ist danach im Realbetrieb erreichbar",
+        "Ein Zyklustest weist nach, dass kein Modul des Kerns auf Top-Level ein optionales Subpaket importiert",
+        "Die Liste optionaler Subpakete ist deklariert, nicht implizit"
+      ]
+    }
+  },
+
+  "legacy_traceability": {
+    "prd_source": {
+      "commit": "32d67fba29aefc4f7fb7e5590f8edd29d7668c3d",
+      "branch": "chore/gle-prd-einchecken",
+      "prd_path": ".skillweave/prds/generic-lifecycle-extension/prd.json",
+      "note": "PRD ist nicht in HEAD enthalten. Erfassung und Mapping erfolgen aus der historischen Version auf dem chore/gle-prd-einchecken-Zweig."
+    },
+    "gle_ids_in_current_codebase": {
+      "GLE-001": "tests/contract/test_preview_core_pro_boundary.py (code comment, Zeile 43)",
+      "GLE-004": ".forgejo/workflows/mirror.yml (code comments, Zeilen 90-93)",
+      "GLE-020": "src/skillweave/__init__.py, src/skillweave_degraded.py, CHANGELOG.md, und 16+ weitere Dateien"
+    },
+    "completed_behavior_preserved": true,
+    "no_silent_replanning": true
+  }
+}
