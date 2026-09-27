@@ -38,9 +38,32 @@ means the policy returned a known reason, whereas a raised remover means the
 outcome is unknown (the removal may or may not have landed). On resume, an
 identity left in ``MUTATING`` or ``INTERRUPTED`` has no proof its removal
 completed, so it is **preserved and reported** — never removed again. An
-identity already in ``MUTATED`` is never re-removed either. That is the whole
-idempotency contract: a resume cannot produce a duplicate removal, whichever
-side of the window the interruption fell on.
+identity already in ``MUTATED`` is never re-removed either.
+
+A missing or lost journal record is also covered (SW-157-REMEDY-B)
+------------------------------------------------------------------
+
+All of the above relies on the journal being readable on resume. A journal
+record that was never written, or was lost with a torn tail, leaves no state
+to consult — and a bare ``PLANNED`` record is *not* a licence to re-run the
+mutation, because the mutation itself may have landed before its outcome was.
+The journal alone therefore cannot make the mutation idempotent, so the
+transaction does not rely on it: the removal is gated on **physical evidence**,
+the one fact a lost append cannot fabricate.
+
+Before any removal is attempted — for a fresh identity, a ``PLANNED``-only
+record, a lost tail, or an empty journal — the transaction checks whether the
+workspace is still physically present:
+
+* **present** — it is provably un-removed, so it is removed exactly once;
+* **absent** — no path can prove it un-removed, so it is **preserved and
+  reported** with a durable record, never removed again.
+
+The durable record makes the check a *checkpoint*: the first resume to see the
+absence writes it, and every later resume reads it and is a no-op. That is the
+whole idempotency contract — a resume cannot produce a duplicate removal,
+whichever side of the window the interruption fell on, and whether or not the
+journal survived it.
 
 Every deletion and every deliberate preservation appears in the receipt
 -----------------------------------------------------------------------
@@ -192,6 +215,7 @@ _HELD_REASONS = frozenset(
         "removal_unavailable",
         "already_absent",
         "interrupted_unproven",
+        "absent_unverified",
     }
 )
 
@@ -494,14 +518,24 @@ def _receipt(
 # --------------------------------------------------------------------------- #
 
 
+#: The receipt reasons that mark an outcome as *unproven* rather than an
+#: ordinary, evidence-backed hold. ``interrupted_unproven`` is the caught
+#: remover failure; ``absent_unverified`` is an absent workspace that no
+#: record could prove un-removed (a lost tail, a bare ``PLANNED`` record, or a
+#: missing journal), so a removal may already have landed. Both keep the
+#: receipt ``INCOMPLETE`` and are never re-run.
+_UNPROVEN_REASONS = frozenset({"interrupted_unproven", "absent_unverified"})
+
+
 def _kind_for(state: str, reason: str) -> ReceiptEntryKind:
     if state == TransactionState.MUTATED.value:
         return ReceiptEntryKind.REMOVED
     if state == TransactionState.COMPENSATED.value:
         return ReceiptEntryKind.COMPENSATED
-    # An attempt interrupted mid-removal stays flagged as interrupted even after
-    # resume preserved it, so the receipt never reads as an ordinary hold.
-    if state in {s.value for s in _UNPROVEN_STATES} or reason == "interrupted_unproven":
+    # An attempt interrupted mid-removal — or one whose un-removal cannot be
+    # proven — stays flagged as interrupted even after resume preserved it, so
+    # the receipt never reads as an ordinary hold.
+    if state in {s.value for s in _UNPROVEN_STATES} or reason in _UNPROVEN_REASONS:
         return ReceiptEntryKind.INTERRUPTED
     return ReceiptEntryKind.HELD
 
@@ -611,6 +645,21 @@ class CloseoutTransaction:
             data = b""
         return hashlib.sha256(data).hexdigest()
 
+    def _present(self, path: str) -> bool:
+        """Whether the workspace for ``path`` is physically present on disk.
+
+        This is the evidence the journal cannot substitute for: a lost append
+        can drop any record, but it cannot conjure a workspace back. A blank
+        path (no path could be composed) counts as absent, so nothing is ever
+        mutated on a guess.
+        """
+        if not path:
+            return False
+        try:
+            return Path(path).exists()
+        except OSError:
+            return False
+
     # -- the entry point ---------------------------------------------------- #
 
     def run(
@@ -670,15 +719,32 @@ class CloseoutTransaction:
             if existing is not None and existing.state != TransactionState.PLANNED.value:
                 continue
 
+            # 4. The lost-record gate. A ``PLANNED`` tail, a lost journal tail
+            #    or an empty journal can reach here with no record proving the
+            #    mutation never ran — and the mutation may have landed before
+            #    its outcome was written. The journal cannot answer that, but
+            #    the filesystem can: only a workspace that is still physically
+            #    present can be provably un-removed. An absent one is preserved
+            #    durably (the checkpoint), so no resume ever re-runs it.
+            if not self._present(path):
+                self._persist(
+                    identity,
+                    TransactionState.PRESERVED,
+                    "absent_unverified",
+                    path,
+                    self._branch_for(identity, path),
+                )
+                continue
+
             branch = self._branch_for(identity, path)
 
-            # 4. Plan: record that this identity is being attempted, before it
+            # 5. Plan: record that this identity is being attempted, before it
             #    is. A repeat of the same identity in one pass resumes above.
             self._persist(
                 identity, TransactionState.PLANNED, "authorized", path, branch
             )
 
-            # 5. Enter the mutation window. MUTATING is durable *before* the
+            # 6. Enter the mutation window. MUTATING is durable *before* the
             #    call, so an interruption is always discoverable as unproven.
             self._persist(
                 identity, TransactionState.MUTATING, "entering_removal", path, branch

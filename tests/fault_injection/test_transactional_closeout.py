@@ -42,6 +42,7 @@ from skillweave.closeout_transaction import (  # noqa: E402
 )
 from skillweave.repo_health.worktrees import (  # noqa: E402
     CleanupAuthorization,
+    WorkspaceIdentity,
 )
 from skillweave.routing.workspace import (  # noqa: E402
     Lease,
@@ -181,6 +182,20 @@ def _live_worktrees():
     return _git(_LIVE_REPO, "worktree", "list", "--porcelain").stdout
 
 
+def _identity(run, lane):
+    return WorkspaceIdentity(repo=REPO, run=run, lane=lane)
+
+
+def _lost_tail(journal):
+    """Simulate a lost journal tail: the file survives, its records do not.
+
+    This is the at-worst damage a crash between two appends can leave: a
+    journal that was clearly written (it is present) whose records can no
+    longer be read back.
+    """
+    Path(journal).write_text("", encoding="utf-8")
+
+
 # --------------------------------------------------------------------------- #
 # 1. happy path: one authorized removal, receipt complete
 # --------------------------------------------------------------------------- #
@@ -215,9 +230,17 @@ def test_removes_authorized_workspace_and_receipts_it():
 # --------------------------------------------------------------------------- #
 def test_journal_persists_plan_and_mutation_states():
     with tempfile.TemporaryDirectory() as tmp:
-        collection, _primary, _head = _collection(tmp)
+        collection, primary, _head = _collection(tmp)
+        # A removal is gated on physical presence, so the workspace must really
+        # exist for the mutation window to open at all.
+        path = _add_worktree(primary, collection, "run1", "lane1", "feat-a")
         journal = Path(tmp) / "journal.jsonl"
-        tx = _transaction(collection, journal, remove=_FaultRemover())
+
+        def remove(identity):
+            _git(primary, "worktree", "remove", "--force", str(path))
+            return not path.exists()
+
+        tx = _transaction(collection, journal, remove=remove)
 
         tx.run(run_id="run-1", authorizations=[_authorize("run1", "lane1")])
 
@@ -322,11 +345,17 @@ def test_interrupted_before_mutation_is_also_preserved_not_repeated():
 # --------------------------------------------------------------------------- #
 def test_resume_over_completed_removal_never_removes_twice():
     with tempfile.TemporaryDirectory() as tmp:
-        collection, _primary, _head = _collection(tmp)
+        collection, primary, _head = _collection(tmp)
+        # A real workspace: the first run removes it physically, so the MUTATED
+        # record corresponds to a removal that genuinely landed.
+        path = _add_worktree(primary, collection, "run1", "lane1", "feat-a")
         journal = Path(tmp) / "journal.jsonl"
 
-        first_remover = _FaultRemover()
-        tx = _transaction(collection, journal, remove=first_remover)
+        def remove(identity):
+            _git(primary, "worktree", "remove", "--force", str(path))
+            return not path.exists()
+
+        tx = _transaction(collection, journal, remove=remove)
         first = tx.run(run_id="run-1", authorizations=[_authorize("run1", "lane1")])
         assert [e.kind for e in first.entries] == [ReceiptEntryKind.REMOVED]
 
@@ -342,6 +371,161 @@ def test_resume_over_completed_removal_never_removes_twice():
         # The receipt still accounts for the earlier removal.
         assert [e.kind for e in second.entries] == [ReceiptEntryKind.REMOVED]
         assert second.status == STATUS_COMMITTED
+
+
+# --------------------------------------------------------------------------- #
+# 4b. the lost-tail window (SW-157-REMEDY-B): a mutation whose record is gone
+# --------------------------------------------------------------------------- #
+def test_resume_over_lost_tail_does_not_repeat_the_removal():
+    """The journal was written and then lost; the removal already landed.
+
+    An empty-but-present journal is the signature of a lost tail: the file was
+    created and appended, and its records are now unreadable. Nothing in the
+    journal says whether the workspace was removed, but the workspace itself is
+    gone — so the removal may be exactly what took it. The transaction must not
+    run the mutation again: it preserves and reports instead.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        collection, primary, _head = _collection(tmp)
+        path = _add_worktree(primary, collection, "run1", "lane1", "feat-a")
+        journal = Path(tmp) / "journal.jsonl"
+
+        # The removal landed, then the journal tail was lost before its outcome
+        # could be read back.
+        _git(primary, "worktree", "remove", "--force", str(path))
+        assert not path.exists()
+        _lost_tail(journal)
+
+        remover = _FaultRemover()
+        tx = _transaction(collection, journal, remove=remover)
+        receipt = tx.run(run_id="run-2", authorizations=[_authorize("run1", "lane1")])
+
+        assert remover.calls == []  # the removal cannot happen twice
+        assert receipt.status == STATUS_INCOMPLETE
+        assert [e.kind for e in receipt.entries] == [ReceiptEntryKind.INTERRUPTED]
+        assert receipt.entries[0].reason == "absent_unverified"
+        assert receipt.entries[0].identity == "repo/run1/lane1"
+
+        # The doubt is durable — the checkpoint. A second resume reads the
+        # PRESERVED record and never reaches the mutation window again.
+        again = _FaultRemover()
+        tx2 = _transaction(collection, journal, remove=again)
+        receipt2 = tx2.run(
+            run_id="run-3", authorizations=[_authorize("run1", "lane1")]
+        )
+        assert again.calls == []
+        assert [e.reason for e in receipt2.entries] == ["absent_unverified"]
+
+
+def test_resume_over_missing_journal_does_not_repeat_the_removal():
+    """No journal at all over an already-removed workspace: same guard.
+
+    A journal that was never created (or was deleted) reads as empty, exactly
+    like a lost tail. The physical absence is the only evidence available, and
+    it is enough to withhold the mutation.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        collection, primary, _head = _collection(tmp)
+        path = _add_worktree(primary, collection, "run1", "lane1", "feat-a")
+        journal = Path(tmp) / "journal.jsonl"
+
+        _git(primary, "worktree", "remove", "--force", str(path))
+        assert not journal.exists()
+
+        remover = _FaultRemover()
+        tx = _transaction(collection, journal, remove=remover)
+        receipt = tx.run(run_id="run-2", authorizations=[_authorize("run1", "lane1")])
+
+        assert remover.calls == []
+        assert receipt.status == STATUS_INCOMPLETE
+        assert [e.kind for e in receipt.entries] == [ReceiptEntryKind.INTERRUPTED]
+        assert receipt.entries[0].reason == "absent_unverified"
+
+
+def test_planned_only_tail_over_absent_workspace_is_preserved():
+    """A bare PLANNED record is not a licence to re-run the mutation.
+
+    The record proves only that the plan was written; the mutation may have
+    landed before its outcome was recorded. With the workspace already gone,
+    the safe answer is to preserve, never to remove again.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        collection, primary, _head = _collection(tmp)
+        path = _add_worktree(primary, collection, "run1", "lane1", "feat-a")
+        journal = Path(tmp) / "journal.jsonl"
+
+        tx = _transaction(collection, journal, remove=_FaultRemover())
+        tx._persist(  # noqa: SLF001 - fault injection writes the journal directly
+            _identity("run1", "lane1"),
+            TransactionState.PLANNED,
+            "authorized",
+            str(path),
+            "feat-a",
+        )
+        _git(primary, "worktree", "remove", "--force", str(path))
+        assert not path.exists()
+
+        remover = _FaultRemover()
+        resume_tx = _transaction(collection, journal, remove=remover)
+        receipt = resume_tx.run(
+            run_id="run-2", authorizations=[_authorize("run1", "lane1")]
+        )
+
+        assert remover.calls == []
+        assert receipt.status == STATUS_INCOMPLETE
+        assert [e.kind for e in receipt.entries] == [ReceiptEntryKind.INTERRUPTED]
+        assert receipt.entries[0].reason == "absent_unverified"
+
+
+def test_absent_workspace_with_no_record_is_never_removed():
+    """Absence is never a reason to call the remover on a resume.
+
+    On a first run over an identity whose workspace does not exist, calling the
+    remover could only ever be a no-op at best and a duplicate at worst. The
+    transaction withholds it and records the doubt.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        collection, _primary, _head = _collection(tmp)
+        journal = Path(tmp) / "journal.jsonl"
+
+        remover = _FaultRemover()
+        tx = _transaction(collection, journal, remove=remover)
+        receipt = tx.run(run_id="run-1", authorizations=[_authorize("run1", "lane1")])
+
+        assert remover.calls == []
+        assert receipt.status == STATUS_INCOMPLETE
+        assert [e.kind for e in receipt.entries] == [ReceiptEntryKind.INTERRUPTED]
+        assert receipt.entries[0].reason == "absent_unverified"
+
+
+def test_present_workspace_is_still_removed_exactly_once():
+    """The presence gate must not block a workspace that is genuinely there.
+
+    A lost tail over a present workspace is no reason to hold: presence is the
+    proof that no removal landed, so the removal proceeds exactly once.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        collection, primary, _head = _collection(tmp)
+        path = _add_worktree(primary, collection, "run1", "lane1", "feat-a")
+        journal = Path(tmp) / "journal.jsonl"
+
+        _lost_tail(journal)  # journal present but empty
+        assert path.exists()  # the workspace did not go anywhere
+
+        calls = []
+
+        def remove(identity):
+            calls.append(identity.key)
+            _git(primary, "worktree", "remove", "--force", str(path))
+            return not path.exists()
+
+        tx = _transaction(collection, journal, remove=remove)
+        receipt = tx.run(run_id="run-1", authorizations=[_authorize("run1", "lane1")])
+
+        assert calls == ["repo/run1/lane1"]
+        assert not path.exists()
+        assert [e.kind for e in receipt.entries] == [ReceiptEntryKind.REMOVED]
+        assert receipt.status == STATUS_COMMITTED
 
 
 # --------------------------------------------------------------------------- #
