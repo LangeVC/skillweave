@@ -32,12 +32,11 @@ import sys
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
-from skillweave.assessment_contracts import RESULT_AVAILABLE
+from skillweave.assessment_contracts import RESULT_AVAILABLE, AssessmentError
 from skillweave.assessment_service import (
     AssessmentRequest,
     AssessmentService,
     Finding,
-    ReadOnlyViolation,
     SourceSpec,
 )
 
@@ -144,7 +143,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         receipt = AssessmentService(root).assess(request)
-    except ReadOnlyViolation as exc:  # pragma: no cover -- the service is read-only by construction
+    except AssessmentError as exc:
+        # A malformed request (e.g. a subject that is not a canonical SHA) is a
+        # usage error, not an assessment outcome: report it as exit 2 like any
+        # other unreadable request rather than letting a service exception
+        # escape as a traceback. ReadOnlyViolation is itself an AssessmentError.
         sys.stderr.write(f"ERROR: {exc}\n")
         return EXIT_ERROR
 

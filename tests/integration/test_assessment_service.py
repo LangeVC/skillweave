@@ -210,7 +210,7 @@ def test_absent_probe_makes_assessment_unavailable(tmp_path):
 
 @pytest.mark.parametrize(
     "bad_subject",
-    ["", "abcd", _SHA.upper(), "g" * 40, 12345],
+    ["", "abcd", _SHA.upper(), "g" * 40, 12345, _SHA + "\n"],
 )
 def test_non_canonical_subject_is_refused_not_represented(tmp_path, bad_subject):
     # The contract requires every receipt to carry a canonical subject SHA, so a
@@ -396,6 +396,26 @@ def test_cli_exits_two_for_unreadable_request(tmp_path, capsys):
     )
     assert exit_code == assess_mod.EXIT_ERROR
     assert "could not read the assessment request" in capsys.readouterr().err
+
+
+def test_cli_exits_two_for_a_malformed_subject(tmp_path, capsys):
+    # A request that parses but cannot be represented (a non-canonical subject
+    # SHA) is a usage error, not an assessment outcome: the service raises
+    # AssessmentError and the CLI must sanitise it to exit 2, never leak a
+    # traceback. Uses the real service on purpose -- no probe injection.
+    document = _request_document(_request())
+    document["subject_sha"] = "deadbeef"
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(document), encoding="utf-8")
+
+    exit_code = assess_mod.main(["--root", str(tmp_path), "--request", str(request_path)])
+
+    assert exit_code == assess_mod.EXIT_ERROR
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "ERROR:" in captured.err
+    assert "canonical" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_cli_is_routed_by_the_main_router(tmp_path, capsys, monkeypatch):

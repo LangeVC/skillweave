@@ -68,11 +68,13 @@ from skillweave.assessment_contracts import (
     seal,
 )
 
-#: Canonical lowercase full 40-hex SHA (the subject identity).
-_FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
+#: Canonical lowercase full 40-hex SHA (the subject identity). `\Z` anchors the
+#: true end of string: `$` would also match before a trailing newline, which
+#: would let "<40hex>\n" be sealed as a canonical subject.
+_FULL_SHA = re.compile(r"^[0-9a-f]{40}\Z")
 
 #: Canonical lowercase sha256 (the source content address).
-_SHA256 = re.compile(r"^[a-f0-9]{64}$")
+_SHA256 = re.compile(r"^[a-f0-9]{64}\Z")
 
 #: Source resolution statuses.
 RESOLVED = "resolved"
