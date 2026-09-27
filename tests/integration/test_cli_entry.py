@@ -594,6 +594,7 @@ def test_router_still_registers_every_subcommand():
         "rework",
         "planning-sync",
         "onboard",
+        "assess",
     }
 
 
