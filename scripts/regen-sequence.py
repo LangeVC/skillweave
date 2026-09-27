@@ -136,8 +136,17 @@ def extract_lanes(sequence: Mapping[str, Any]) -> list[LaneInfo]:
     return lanes
 
 
-def render_review_brief(lane: LaneInfo) -> str:
-    """Render the review-brief template for one lane."""
+def render_review_brief(
+    lane: LaneInfo,
+    candidate_sha: str = "",
+) -> str:
+    """Render the review-brief template for one lane.
+
+    When ``candidate_sha`` is provided (a full 40-hex SHA), the brief binds it
+    in the VERDICT template so the reviewer names the exact SHA judged. The
+    worktree is rendered as ``$PWD`` — never a static ``.worktrees`` path — so
+    the brief is portable across runtime environments.
+    """
     lines: list[str] = []
     lines.append(f"# Review Brief: {lane.lane_id}")
     lines.append("")
@@ -153,7 +162,7 @@ def render_review_brief(lane: LaneInfo) -> str:
     lines.append(f"- Lane ID: {lane.lane_id}")
     lines.append(f"- Kind: {lane.kind}")
     lines.append(f"- Phase: {lane.phase or '—'}")
-    lines.append(f"- Worktree: {lane.worktree or '—'}")
+    lines.append("- Worktree: $PWD")
     lines.append(f"- Branch: {lane.branch or '—'}")
     if lane.write_scope:
         lines.append("- Write scope:")
@@ -186,8 +195,9 @@ def render_review_brief(lane: LaneInfo) -> str:
     lines.append("")
     lines.append("## VERDICT")
     lines.append("")
+    sha_line = candidate_sha if candidate_sha else "<full 40-hex SHA of the judged branch tip>"
     lines.append("- VERDICT: PASS | FAIL | DEFER")
-    lines.append("- Reviewed SHA: <full 40-hex SHA of the judged branch tip>")
+    lines.append(f"- Reviewed SHA: {sha_line}")
     lines.append("- Evidence: <file:line or command output that produced the finding>")
     lines.append("- Findings:")
     lines.append("  - ")
@@ -196,26 +206,43 @@ def render_review_brief(lane: LaneInfo) -> str:
     return "\n".join(lines)
 
 
-def generate_review_briefs(sequence_path: Path, out_dir: Path) -> list[Path]:
+def generate_review_briefs(
+    sequence_path: Path, out_dir: Path, candidate_sha: str = "",
+    document_index: int = -1,
+) -> list[Path]:
     """Write one ``review-brief-<lane_id>.md`` per lane; return written paths.
+
+    Supports multi-document YAML: every document in the file is processed
+    independently, so a single file can carry both first-review and re-review
+    candidates. Set ``document_index`` to process only the Nth document
+    (0-based); omit or -1 to process all documents. When ``candidate_sha`` is
+    provided every brief binds the full SHA in the VERDICT template.
 
     Raises ``yaml.YAMLError`` for malformed input. A sequence with no lanes
     writes nothing and returns an empty list.
     """
-    sequence = yaml.safe_load(sequence_path.read_text(encoding="utf-8"))
-    if not isinstance(sequence, dict):
-        raise ValueError(f"{sequence_path} is not a mapping document")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    documents = list(yaml.safe_load_all(sequence_path.read_text(encoding="utf-8")))
+    if document_index >= 0:
+        documents = [documents[document_index]]
     written: list[Path] = []
-    for lane in extract_lanes(sequence):
-        if not lane.lane_id:
-            print(
-                "regen-sequence: skipping lane without an id", file=sys.stderr
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for doc in documents:
+        if not isinstance(doc, dict):
+            raise ValueError(
+                f"{sequence_path} document is not a mapping: {type(doc).__name__}"
             )
-            continue
-        target = out_dir / f"review-brief-{lane.lane_id}.md"
-        target.write_text(render_review_brief(lane), encoding="utf-8")
-        written.append(target)
+        for lane in extract_lanes(doc):
+            if not lane.lane_id:
+                print(
+                    "regen-sequence: skipping lane without an id", file=sys.stderr
+                )
+                continue
+            target = out_dir / f"review-brief-{lane.lane_id}.md"
+            target.write_text(
+                render_review_brief(lane, candidate_sha=candidate_sha),
+                encoding="utf-8",
+            )
+            written.append(target)
     return written
 
 
@@ -542,6 +569,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="write one review-brief-<lane_id>.md per lane",
     )
     ap.add_argument(
+        "--candidate-sha", type=str, default="",
+        metavar="40hex",
+        help="full 40-hex SHA of the candidate branch tip (bound into brief VERDICT)",
+    )
+    ap.add_argument(
         "--inject-prd", type=Path, metavar="prd_dir",
         help="copy prd.json (and prd.md if present) into .skillweave/ at the worktree root",
     )
@@ -569,7 +601,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
 
     if args.generate_review_briefs is not None:
-        written = generate_review_briefs(args.generate_review_briefs, args.out)
+        written = generate_review_briefs(
+            args.generate_review_briefs, args.out, candidate_sha=args.candidate_sha
+        )
         if not written:
             print(
                 "regen-sequence: no lanes found; wrote no review briefs",

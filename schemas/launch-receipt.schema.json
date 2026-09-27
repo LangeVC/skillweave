@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skillweave.dev/schemas/launch-receipt/v1",
+  "title": "Launch Receipt Schema",
+  "description": "Tamper-evident launch receipt (SW-157-LAUNCH-001). A receipt records one deployment attempt: the artifact deployed (sha256-pinned), the target environment, the commands run and their exit codes, the outcome, the provenance of the launcher, and a sha256 content digest over the canonical receipt. An unavailable receipt must declare at least one limit explaining why the deployment could not proceed. Unknown keys are rejected at every level.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "result",
+    "target",
+    "artifact",
+    "commands",
+    "outcome",
+    "provenance",
+    "limits",
+    "digest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "description": "Receipt schema version. Only v1 exists."
+    },
+    "result": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["available", "unavailable"],
+          "description": "available = the deployment attempt completed and produced a decision; unavailable = it could not be attempted and must be read with its limits."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional one-line statement of the deployment outcome."
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["environment", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "environment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target deployment environment (e.g. staging, production)."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Semantic version being deployed."
+        },
+        "host": {
+          "type": "string",
+          "description": "Optional resolved host or endpoint."
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["artifact_id", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for the deployed artifact."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Canonical lowercase sha256 content digest of the artifact."
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "description": "Ordered commands run during deployment and their exit codes. Order is significant and digested.",
+      "items": {
+        "type": "object",
+        "required": ["command", "exit"],
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "exit": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "failure", "unavailable"],
+          "description": "success = deployment completed and verified; failure = deployment or verification failed; unavailable = deployment could not be attempted."
+        },
+        "health": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["ok", "degraded", "down", "unchecked"]
+            },
+            "response_time_ms": {
+              "type": "integer"
+            }
+          },
+          "description": "Optional post-deployment health check result."
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["launcher", "run_id", "produced_at"],
+      "additionalProperties": false,
+      "properties": {
+        "launcher": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the launcher (skill, tool, or operator)."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "produced_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional model identifier used for the launch."
+        }
+      }
+    },
+    "limits": {
+      "type": "array",
+      "description": "Explicit limits of the launch: what was not verified or could not be established.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Canonical lowercase sha256 over the receipt with this field excluded; recomputed and compared on ingestion."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "properties": {
+              "status": { "const": "unavailable" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "limits": { "minItems": 1 }
+        }
+      },
+      "else": {
+        "properties": {
+          "commands": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}

@@ -235,6 +235,7 @@ register_area("prds", _D.AUTHORED, _L.DURABLE, _S.SEALED)
 register_area("prompts", _D.AUTHORED, _L.DURABLE, _S.SEALED)
 register_area("release", _D.AUTHORED, _L.DURABLE, _S.SEALED)
 register_area("reports", _D.GENERATED, _L.RECONSTRUCTIBLE, _S.SEALED)
+register_area("retrospectives", _D.GENERATED, _L.DURABLE, _S.SEALED)
 register_area("rework", _D.GENERATED, _L.RECONSTRUCTIBLE, _S.SEALED)
 register_area("sequences", _D.AUTHORED, _L.DURABLE, _S.SEALED)
 register_area("specs", _D.AUTHORED, _L.DURABLE, _S.SEALED)
@@ -263,7 +264,7 @@ class SkillWeavePersistence:
     # project and with a ``config/`` directory already owned there (Django,
     # Rails, Kubernetes, Ansible, …). See SW152-008.
     CONFIG_TIER_DIR = "skillweave.config"
-    SUBDIRS = ["handover", "specs", "tracking-log", "manifesto"]
+    SUBDIRS = ["handover", "specs", "tracking-log", "manifesto", "retrospectives"]
     CONFIG_FILE = "config.yaml"
     # Anchored so a nested fixture root is not swallowed; the whole substrate is
     # git-excluded. skillweave.config/ is never added to .gitignore.
@@ -368,6 +369,7 @@ class SkillWeavePersistence:
             "specs": "# Specifications\n\nProject specifications, PRDs, architecture documents.",
             "tracking-log": "# Tracking Logs\n\nAuto-generated progress logs. Excluded from git.",
             "manifesto": "# Project Manifesto\n\nProject-specific rules, mode settings, design principles.",
+            "retrospectives": "# Retrospectives\n\nAuto-generated retrospective reports (vX.Y.Z.md). Synced to planning repository.",
         }
         
         for subdir, content in readme_content.items():

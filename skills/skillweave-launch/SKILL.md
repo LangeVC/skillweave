@@ -123,11 +123,37 @@ skillweave-launch release_summary='{"version":"0.6.0","artifact_locations":["dis
 - Vergleicht response_time, error_rate, requests_per_minute
 - Liefert delta_pct und Verdict (improved/degraded/stable)
 
+## Launch Receipt
+
+Every deployment attempt produces a tamper-evident **LaunchReceipt** that binds:
+
+| Field | Content |
+|-------|---------|
+| `artifact` | Deployed artifact pinned by sha256 content digest |
+| `target` | Environment and version |
+| `commands` | Ordered commands run and their exit codes |
+| `outcome` | success / failure / unavailable, plus optional health status |
+| `provenance` | Launcher identity, run ID, timestamp |
+| `limits` | What was not verified or could not be established |
+
+The receipt is sealed with a sha256 content digest that covers all fields except
+`digest` itself. Any post-hoc mutation is detected by `canonicalize()`.
+
+**Rules:**
+- An `unavailable` result **must** declare at least one limit and **cannot** have a `success` outcome.
+- An `available` result **must** declare at least one command.
+- No cleanup authority: the receipt is read-only evidence.
+
+Schema: `schemas/launch-receipt.schema.json`
+
 ## Testing
 
 - `deployment.trigger_deployment`: Korrekter workflow_dispatch-Aufruf, Environment-Weitergabe
 - `deployment.health_check`: Positiv (200, <500ms) / Negativ (Timeout, 5xx)
 - `deployment.rollback`: Plan-Dokumentation, kein automatischer Revert
+- `deployment.LaunchReceipt`: Seal/canonicalize mit korrektem digest, Tamper-Erkennung
+- `deployment.LaunchReceipt`: Unavailable ohne Limits oder mit success-outcome wird zurückgewiesen
+- `deployment.LaunchReceipt`: Verfügbares receipt ohne commands wird zurückgewiesen
 - `announce.generate_release_notes`: CHANGELOG.md-Parsing, summary-Merge, valides Markdown/JSON
 - `announce.format_announcement`: Channel-spezifische Formatierung
 - `metrics.capture_metrics`: Endpoint-Abfrage, Timeout-Handling

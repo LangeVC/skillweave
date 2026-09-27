@@ -261,6 +261,21 @@ Before any release step, assess whether the build is ready:
 - Changelog is current
 - Version has been bumped
 
+### 1a. Assessment Gate (SW-157)
+
+Before packaging, validate all assessment receipts through the tamper-evident
+gate. Receipts live in `.skillweave/assessments/` and are validated by
+`AssessmentGate` in `skillweave.release.assessment_gate`:
+
+- **Missing receipt**: a required `.json` file does not exist — block.
+- **Stale receipt**: `provenance.produced_at` exceeds the staleness threshold — block.
+- **Mismatched receipt**: the sha256 digest does not match the payload — block (tamper-evident).
+- **Tampered receipt**: `canonicalize()` raises `AssessmentTamperError` — block.
+
+The gate is **read-only** and has no cleanup authority. It never writes,
+deletes, or mutates receipts or workspace state. Cleanup authorization is
+handled separately by `skillweave.repo_health.worktrees`.
+
 ### 2. Packaging
 
 Build distributable artifacts:

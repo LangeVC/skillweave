@@ -61,6 +61,7 @@ role_defaults:
       - "!= ops"
 
 contracts:
+  - schemas/assessment-receipt.schema.json
   - schemas/dispatch-handoff.schema.json
   - schemas/dispatch-sequence.schema.json
   - schemas/dispatch-trace.schema.json

@@ -8,6 +8,7 @@ planning repository refuses to call any area durable.
 """
 
 from skillweave.persistence import (
+    Direction,
     Disclosure,
     Durability,
     get_area_declaration,
@@ -207,6 +208,61 @@ def test_unreachable_destination_sync_reports_at_risk_no_crash(tmp_path, monkeyp
     report = store.sync("prds", str(tmp_path))
     assert report.at_risk is True
     assert report.reason, "at-risk report must carry a non-empty reason"
+
+
+def test_retrospectives_sync_to_planning_retrospectives(tmp_path):
+    """A retrospective persisted at .skillweave/retrospectives/vX.Y.Z.md syncs
+    to .skillweave/planning/retrospectives/ without manual copy."""
+    assert not (tmp_path / ".git").exists()
+
+    # Register the retrospectives area (persistence declaration seeded at import).
+    decl = get_area_declaration("retrospectives")
+    assert decl is not None
+    assert decl.durability is Durability.DURABLE
+
+    # Create a retrospective payload in the source workspace.
+    source = tmp_path / ".skillweave" / "retrospectives"
+    source.mkdir(parents=True)
+    (source / "v1.0.0.md").write_text(
+        "## Retrospective v1.0.0\n\n### What went well\n- Release completed on time\n"
+    )
+    (source / "v1.1.0.md").write_text(
+        "## Retrospective v1.1.0\n\n### What went well\n- Stability improved\n"
+    )
+
+    # Planning repository configured and reachable.
+    planning_root = tmp_path / "planning-checkout"
+    planning_root.mkdir()
+
+    store = PlanningSyncBackingStore(
+        repository="skillweave/skillweave-planning", planning_root=str(planning_root)
+    )
+    assert store.reachable
+
+    report = store.sync("retrospectives", str(tmp_path))
+    assert isinstance(report, SyncReport)
+    assert report.at_risk is False
+
+    carried = report.names()
+    assert set(carried) == {"v1.0.0.md", "v1.1.0.md"}, carried
+
+    # Payload landed under planning/retrospectives/ — no manual copy.
+    target = planning_root / ".skillweave" / "planning" / "retrospectives"
+    assert (target / "v1.0.0.md").is_file()
+    assert (target / "v1.1.0.md").is_file()
+    assert (
+        target / "v1.0.0.md"
+    ).read_text() == "## Retrospective v1.0.0\n\n### What went well\n- Release completed on time\n"
+
+
+def test_retrospectives_area_declared_durable():
+    """The retrospectives area is registered as GENERATED, DURABLE, SEALED
+    so it participates in the planning-sync contract automatically."""
+    decl = get_area_declaration("retrospectives")
+    assert decl is not None
+    assert decl.direction is Direction.GENERATED
+    assert decl.durability is Durability.DURABLE
+    assert decl.disclosure is Disclosure.SEALED
 
 
 def test_unreachable_destination_sync_reports_at_risk_via_env(tmp_path, monkeypatch):

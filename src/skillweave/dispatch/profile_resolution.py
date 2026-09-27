@@ -190,6 +190,7 @@ def resolve_limits(
             min_models_required=base.min_models_required,
             on_model_failure=base.on_model_failure,
             heartbeat_interval=validated,
+            max_turns=base.max_turns,
         )
     # Prefer the override field when it is meaningfully set, else the base. The
     # ``on_model_failure`` name is validated upstream by ``Limits.from_dict``;
@@ -211,6 +212,7 @@ def resolve_limits(
             override.on_model_failure if _is_set(override.on_model_failure) else base.on_model_failure
         ),
         heartbeat_interval=_validate_heartbeat_interval(heartbeat),
+        max_turns=override.max_turns if _is_set(override.max_turns) else base.max_turns,
     )
 
 
