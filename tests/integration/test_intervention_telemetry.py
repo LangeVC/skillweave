@@ -155,6 +155,137 @@ def test_refuses_pid_in_payload():
         _validate_payload({"reason": "ok", "pid": 1234})
 
 
+# ── Privacy negative: value-level (secrets and absolute paths) ────────────
+#
+# Key validation is not enough: an allowed key can smuggle secret material or a
+# local filesystem path through its *value*. These tests pin the value-level
+# contract that GATE-C_PRIVACY_VALUE_BYPASS found missing.
+
+def test_masks_absolute_posix_path_in_reason():
+    out = _validate_payload({"reason": "failed reading /Users/alice/.ssh/id_rsa"})
+    assert "alice" not in out["reason"]
+    assert "/Users/alice" not in out["reason"]
+    assert "[REDACTED]" in out["reason"]
+
+
+def test_masks_nested_absolute_path_in_reason():
+    out = _validate_payload({"reason": "log at /var/log/skillweave/run-1.jsonl"})
+    assert "/var/log/skillweave" not in out["reason"]
+    assert "[REDACTED]" in out["reason"]
+
+
+def test_masks_windows_absolute_path():
+    out = _validate_payload({"reason": r"failed at C:\Users\bob\secrets.txt"})
+    assert "bob" not in out["reason"]
+    assert "[REDACTED]" in out["reason"]
+
+
+def test_masks_bare_home_directory():
+    out = _validate_payload({"reason": "cwd was /home/alice"})
+    assert "alice" not in out["reason"]
+    assert "[REDACTED]" in out["reason"]
+
+
+def test_masks_bearer_token_in_signal():
+    out = _validate_payload({"signal": "auth failed Bearer sk-abcdef1234567890"})
+    assert "sk-abcdef1234567890" not in out["signal"]
+    assert "[REDACTED_SECRET]" in out["signal"]
+
+
+def test_masks_api_key_assignment_in_reason():
+    out = _validate_payload({"reason": "retry with api_key=supersecretvalue"})
+    assert "supersecretvalue" not in out["reason"]
+    assert "[REDACTED_SECRET]" in out["reason"]
+
+
+def test_masks_pem_private_key_block():
+    out = _validate_payload(
+        {"reason": "-----BEGIN RSA PRIVATE KEY----- leaked"}
+    )
+    assert "BEGIN RSA PRIVATE KEY" not in out["reason"]
+    assert "[REDACTED_SECRET]" in out["reason"]
+
+
+def test_refuses_secret_smuggled_past_redaction():
+    # Key-level checks must not be the only defence: a blocked denomination can
+    # ride inside an *allowed* key's value. Masking hides the bytes, but the
+    # round-trip still has to be lossy in the caller's favour — the raw secret
+    # must not survive into the emitted payload.
+    raw = "sk-livesecret-abc123"
+    out = _validate_payload({"reason": f"auth failed api_key={raw}"})
+    assert raw not in json.dumps(out)
+    assert "sk-livesecret" not in json.dumps(out)
+    assert "[REDACTED_SECRET]" in out["reason"]
+
+
+def test_refuses_unmaskable_secret_denomination():
+    # A value that still carries an unmasked credential after redaction is a
+    # hard stop: the refusal path exists so a future shape that masking misses
+    # cannot silently reach the stream.
+    from skillweave.telemetry_intervention import _assert_no_secret
+
+    with pytest.raises(InterventionTelemetryError, match="secret material"):
+        _assert_no_secret("reason", "api_key=AKIAIOSFODNN7EXAMPLE")
+
+
+def test_masks_absolute_path_in_dispatch_id():
+    # The gate named dispatch_id explicitly: it may not smuggle a local path.
+    out = _validate_payload({"dispatch_id": "/Users/alice/.ssh/id_rsa"})
+    assert "/Users/alice" not in out["dispatch_id"]
+    assert "id_rsa" not in out["dispatch_id"]
+    assert out["dispatch_id"] == "[REDACTED]"
+
+
+def test_masks_absolute_path_in_signal():
+    out = _validate_payload({"signal": "/home/alice/secrets/run-1"})
+    assert "alice" not in out["signal"]
+    assert "[REDACTED]" in out["signal"]
+
+
+def test_masks_home_tilde_path():
+    out = _validate_payload({"reason": "read ~/.ssh/id_rsa failed"})
+    assert "~/.ssh" not in out["reason"]
+    assert "id_rsa" not in out["reason"]
+    assert "[REDACTED]" in out["reason"]
+
+
+def test_identifier_fields_mask_secret_and_path():
+    # No identifier exemption: a secret in child_key is masked, and a path-shaped
+    # identifier is masked too. Clean identifiers still pass through (see below).
+    out = _validate_payload(
+        {"child_key": "/Users/alice/repo/run-1/token=abcdef123456"}
+    )
+    assert "/Users/alice" not in out["child_key"]
+    assert "abcdef123456" not in out["child_key"]
+
+
+def test_clean_identifier_preserved():
+    out = _validate_payload(
+        {"wave": "wave-0", "lane_id": "L1", "dispatch_id": "d1", "signal": "SIGTERM"}
+    )
+    assert out == {
+        "wave": "wave-0", "lane_id": "L1", "dispatch_id": "d1", "signal": "SIGTERM",
+    }
+
+
+def test_clean_value_is_untouched():
+    out = _validate_payload({"reason": "process terminated unexpectedly"})
+    assert out["reason"] == "process terminated unexpectedly"
+
+
+def test_masked_value_reaches_emitted_stream():
+    stream, sink = _stream()
+    emitter = InterventionEmitter(stream)
+    emitter.emit_malformed(
+        wave="0", lane_id="L1", dispatch_id="d2",
+        reason="crash in /Users/alice/project/secret.log",
+    )
+    ev = _lines(sink)[0]
+    assert "/Users/alice" not in ev["reason"]
+    assert "alice" not in ev["reason"]
+    assert "[REDACTED]" in ev["reason"]
+
+
 # ── Measured receipt digest ───────────────────────────────────────────────
 
 def test_receipt_digest_deterministic():
