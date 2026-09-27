@@ -46,6 +46,26 @@ different human responses:
 A tampered launch receipt is therefore *not* "missing evidence" — it is
 mismatched evidence, and it blocks CLOSED on its own.
 
+Completeness: omission is a hold
+--------------------------------
+
+Per-artifact status cannot see the artifact that never arrived on the list. A
+run could therefore supply *nothing* and, having resolved no inputs, present no
+missing evidence — closing on an empty set. Completeness is enforced separately,
+by the **required-evidence manifest** (``required_evidence``):
+
+* No manifest declared → :data:`Hold.EVIDENCE_MANIFEST_MISSING`. With nothing
+  declared required, "supplied everything" and "supplied nothing" are the same
+  observation, and a closeout may not read the ambiguity as a clean run.
+* A manifested producer absent from ``evidence`` → :data:`Hold.EVIDENCE_INCOMPLETE`,
+  naming the producer. A declared artifact that did not arrive is a hold even
+  when the run said nothing about it.
+
+Only a manifest that is actually declared may close: a manifest with no sources
+is complete for a run that owed no evidence, but the reverse (evidence with no
+manifest) never is. This is what makes "omitting all evidence yields closed"
+impossible, regardless of how the caller spells the input.
+
 Workspace holds
 ---------------
 
@@ -140,6 +160,7 @@ __all__ = [
     "is_closed",
     "tampered_launch_receipt",
     "missing_evidence",
+    "required_evidence",
 ]
 
 
@@ -244,6 +265,8 @@ class Hold(str, Enum):
 
     EVIDENCE_MISSING = "evidence_missing"
     EVIDENCE_MISMATCHED = "evidence_mismatched"
+    EVIDENCE_MANIFEST_MISSING = "evidence_manifest_missing"
+    EVIDENCE_INCOMPLETE = "evidence_incomplete"
     ASSESSMENT_UNAVAILABLE = "assessment_unavailable"
     ASSESSMENT_NO_EVIDENCE = "assessment_no_evidence"
     LAUNCH_UNVERIFIED = "launch_unverified"
@@ -264,6 +287,8 @@ class Hold(str, Enum):
 HOLD_BOUNDARIES: Mapping[Hold, Boundary] = {
     Hold.EVIDENCE_MISSING: Boundary.CLOSEOUT,
     Hold.EVIDENCE_MISMATCHED: Boundary.CLOSEOUT,
+    Hold.EVIDENCE_MANIFEST_MISSING: Boundary.CLOSEOUT,
+    Hold.EVIDENCE_INCOMPLETE: Boundary.CLOSEOUT,
     Hold.ASSESSMENT_UNAVAILABLE: Boundary.RELEASECHAIN,
     Hold.ASSESSMENT_NO_EVIDENCE: Boundary.RELEASECHAIN,
     Hold.LAUNCH_UNVERIFIED: Boundary.LAUNCH,
@@ -461,6 +486,7 @@ class CloseoutPreview:
     run_id: str
     subject: str
     status: str
+    required_evidence: tuple[dict, ...]
     evidence: tuple[dict, ...]
     blockers: tuple[Blocker, ...]
     authority: tuple[dict, ...]
@@ -498,6 +524,7 @@ class CloseoutPreview:
             "run_id": self.run_id,
             "subject": self.subject,
             "status": self.status,
+            "required_evidence": [dict(entry) for entry in self.required_evidence],
             "evidence": [dict(entry) for entry in self.evidence],
             "blockers": [blocker.as_dict() for blocker in self.blockers],
             "authority": [dict(entry) for entry in self.authority],
@@ -796,12 +823,26 @@ class CloseoutService:
         *,
         run_id: str,
         subject: str,
+        required_evidence: Optional[Sequence[EvidenceInput]] = None,
         evidence: Sequence[EvidenceInput] = (),
         workspaces: Any = (),
         telemetry: Any = None,
         unfinished: Sequence[str] = (),
     ) -> CloseoutPreview:
         """Evaluate every input into a total, deterministic, read-only preview.
+
+        ``required_evidence`` is the run's required-evidence manifest: the
+        named artifacts the run *declared* it would supply before anyone may
+        declare it closed. It is the completeness contract, and it is what makes
+        an empty ``evidence`` sequence a hold instead of a silent CLOSED.
+
+        Omitting the manifest entirely is itself a hold
+        (:data:`Hold.EVIDENCE_MANIFEST_MISSING`): with nothing declared
+        required, there is no way to tell a run that supplied everything from
+        one that supplied nothing, so the closeout refuses to guess. When the
+        manifest is present, every declared producer must appear in ``evidence``;
+        one that does not is a hold (:data:`Hold.EVIDENCE_INCOMPLETE`) naming the
+        producer, so a partially-supplied run cannot reach CLOSED by omission.
 
         Never raises for an adverse finding and never for a shortfall: "the run
         may not be closed, and here is why" is an ordinary, expected output.
@@ -825,11 +866,19 @@ class CloseoutService:
                 f"{subject!r}; a closeout receipt cannot represent it"
             )
 
+        supplied: Sequence[EvidenceInput] = tuple(evidence)
+
         blockers: List[Blocker] = []
-        blockers.extend(self._evidence_blockers(evidence))
+        blockers.extend(self._completeness_blockers(required_evidence, supplied))
+        blockers.extend(self._evidence_blockers(supplied))
         blockers.extend(self._workspace_blockers(workspaces))
         blockers.extend(_telemetry_blockers(telemetry))
         blockers.extend(_unfinished_blockers(unfinished))
+
+        # The manifest is echoed in declaration order, deduplicated by
+        # (kind, producer), so the preview payload records exactly what was
+        # declared required. A caller that omitted it yields an empty tuple.
+        manifest = _unique_manifest(required_evidence)
 
         payload = {
             "schema_version": SCHEMA_VERSION,
@@ -837,7 +886,8 @@ class CloseoutService:
             "run_id": run_id,
             "subject": subject,
             "status": STATUS_HELD if blockers else STATUS_CLOSED,
-            "evidence": [self._evidence_row(item) for item in evidence],
+            "required_evidence": [_required_row(item) for item in manifest],
+            "evidence": [self._evidence_row(item) for item in supplied],
             "blockers": [blocker.as_dict() for blocker in blockers],
             "authority": _authority_rows(),
         }
@@ -846,6 +896,7 @@ class CloseoutService:
             preview_version=PREVIEW_VERSION,
             run_id=run_id,
             subject=subject,
+            required_evidence=tuple(payload["required_evidence"]),
             status=payload["status"],
             evidence=tuple(payload["evidence"]),
             blockers=tuple(blockers),
@@ -995,6 +1046,52 @@ class CloseoutService:
             blocker = _workspace_blocker(signal)
             if blocker is not None:
                 blockers.append(blocker)
+        return blockers
+
+    def _completeness_blockers(
+        self,
+        required: Optional[Sequence[EvidenceInput]],
+        supplied: Sequence[EvidenceInput],
+    ) -> List[Blocker]:
+        """The holds that stop a run from closing by omission.
+
+        Two shortfalls, both deliberate:
+
+        * No manifest at all — the run declared nothing required, so "supplied
+          nothing" and "supplied everything" are indistinguishable. The closeout
+          refuses the ambiguity rather than reading it as a clean run.
+        * A declared producer absent from ``evidence`` — the manifest named an
+          artifact the run owed, and it did not arrive. The hold names that
+          producer, so an omission is a specific, fixable finding rather than a
+          silent pass.
+
+        A manifest with no sources *is* complete for a run that owed no evidence;
+        the reverse case (evidence with no manifest) is not, because nothing
+        established that the evidence set was the whole set.
+        """
+        if required is None:
+            return [
+                _blocker(
+                    Hold.EVIDENCE_MANIFEST_MISSING, "closeout",
+                    "no required-evidence manifest was declared, so completeness "
+                    "cannot be established; a run that supplies no manifest may "
+                    "not be declared closed",
+                )
+            ]
+
+        present = {(item.kind, item.producer) for item in supplied}
+        blockers: List[Blocker] = []
+        for item in _unique_manifest(required):
+            if (item.kind, item.producer) not in present:
+                blockers.append(
+                    _blocker(
+                        Hold.EVIDENCE_INCOMPLETE, item.producer,
+                        f"the required-evidence manifest declares "
+                        f"{item.kind.value} evidence from {item.producer!r}, but "
+                        "no such artifact was supplied; a missing receipt is a "
+                        "hold, not an omission",
+                    )
+                )
         return blockers
 
     @staticmethod
@@ -1174,6 +1271,46 @@ def _authority_rows() -> List[dict]:
 def missing_evidence(kind: EvidenceKind, producer: str) -> EvidenceInput:
     """An input the run declared it would supply and did not."""
     return EvidenceInput(kind=kind, producer=producer, supplied=False)
+
+
+def required_evidence(
+    required: Iterable[EvidenceInput], supplied: Iterable[EvidenceInput]
+) -> tuple[tuple[EvidenceInput, ...], tuple[EvidenceInput, ...]]:
+    """Pair a required-evidence manifest with the evidence a run supplied.
+
+    The manifest is declaration order, deduplicated by ``(kind, producer)`` so a
+    producer that is declared twice cannot manufacture a phantom hold. The
+    supplied sequence is passed through untouched: duplicates there are the
+    caller's business, and :meth:`CloseoutService.preview` already reports a
+    missing producer exactly once per manifest entry.
+
+    Returns ``(manifest, supplied)`` for ``preview(required_evidence=...,
+    evidence=...)``. Prefer this over passing the two sequences by hand: it is
+    the one place the "which order, which duplicates" question is answered.
+    """
+    return _unique_manifest(tuple(required)), tuple(supplied)
+
+
+def _unique_manifest(
+    required: Optional[Sequence[EvidenceInput]],
+) -> tuple[EvidenceInput, ...]:
+    """Deduplicate a required-evidence manifest by ``(kind, producer)``."""
+    if not required:
+        return ()
+    seen: set[tuple[Any, Any]] = set()
+    unique: List[EvidenceInput] = []
+    for item in required:
+        key = (item.kind, item.producer)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return tuple(unique)
+
+
+def _required_row(item: EvidenceInput) -> dict:
+    """One manifest entry, rendered deterministically for the digest."""
+    return {"kind": item.kind.value, "producer": item.producer}
 
 
 def tampered_launch_receipt(value: Any) -> EvidenceInput:

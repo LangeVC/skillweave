@@ -38,6 +38,7 @@ from skillweave.closeout_service import (  # noqa: E402
     WorkspaceSignal,
     is_closed,
     missing_evidence,
+    required_evidence,
     tampered_launch_receipt,
 )
 from skillweave.repo_health.worktrees import (  # noqa: E402
@@ -150,19 +151,28 @@ def _row(**overrides):
 
 
 def _clean_preview_kwargs(**overrides):
+    """A run that supplied the artifact its manifest declared, and nothing else wrong.
+
+    ``required_evidence`` is part of the clean shape: without a manifest the
+    closeout cannot tell a complete run from an empty one, so it holds. Tests
+    that pass ``evidence=`` must therefore keep the manifest in step with the
+    producers they supply, or they are exercising an incomplete run.
+    """
+    evidence = [
+        EvidenceInput(
+            kind=EvidenceKind.LAUNCH, producer="launch", value=_launch_receipt(),
+            supplied=True,
+        ),
+        EvidenceInput(
+            kind=EvidenceKind.ASSESSMENT, producer="assess",
+            value=_assessment_receipt(), supplied=True, cross_check=SUBJECT,
+        ),
+    ]
     kwargs = dict(
         run_id="run-1",
         subject=SUBJECT,
-        evidence=[
-            EvidenceInput(
-                kind=EvidenceKind.LAUNCH, producer="launch", value=_launch_receipt(),
-                supplied=True,
-            ),
-            EvidenceInput(
-                kind=EvidenceKind.ASSESSMENT, producer="assess",
-                value=_assessment_receipt(), supplied=True, cross_check=SUBJECT,
-            ),
-        ],
+        required_evidence=evidence,
+        evidence=evidence,
         workspaces=[_row()],
         telemetry=_Telemetry(),
     )
@@ -812,3 +822,140 @@ def test_no_adverse_workspace_state_closes_silently(overrides):
     )
     assert preview.status == STATUS_HELD
     assert preview.blockers
+
+
+# ── Completeness: omission is a hold, never a silent CLOSED ────────────────
+#
+# GATE-A_MISSING_RECEIPT_GAP: omitting every artifact must not close, because a
+# closeout that resolves no inputs would otherwise present no missing evidence.
+# These are the regression tests for the required-evidence manifest.
+
+
+def test_omitting_the_manifest_blocks_closed():
+    """No required-evidence manifest means completeness is unestablished."""
+    preview = _service().preview(**_clean_preview_kwargs(required_evidence=None))
+    assert preview.status == STATUS_HELD
+    assert preview.has(Hold.EVIDENCE_MANIFEST_MISSING)
+
+
+def test_omitting_all_evidence_blocks_closed():
+    """The gate's exact repro: no manifest, no evidence, no workspace hold."""
+    preview = _service().preview(
+        run_id="run-1", subject=SUBJECT, workspaces=[_row()], telemetry=_Telemetry()
+    )
+    assert preview.status == STATUS_HELD
+    assert preview.has(Hold.EVIDENCE_MANIFEST_MISSING)
+    assert preview.codes  # never a silent CLOSED with 0 evidence rows
+
+
+def test_manifest_with_no_supplied_evidence_blocks_every_declared_producer():
+    preview = _service().preview(
+        **_clean_preview_kwargs(
+            required_evidence=[
+                missing_evidence(EvidenceKind.LAUNCH, "launch"),
+                missing_evidence(EvidenceKind.ASSESSMENT, "assess"),
+            ],
+            evidence=[],
+        )
+    )
+    assert preview.status == STATUS_HELD
+    assert preview.has(Hold.EVIDENCE_INCOMPLETE)
+    incomplete = [
+        b for b in preview.blockers if b.code == Hold.EVIDENCE_INCOMPLETE.value
+    ]
+    assert {b.subject for b in incomplete} == {"launch", "assess"}
+
+
+def test_partially_supplied_manifest_blocks_on_the_absent_producer():
+    """Deploying but not assessing is a hold naming the artifact that is owed."""
+    preview = _service().preview(
+        **_clean_preview_kwargs(
+            required_evidence=[
+                EvidenceInput(
+                    kind=EvidenceKind.LAUNCH, producer="launch",
+                    value=_launch_receipt(), supplied=True,
+                ),
+                missing_evidence(EvidenceKind.ASSESSMENT, "assess"),
+            ],
+            evidence=[
+                EvidenceInput(
+                    kind=EvidenceKind.LAUNCH, producer="launch",
+                    value=_launch_receipt(), supplied=True,
+                )
+            ],
+        )
+    )
+    assert preview.has(Hold.EVIDENCE_INCOMPLETE)
+    incomplete = [
+        b for b in preview.blockers if b.code == Hold.EVIDENCE_INCOMPLETE.value
+    ]
+    assert [b.subject for b in incomplete] == ["assess"]
+
+
+def test_declared_free_run_with_no_evidence_may_close():
+    """A manifest that is declared and empty is a real declaration of nothing owed."""
+    preview = _service().preview(
+        **_clean_preview_kwargs(required_evidence=[], evidence=[])
+    )
+    assert preview.status == STATUS_CLOSED
+    assert not preview.has(Hold.EVIDENCE_INCOMPLETE)
+    assert not preview.has(Hold.EVIDENCE_MANIFEST_MISSING)
+
+
+def test_manifest_is_echoed_into_the_preview_payload():
+    preview = _service().preview(**_clean_preview_kwargs())
+    assert [row["producer"] for row in preview.required_evidence] == [
+        "launch",
+        "assess",
+    ]
+    assert preview.required_evidence[0]["kind"] == "launch"
+
+
+def test_manifest_entry_that_is_supplied_but_broken_holds_on_status_not_completeness():
+    """A supplied-but-tampered artifact is mismatched, not "incomplete"."""
+    tampered = copy.deepcopy(_launch_receipt())
+    tampered["outcome"] = {"status": "failure"}
+    entry = [tampered_launch_receipt(tampered)]
+    preview = _service().preview(
+        **_clean_preview_kwargs(required_evidence=entry, evidence=entry)
+    )
+    assert preview.has(Hold.EVIDENCE_MISMATCHED)
+    assert not preview.has(Hold.EVIDENCE_INCOMPLETE)
+
+
+def test_duplicate_manifest_entries_yield_one_hold():
+    """A producer declared twice cannot manufacture a phantom second hold."""
+    manifest = [
+        missing_evidence(EvidenceKind.LAUNCH, "launch"),
+        missing_evidence(EvidenceKind.LAUNCH, "launch"),
+    ]
+    preview = _service().preview(
+        **_clean_preview_kwargs(required_evidence=manifest, evidence=[])
+    )
+    incomplete = [
+        b for b in preview.blockers if b.code == Hold.EVIDENCE_INCOMPLETE.value
+    ]
+    assert len(incomplete) == 1
+    assert len(preview.required_evidence) == 1
+
+
+def test_required_evidence_helper_pairs_manifest_and_supply():
+    manifest, supplied = required_evidence(
+        [missing_evidence(EvidenceKind.LAUNCH, "launch")], []
+    )
+    assert len(manifest) == 1
+    assert supplied == ()
+    preview = _service().preview(
+        **_clean_preview_kwargs(required_evidence=manifest, evidence=list(supplied))
+    )
+    assert preview.has(Hold.EVIDENCE_INCOMPLETE)
+
+
+def test_manifest_digest_changes_when_the_manifest_changes():
+    one = _service().preview(**_clean_preview_kwargs())
+    two = _service().preview(
+        **_clean_preview_kwargs(
+            required_evidence=[missing_evidence(EvidenceKind.LAUNCH, "launch")]
+        )
+    )
+    assert one.digest != two.digest
