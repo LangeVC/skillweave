@@ -2,7 +2,8 @@
 
 This module owns the intervention-telemetry contract and its measured receipt.
 It defines three distinct typed events, enforces a privacy-safe payload (no PII,
-no raw output, no model-specific identifiers), and emits each event through the
+no raw output, no model-specific identifiers, no secrets, no absolute local
+paths — enforced on values, not merely on keys), and emits each event through the
 shared :class:`~skillweave.dispatch.events.DispatchEventStream` with a measured
 receipt digest so the closeout consumer can verify delivery without a provider.
 
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
@@ -39,6 +41,56 @@ _ALLOWED_PAYLOAD_KEYS = frozenset({
     "dispatch_id", "child_key", "elapsed_ms", "signal",
 })
 
+# ── Value-level privacy: secrets and absolute paths ──────────────────────────
+#
+# Key validation alone is insufficient: a caller can smuggle a credential or a
+# local filesystem path into an *allowed* key's value (``reason``, ``signal``,
+# ``dispatch_id``). Values are therefore validated and redacted, never trusted.
+# The treatment is uniform across every allowed key — there is no identifier
+# exemption, because the gate named ``dispatch_id`` and ``signal`` themselves as
+# smuggling channels. Two guarantees hold for *every* value:
+#
+#   * a secret instance can never reach the stream (masked, or refused);
+#   * an absolute, rooted, or home-resolvable path is masked.
+#
+# Clean human-readable values (``"retry"``, ``"SIGTERM"``, ``"wave-0"``) pass
+# through verbatim; only the unsafe shapes are rewritten.
+
+#: The mask written in place of an absolute, rooted, or home local path.
+_REDACTION_MASK = "[REDACTED]"
+
+#: The mask written in place of a secret (bearer token, API key, PEM key).
+_SECRET_MASK = "[REDACTED_SECRET]"
+
+#: Absolute POSIX path (``/etc/passwd``), Windows drive path (``C:\Users\...``),
+#: and UNC path (``\\host\share``). Matched anywhere in a value so a path
+#: embedded in a longer string is still caught.
+_ABSOLUTE_PATH_RE = re.compile(
+    r"(?:[A-Za-z]:[\\/]|\\\\)[^\s\"']*"          # Windows / UNC path
+    r"|/(?:[^\s/:]+/)+[^\s/:]*"                   # POSIX path, two+ segments
+)
+
+#: A path whose first segment is a well-known root (``/Users/alice/...``,
+#: ``/home/alice/...``). Catches the single-segment-tail case (a bare home
+#: directory) that ``_ABSOLUTE_PATH_RE`` deliberately does not.
+_ROOTED_PATH_RE = re.compile(
+    r"(?:/(?:Users|home|root|tmp|var|etc|opt|private|Volumes)/[^\s\"']*)"
+)
+
+#: A ``~``-rooted home reference (``~/.ssh/id_rsa``, ``~/project``): a local
+#: path that resolves outside the repo and is masked like any other.
+_HOME_PATH_RE = re.compile(r"~[/\\][^\s\"']*")
+
+#: A secret denomination: ``Bearer <token>``, ``key=value`` credential pairs,
+#: and PEM private-key blocks.
+_SECRET_RE = re.compile(
+    r"(?i)"
+    r"(?:bearer\s+[A-Za-z0-9._\-]{8,})"
+    r"|(?:\b(?:api[_-]?key|secret|token|password|passwd|pwd|credential|auth)"
+    r"\s*[:=]\s*\S+)"
+    r"|(?:-----BEGIN[^-]*PRIVATE KEY-----)"
+)
+
 
 class InterventionTelemetryError(ValueError):
     """Raised when an intervention payload violates privacy or schema."""
@@ -50,18 +102,80 @@ def _refuse_privacy(key: str) -> None:
     )
 
 
+def _substitute_secrets(text: str) -> str:
+    """Replace every secret denomination in ``text`` with the secret mask."""
+    return _SECRET_RE.sub(_SECRET_MASK, text)
+
+
+def _contains_secret(text: str) -> bool:
+    """Return whether ``text`` carries an unmasked secret denominator."""
+    return _SECRET_RE.search(text) is not None
+
+
+def _redact_value(value: Any) -> Any:
+    """Return a privacy-safe form of one payload value.
+
+    Strings are stripped of secrets and of absolute, rooted, and home path
+    shapes. Non-strings are returned as JSON scalars; a container is walked so a
+    nested value cannot smuggle a secret or path past the top-level check.
+    """
+    if isinstance(value, str):
+        redacted = _substitute_secrets(value)
+        redacted = _ABSOLUTE_PATH_RE.sub(_REDACTION_MASK, redacted)
+        redacted = _ROOTED_PATH_RE.sub(_REDACTION_MASK, redacted)
+        redacted = _HOME_PATH_RE.sub(_REDACTION_MASK, redacted)
+        return redacted
+    if isinstance(value, dict):
+        return {k: _redact_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_redact_value(v) for v in value]
+    return value
+
+
+def _assert_no_secret(key: str, value: Any) -> None:
+    """Refuse ``value`` outright if a secret survives redaction.
+
+    Redaction is best-effort for path shapes; a secret is a hard stop. The check
+    runs *after* masking, so a mask token (which matches no secret denominator)
+    passes while a smuggled credential does not.
+    """
+    if isinstance(value, str):
+        if _contains_secret(value):
+            raise InterventionTelemetryError(
+                f"intervention payload key '{key}' carries secret material in "
+                "its value"
+            )
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            _assert_no_secret(f"{key}.{k}", v)
+    elif isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            _assert_no_secret(f"{key}[{i}]", v)
+
+
 def _validate_payload(payload: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """Validate and return a privacy-safe, schema-constrained payload."""
+    """Validate and return a privacy-safe, schema-constrained payload.
+
+    Validates *values*, not just keys: no allowed key may carry a secret or an
+    absolute, rooted, or home local path. The same treatment applies to
+    ``reason``, ``dispatch_id``, ``signal``, and every other allowed key — there
+    is no identifier exemption. Secrets are masked and refused outright if any
+    survive masking; local paths are masked. Clean values pass through unchanged.
+    """
     if not payload:
         return {}
-    for key in payload:
+    safe: dict[str, Any] = {}
+    for key, value in payload.items():
         if key in _PRIVACY_BLOCKED:
             _refuse_privacy(key)
         if key not in _ALLOWED_PAYLOAD_KEYS:
             raise InterventionTelemetryError(
                 f"intervention payload key '{key}' is not in the allowed set"
             )
-    return dict(payload)
+        redacted = _redact_value(value)
+        _assert_no_secret(key, redacted)
+        safe[key] = redacted
+    return safe
 
 
 # ── Receipt digest: a measured, content-addressed proof of emission ──────────
@@ -276,4 +390,6 @@ __all__ = [
     "InterventionCloseout",
     "_receipt_digest",
     "_validate_payload",
+    "_redact_value",
+    "_assert_no_secret",
 ]
