@@ -1,3 +1,14 @@
+## v1.5.8 (2026-09-27) — Generic Routing, Messaging & Validation Expansion
+
+SkillWeave v1.5.8 completes the Generic Lifecycle execution capability. It introduces a modular routing adapter, dedicated worker messaging channels, deterministic blocker slicing, and massive vertical and horizontal testing expansions for both Software Delivery and Research Synthesis pipelines.
+
+### Highlights
+- **Generic Harness Adapter**: Replaced hardcoded OpenClaude references with a `HarnessAdapter` interface and an agnostic `AdapterRequest` contract, paving the way for multi-harness routing (e.g. Faigate / OmniRoute).
+- **Worker Direct Messaging**: Agents now emit structured `DirectMessage` records via a dedicated file-based JSONL channel (`SW_MSG_CHANNEL`), decoupling worker signals from fragile stdout log scraping.
+- **S3-Gate Validation Slicing**: Blocker parsing now fails closed if `(lane_id, domain)` matches multiple records identically, preventing runaway spawn loops when blockers are ambiguous.
+- **Contract Reality Check**: Delivered a 20-criterion alignment map mapping the PRD requirements to their implementations and testing coverage.
+- **Extensive Validation Profiles**: Added exhaustive Golden Scenarios for the generic lifecycle, fully modeled research and software delivery profiles, and breadth integration tests.
+
 ## v1.5.7 (2026-09-27) — Lifecycle Closeout and Remediation
 
 SkillWeave v1.5.7 introduces the fully integrated Lifecycle Closeout system, bringing robust transactionality, tamper-evident telemetry, and durable retrospective persistence to the pipeline.
