@@ -1,5 +1,7 @@
 from __future__ import annotations
+import hashlib
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from typing import Optional
 
 from .feedback import FeedbackItem
@@ -8,6 +10,9 @@ from .retrospective import RetroItem
 
 EFFORT_ORDER = {"small": 1, "medium": 2, "large": 3}
 URGENCY_ORDER = {"high": 3, "medium": 2, "low": 1}
+
+#: Near-duplicate threshold, matching the repo-health file dedup default.
+DEFAULT_FUZZY_THRESHOLD = 0.85
 
 
 @dataclass
@@ -59,8 +64,61 @@ def plan_iteration(
     for bl in backlog:
         bl.priority_score = URGENCY_ORDER.get(bl.urgency, 1) / EFFORT_ORDER.get(bl.effort, 2)
 
+    backlog = dedupe_backlog(backlog)
     backlog.sort(key=lambda x: x.priority_score, reverse=True)
     return backlog
+
+
+def dedupe_backlog(
+    items: list[BacklogItem],
+    existing: Optional[list[BacklogItem]] = None,
+    fuzzy_threshold: float = DEFAULT_FUZZY_THRESHOLD,
+) -> list[BacklogItem]:
+    """Drop backlog candidates already present, exactly or near-exactly.
+
+    The first occurrence of a description wins; later ones are dropped.
+    ``existing`` seeds the seen-set so a fresh batch is deduplicated against
+    an already-planned backlog rather than only against itself. Exact matches
+    are keyed by a normalised MD5 of the description (mirroring
+    ``repo_health.dedup``); remaining near-matches are found with
+    :class:`difflib.SequenceMatcher` at ``fuzzy_threshold`` (default 0.85, the
+    repo-health file-dedup default).
+    """
+    seen: list[BacklogItem] = list(existing or [])
+    exact_seen: dict[str, BacklogItem] = {_exact_key(i.description): i for i in seen}
+
+    kept: list[BacklogItem] = []
+    for item in items:
+        key = _exact_key(item.description)
+        if key in exact_seen:
+            continue
+        if _find_near_duplicate(seen + kept, item.description, fuzzy_threshold) is not None:
+            continue
+        exact_seen[key] = item
+        kept.append(item)
+    return kept
+
+
+def _exact_key(description: str) -> str:
+    normalised = " ".join(description.lower().split())
+    return hashlib.md5(normalised.encode("utf-8")).hexdigest()
+
+
+def _find_near_duplicate(
+    pool: list[BacklogItem],
+    description: str,
+    threshold: float,
+) -> Optional[BacklogItem]:
+    target = " ".join(description.lower().split())
+    if not target:
+        return None
+    for candidate in pool:
+        other = " ".join(candidate.description.lower().split())
+        if not other:
+            continue
+        if SequenceMatcher(None, target, other).ratio() >= threshold:
+            return candidate
+    return None
 
 
 def _estimate_effort(item: FeedbackItem) -> str:
