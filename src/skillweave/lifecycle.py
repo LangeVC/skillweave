@@ -15,6 +15,15 @@ implicit absence.
 
 from __future__ import annotations
 
+import os as _os
+
+# The lifecycle contract surface lives in the sibling ``lifecycle/`` directory
+# (``lifecycle/contracts.py``). A module cannot normally serve submodules, so
+# declare the package path explicitly: ``skillweave.lifecycle`` stays this
+# module (``from skillweave.lifecycle import phase_ids`` keeps working) while
+# ``skillweave.lifecycle.contracts`` also resolves.
+__path__ = [_os.path.join(_os.path.dirname(__file__), "lifecycle")]
+
 # Canonical phase order. ``order`` is 1-based and stable; consumers that need
 # sequence use this list, not the YAML file order.
 PHASES: list[dict] = [

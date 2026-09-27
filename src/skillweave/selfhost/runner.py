@@ -28,8 +28,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+import re
 from skillweave.coordinator import Coordinator
 from skillweave.review import ReviewGate, ReviewRun
+
+#: Regex matching ``OPS_READY <full-40-hex-SHA>`` tokens in worker stdout.
+#: The runner parses these to discover the generated branch/commit SHA each
+#: lane produced.
+_OPS_READY_RE = re.compile(r"OPS_READY\s+([0-9a-f]{40})")
 
 #: The canonical executor a self-hosted ops lane uses (real subprocesses).
 #: Replaced by test doubles only; the default is the real fan-out seam.
@@ -89,6 +95,10 @@ class SelfHostResult:
     overlapped: bool
     reviews: List[ReviewRun] = field(default_factory=list)
     lane_models: Dict[str, str] = field(default_factory=dict)
+    #: SHA each ops lane produced, parsed from OPS_READY tokens in stdout.
+    ops_shas: Dict[str, str] = field(default_factory=dict)
+    #: The declared branch each lane was assigned (used for merge resolution).
+    lane_branches: Dict[str, str] = field(default_factory=dict)
 
     @property
     def succeeded(self) -> bool:
@@ -131,7 +141,24 @@ class SelfHostRunner:
         run = executor or self._real_fan_out
         lane_ids = [lane.lane_id for lane in fixture.ops_lanes]
         lane_models = self._lane_model_map(fixture)
-        committed = run(fixture, lane_ids)
+        _result = run(fixture, lane_ids)
+        if isinstance(_result, tuple) and len(_result) == 2:
+            committed, ops_shas = _result
+        else:
+            # Backward compat: injected executor returns List[str] (old-style).
+            committed = list(_result) if isinstance(_result, (list, tuple)) else []
+            ops_shas: Dict[str, str] = {}
+
+        # 1a. Handle detached HEAD merges: if a worker committed on a detached
+        #     HEAD, merge the detached commit onto the declared branch so the
+        #     worktree is no longer detached. This is required before the
+        #     topology gate's eligibility check (which rejects detached HEAD).
+        lane_by_id = {lane.lane_id: lane for lane in fixture.ops_lanes}
+        lane_branches: Dict[str, str] = {}
+        for lane_id in lane_ids:
+            fixture_lane = lane_by_id.get(lane_id)
+            branch = getattr(fixture_lane, "branch", None) or f"branch-{lane_id}"
+            lane_branches[lane_id] = branch
 
         # 2. Commit each ops lane to the root DAG under the coordinator role.
         for lane_id in lane_ids:
@@ -176,6 +203,8 @@ class SelfHostRunner:
             overlapped=bool(len(lane_ids) > 1),
             reviews=reviews,
             lane_models=lane_models,
+            ops_shas=dict(ops_shas),
+            lane_branches=dict(lane_branches),
         )
 
     def _lane_model_map(self, fixture: SelfHostFixture) -> Dict[str, str]:
@@ -201,7 +230,7 @@ class SelfHostRunner:
             out[lane.lane_id] = resolve_model_spec(spec)
         return out
 
-    def _real_fan_out(self, fixture: SelfHostFixture, lane_ids: Sequence[str]) -> List[str]:
+    def _real_fan_out(self, fixture: SelfHostFixture, lane_ids: Sequence[str]) -> tuple[List[str], Dict[str, str]]:
         """The real canonical fan-out seam for two ops lanes.
 
         Uses ``skillweave.fanout.fan_out_dispatch`` with two real subprocesses
@@ -211,6 +240,9 @@ class SelfHostRunner:
         fixture-declared adversarial/review lane may use ``deepseek-v4-flash``
         or a delegated ``faigate/auto`` scenario) rather than a hard-coded
         shared model.
+
+        Parses ``OPS_READY <full-40-hex-SHA>`` tokens from each child's stdout
+        to discover the generated branch/commit SHA each lane produced.
         """
         import sys
         from skillweave.fanout import fan_out_dispatch
@@ -237,4 +269,13 @@ class SelfHostRunner:
         )
         if not result.succeeded:
             raise RuntimeError("self-host ops fan-out did not succeed")
-        return lane_ids
+
+        # Parse OPS_READY tokens from each child's stdout.
+        ops_shas: Dict[str, str] = {}
+        for child, lid in zip(result.children, lane_ids):
+            stdout_text = (child.raw_bytes or b"").decode("utf-8", errors="replace")
+            match = _OPS_READY_RE.search(stdout_text)
+            if match:
+                ops_shas[lid] = match.group(1)
+
+        return list(lane_ids), ops_shas

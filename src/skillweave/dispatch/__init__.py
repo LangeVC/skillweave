@@ -47,6 +47,14 @@ from .events import (  # noqa: F401
 # The experimental application seam and its CLI (SW138-DISPATCH-001). These
 # consume the contract/profile/stream exported above and drive a wave through
 # the shared fan-out / run / workspace services.
+# Worker-to-controller messaging channel (SW-158-RETRO-003).
+from .messaging import (  # noqa: F401
+    ENV_MESSAGE_CHANNEL,
+    MessageChannelError,
+    DirectMessage,
+    MessageChannel,
+)
+
 from .application import (  # noqa: F401
     EXECUTION_MODELS,
     HALT_REQUIRES_OPERATOR,
@@ -116,4 +124,9 @@ __all__ = [
     "derive_topology_manifests",
     "enforce_topology",
     "generate_run_id",
+    # SW-158-RETRO-003
+    "ENV_MESSAGE_CHANNEL",
+    "MessageChannelError",
+    "DirectMessage",
+    "MessageChannel",
 ]

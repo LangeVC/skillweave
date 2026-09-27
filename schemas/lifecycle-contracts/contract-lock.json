@@ -1,0 +1,86 @@
+{
+  "contractSet": {
+    "name": "skillweave-lifecycle-contracts",
+    "version": "1.0.0"
+  },
+  "contracts": {
+    "work-profile": {
+      "schema": "work-profile.schema.json",
+      "supportedVersions": ["1.0.0"]
+    },
+    "lifecycle-profile": {
+      "schema": "lifecycle-profile.schema.json",
+      "supportedVersions": ["1.0.0"]
+    },
+    "deliverable-contract": {
+      "schema": "deliverable-contract.schema.json",
+      "supportedVersions": ["1.0.0"]
+    },
+    "evidence-contract": {
+      "schema": "evidence-contract.schema.json",
+      "supportedVersions": ["1.0.0"]
+    },
+    "category-pack": {
+      "schema": "category-pack.schema.json",
+      "supportedVersions": ["1.0.0"]
+    },
+    "category-taxonomy": {
+      "schema": "category-taxonomy.schema.json",
+      "supportedVersions": ["1.0.0"]
+    },
+    "model-provider": {
+      "schema": "model-provider.schema.json",
+      "supportedVersions": ["1.0.0"]
+    },
+    "search-provider": {
+      "schema": "search-provider.schema.json",
+      "supportedVersions": ["1.0.0"]
+    }
+  },
+  "vocabulary": {
+    "categories": [
+      "research",
+      "decide",
+      "design",
+      "author",
+      "facilitate",
+      "build",
+      "transform",
+      "assure",
+      "operate",
+      "publish",
+      "learn"
+    ],
+    "kernelStages": ["K0", "K1", "K2", "K3", "K4", "K5", "K6"],
+    "topologies": [
+      "linear",
+      "iterative",
+      "dag",
+      "reactive",
+      "continuous",
+      "exploratory",
+      "human_cadenced"
+    ],
+    "humanCoupling": [
+      "autonomous",
+      "supervised",
+      "approval_required",
+      "collaborative",
+      "human_led"
+    ],
+    "changeSurfaces": [
+      "code",
+      "configuration",
+      "infrastructure",
+      "data",
+      "documents",
+      "knowledge",
+      "public_channel",
+      "external_system",
+      "organization",
+      "human",
+      "finance",
+      "legal"
+    ]
+  }
+}
