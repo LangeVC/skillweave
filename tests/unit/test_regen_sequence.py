@@ -62,7 +62,7 @@ def _run_cli(argv):
 def test_generate_review_briefs_writes_one_brief_per_lane():
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
-        written = rs.generate_review_briefs(_FIXTURE, out)
+        written = rs.generate_review_briefs(_FIXTURE, out, document_index=0)
         names = {p.name for p in written}
         assert "review-brief-lane-alpha.md" in names
         assert "review-brief-lane-beta.md" in names
@@ -78,7 +78,7 @@ def test_generate_review_briefs_writes_one_brief_per_lane():
 def test_brief_carries_lane_id_task_ids_and_criteria():
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
-        rs.generate_review_briefs(_FIXTURE, out)
+        rs.generate_review_briefs(_FIXTURE, out, document_index=0)
         alpha = (out / "review-brief-lane-alpha.md").read_text(encoding="utf-8")
         assert "- Lane ID: lane-alpha" in alpha
         assert "- ALPHA-001" in alpha
@@ -92,7 +92,7 @@ def test_brief_carries_lane_id_task_ids_and_criteria():
 def test_brief_reads_gates_as_acceptance_criteria():
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
-        rs.generate_review_briefs(_FIXTURE, out)
+        rs.generate_review_briefs(_FIXTURE, out, document_index=0)
         gamma = (out / "review-brief-lane-gamma.md").read_text(encoding="utf-8")
         assert "gamma criterion one" in gamma
         assert "gamma criterion two" in gamma
@@ -103,7 +103,9 @@ def test_brief_reads_gates_as_acceptance_criteria():
 
 def test_cli_generate_review_briefs_flag():
     with tempfile.TemporaryDirectory() as tmp:
-        rc, out = _run_cli(["--generate-review-briefs", str(_FIXTURE), "--out", tmp])
+        rc, out = _run_cli(
+            ["--generate-review-briefs", str(_FIXTURE), "--out", tmp]
+        )
         assert rc == 0
         files = list(Path(tmp).glob("review-brief-*.md"))
         assert len(files) == 3
@@ -245,3 +247,100 @@ def test_from_prd_fails_closed_on_malformed_prd():
             pass
         else:
             raise AssertionError("expected a fail-closed error for sequence-less PRD")
+
+
+def test_multi_document_yaml_second_candidate():
+    """Multi-doc YAML: the second document (re-review) produces independent lanes."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        written = rs.generate_review_briefs(_FIXTURE, out, document_index=1)
+        assert len(written) >= 2  # lane-alpha and lane-gamma in second doc
+        names = {p.name for p in written}
+        assert "review-brief-lane-alpha.md" in names
+        assert "review-brief-lane-gamma.md" in names
+        alpha = (out / "review-brief-lane-alpha.md").read_text(encoding="utf-8")
+        assert "re-review" in alpha
+        assert "alpha criterion three" in alpha
+
+
+def test_multi_document_yaml_both_candidates_no_collision():
+    """Both documents processed: lanes from doc 1 and doc 2 are both written."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        written = rs.generate_review_briefs(_FIXTURE, out)
+        assert len(written) >= 5  # 3 lanes doc0 + 2 lanes doc1
+        # Both criterion sets present in the output (last write wins for
+        # same-named files, so verify both documents were read).
+        alpha = (out / "review-brief-lane-alpha.md").read_text(encoding="utf-8")
+        assert "re-review" in alpha  # doc1 overwrote doc0
+
+
+def test_candidate_sha_bound_into_brief():
+    """--candidate-sha binds the full SHA into the VERDICT template."""
+    expected_sha = "abcdef0123456789abcdef0123456789abcdef01"
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        rs.generate_review_briefs(
+            _FIXTURE, out, candidate_sha=expected_sha, document_index=0
+        )
+        alpha = (out / "review-brief-lane-alpha.md").read_text(encoding="utf-8")
+        assert expected_sha in alpha
+        assert "- Reviewed SHA: abcdef0123456789abcdef0123456789abcdef01" in alpha
+
+
+def test_candidate_sha_no_placeholder_in_verdict():
+    """When candidate_sha is provided, '<full 40-hex SHA>' placeholder is absent."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        rs.generate_review_briefs(
+            _FIXTURE, out, candidate_sha="aabbccddee00112233445566778899aabbccddee",
+            document_index=0,
+        )
+        alpha = (out / "review-brief-lane-alpha.md").read_text(encoding="utf-8")
+        assert "aabbccddee00112233445566778899aabbccddee" in alpha
+        assert "<full 40-hex" not in alpha
+
+
+def test_cli_candidate_sha_flag():
+    """CLI --candidate-sha flag propagates into brief VERDICT."""
+    sha = "1111111111222222222233333333334444444444"
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, out = _run_cli(
+            [
+                "--generate-review-briefs", str(_FIXTURE),
+                "--out", tmp,
+                "--candidate-sha", sha,
+            ]
+        )
+        assert rc == 0
+        alpha = (Path(tmp) / "review-brief-lane-alpha.md").read_text(encoding="utf-8")
+        assert sha in alpha
+
+
+def test_brief_uses_pwd_not_static_worktree_path():
+    """Brief renders Worktree as '$PWD' — never a static .worktrees path."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        rs.generate_review_briefs(_FIXTURE, out, document_index=0)
+        alpha = (out / "review-brief-lane-alpha.md").read_text(encoding="utf-8")
+        assert "- Worktree: $PWD" in alpha
+        assert ".worktrees" not in alpha
+
+
+def test_second_document_judged_independently():
+    """Second-worktree fixture judges the second candidate without prompt edits.
+
+    The second document in the multi-doc YAML represents a re-review candidate.
+    When processed independently (document_index=1), it produces briefs with
+    the re-review criteria and no first-review-only criteria.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp)
+        written = rs.generate_review_briefs(_FIXTURE, out, document_index=1)
+        assert len(written) >= 2
+        gamma = (out / "review-brief-lane-gamma.md").read_text(encoding="utf-8")
+        # Re-review criteria present
+        assert "gamma criterion one (re-review)" in gamma
+        # First-review-only criteria not present
+        assert "gamma criterion three" not in gamma
+        assert "gamma gate" not in gamma
