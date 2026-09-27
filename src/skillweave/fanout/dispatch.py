@@ -351,6 +351,7 @@ def fan_out_dispatch(
     timeout: Optional[float] = None,
     artifact_store: Optional[Any] = None,
     on_child_lifecycle: Optional[Callable[..., None]] = None,
+    env: Optional[dict[str, str]] = None,
 ) -> FanOutResult:
     """Start every command as a real process, then wait for all.
 
@@ -477,6 +478,7 @@ def fan_out_dispatch(
                 model=resolved_models[index],
                 created_at=created_at,
                 cwd=child_cwd,
+                env=env,
             )
         except Exception as exc:  # noqa: BLE001
             # A child that never spawned is a launch failure, never a silent

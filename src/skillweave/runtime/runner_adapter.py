@@ -409,6 +409,7 @@ def start_process(
     model: str,
     created_at: Optional[str] = None,
     cwd: Optional[str] = None,
+    env: Optional[dict[str, str]] = None,
 ) -> RunningProcess:
     """Start ``command`` as a real process and return a live handle.
 
@@ -420,13 +421,22 @@ def start_process(
     ``wait(timeout=...)`` can kill every descendant it spawned. Use
     ``start_process`` when the caller needs cancel/timeout semantics;
     ``run_command`` is the blocking convenience wrapper over it.
+
+    ``env`` (optional) is a set of extra environment variables merged into the
+    child process's environment. The worker can discover the message channel
+    via ``os.environ["SW_MSG_CHANNEL"]`` when ``env`` carries that key.
     """
+    child_env = None
+    if env:
+        child_env = dict(os.environ)
+        child_env.update(env)
     proc = subprocess.Popen(
         list(command),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=cwd,
+        env=child_env,
         start_new_session=True,
     )
     return RunningProcess(
@@ -453,6 +463,7 @@ def run_command(
     input_bytes: Optional[bytes] = None,
     timeout: Optional[float] = None,
     cwd: Optional[str] = None,
+    env: Optional[dict[str, str]] = None,
 ) -> ProcessResult:
     """Run ``command`` to completion and return bound evidence.
 
@@ -462,6 +473,9 @@ def run_command(
     ``termination == "timed_out"`` result rather than raising; a worker that
     dies without producing a result is reported as a failure with a message,
     never a silent success.
+
+    ``env`` (optional) is forwarded to ``start_process`` for the subprocess
+    environment.
     """
     handle = start_process(
         command,
@@ -472,6 +486,7 @@ def run_command(
         model=model,
         created_at=created_at,
         cwd=cwd,
+        env=env,
     )
     return handle.wait(timeout=timeout, input_bytes=input_bytes)
 
