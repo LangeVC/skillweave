@@ -1,8 +1,8 @@
 """The unified SkillWeave CLI router.
 
-Besides the four delegation subcommands (``dispatch``, ``run``, ``rework``,
-``planning-sync``), this module owns the interactive/JSON **entry** surface
-(SW-156-ENTRY-003). ``skillweave entry`` resolves a typed intent through the
+Besides the delegation subcommands (``dispatch``, ``run``, ``rework``,
+``planning-sync``, ``assess``), this module owns the interactive/JSON **entry**
+surface (SW-156-ENTRY-003). ``skillweave entry`` resolves a typed intent through the
 shared :class:`skillweave.entry.EntryService` contract (SW-156-ENTRY-001) and
 answers in one of two registers:
 
@@ -47,6 +47,7 @@ from skillweave.cli import onboard as onboard_mod
 from skillweave.dispatch import cli as dispatch
 from skillweave.cli import observe as observe_mod
 from skillweave.cli import planning_sync as planning_sync_mod
+from skillweave.cli import assess as assess_mod
 
 # ── Entry exit semantics (SW-156-ENTRY-003) ─────────────────────────────────
 
@@ -154,6 +155,14 @@ def _build_parser(prog: str = "skillweave") -> argparse.ArgumentParser:
         add_help=False,
     )
 
+    # `assess` subcommand -- read-only, tamper-evident assessment receipt
+    subparsers.add_parser(
+        "assess",
+        help="Run a read-only assessment and emit the sealed receipt as JSON",
+        parents=[assess_mod.build_parser()],
+        add_help=False,
+    )
+
     return parser
 
 
@@ -197,6 +206,8 @@ def main(
         return rework.main(subcommand_argv(args_list))
     elif args.command == "planning-sync":
         return planning_sync_mod.main(subcommand_argv(args_list))
+    elif args.command == "assess":
+        return assess_mod.main(subcommand_argv(args_list))
     else:
         parser.print_help()
         return 1
@@ -210,7 +221,7 @@ def subcommand_argv(args_list: Sequence[str]) -> list:
     from the subcommand's own index is correct for both call styles.
     """
     for index, token in enumerate(args_list):
-        if token in ("onboard", "entry", "dispatch", "run", "rework", "planning-sync"):
+        if token in ("onboard", "entry", "dispatch", "run", "rework", "planning-sync", "assess"):
             return list(args_list[index + 1:])
     return []
 

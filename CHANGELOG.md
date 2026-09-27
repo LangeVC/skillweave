@@ -1,3 +1,14 @@
+## v1.5.7 (2026-09-27) — Lifecycle Closeout and Remediation
+
+SkillWeave v1.5.7 introduces the fully integrated Lifecycle Closeout system, bringing robust transactionality, tamper-evident telemetry, and durable retrospective persistence to the pipeline.
+
+### Highlights
+- **Transactional Closeout**: Workspaces are now removed via an idempotent, fsynced journal. Duplicate mutations are prevented, and crashes during the mutation window are handled gracefully.
+- **Tamper-Evident Telemetry**: Privacy validations now cover both keys and values, proactively redacting secrets and absolute paths from the telemetry stream.
+- **Durable Retrospectives**: Retrospective synchronization is now fully atomic (`mkstemp` -> `os.replace`), ensuring no torn reads or data loss during sync.
+- **Strict Evidence Boundaries**: Missing or incomplete evidence now strictly forces a hold instead of silently closing out.
+- **Remediation Slicing**: Introduced a new `byteplus-deepseek-pro` escalation pathway to slice multi-domain failures into disjoint micro-lanes and repair blocking gates autonomously.
+
 # SkillWeave Changelog
 ## v1.5.6 (2026-09-26) — Universal Entry and Onboarding Ecosystem
 

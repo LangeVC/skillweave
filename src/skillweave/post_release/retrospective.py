@@ -1,7 +1,16 @@
 from __future__ import annotations
+import os
+import tempfile
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Union
+
+
+#: The durable area a retrospective belongs to. This is the area name the
+#: persistence layer declares (GENERATED, DURABLE, SEALED) and the name the
+#: planning-sync backing store carries to the org planning repository.
+RETRO_AREA = "retrospectives"
 
 
 @dataclass
@@ -72,3 +81,105 @@ def format_retro_report(items: list[RetroItem]) -> str:
     lines.append(f"_Observe-Report kann unter `/skillweave-observe command=\"report\" session=\"<id>\"` eingebettet werden._\n")
 
     return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# Durable sync
+# --------------------------------------------------------------------------- #
+
+
+def _document_bytes(document: Union[str, bytes]) -> bytes:
+    return document if isinstance(document, bytes) else document.encode("utf-8")
+
+
+def atomic_write_text(path: Path, data: Union[str, bytes]) -> None:
+    """Write ``path`` atomically and durably — readers never see a torn file.
+
+    The document is written to a sibling temp file in the same directory, flushed
+    and ``fsync``-ed, then ``os.replace``-d over the destination. Because the
+    replace is atomic within one filesystem, a reader either sees the complete
+    previous document or the complete new one, never a partial write; and because
+    the file's contents are fsync-ed before the rename, the payload survives a
+    crash that follows a reported success. The containing directory is fsync-ed
+    last so the rename itself is durable.
+    """
+    path = Path(path)
+    directory = path.parent
+    directory.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(directory), prefix=f".{path.name}.", suffix=".tmp"
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(_document_bytes(data))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        _fsync_directory(directory)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Make a rename durable. Best-effort: not every platform allows it."""
+    try:
+        fd = os.open(str(directory), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def sync_retrospective(
+    persistence: "SkillWeavePersistence",  # noqa: F821 - duck-typed, avoids import cycle
+    release_version: str,
+    document: str,
+) -> object:
+    """Persist a retrospective document into the durable ``retrospectives`` area.
+
+    Writes ``.skillweave/retrospectives/vX.Y.Z.md`` — the exact payload the
+    planning-sync contract expects (see
+    ``tests/unit/test_planning_sync.py::test_retrospectives_sync_to_planning_retrospectives``),
+    then carries that area to its backing store. Durability is not assumed: the
+    sync reports what it carried, so an unreachable destination surfaces rather
+    than being silently accepted.
+
+    The write is atomic and durable rather than a bare ``write_text``: the
+    document is fsync-ed to a temporary sibling and renamed into place (see
+    :func:`atomic_write_text`), so an interrupted or crashing sync can never
+    leave a truncated retrospective behind.
+
+    ``persistence`` is any object exposing ``skillweave_dir`` (a
+    :class:`~skillweave.persistence.SkillWeavePersistence`), and the sync is
+    delegated to :func:`skillweave.runtime.resolve_runtime_store` so this module
+    never hard-codes git-vs-planning-sync.
+    """
+    from skillweave.runtime import resolve_runtime_store
+
+    root = getattr(persistence, "skillweave_dir", None)
+    if root is None:
+        raise ValueError(
+            "sync_retrospective needs a persistence object exposing skillweave_dir"
+        )
+    root = Path(root)
+    retro_dir = root / RETRO_AREA
+
+    document_path = retro_dir / f"v{release_version}.md"
+    atomic_write_text(document_path, document)
+
+    project_root = root.parent
+    store = resolve_runtime_store(str(project_root))
+    sync = getattr(store, "sync", None)
+    if store is None or sync is None:
+        # No store configured, or one that cannot carry an area (e.g. the
+        # local-only adapter): report the payload at risk rather than claiming
+        # a durability that was not realised.
+        return {"area": RETRO_AREA, "carried": [document_path.name], "at_risk": True}
+    return sync(RETRO_AREA, str(project_root))

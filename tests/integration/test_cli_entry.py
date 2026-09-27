@@ -594,6 +594,7 @@ def test_router_still_registers_every_subcommand():
         "rework",
         "planning-sync",
         "onboard",
+        "assess",
     }
 
 
@@ -723,7 +724,7 @@ def test_product_version_matches_the_declared_release():
     test honest across releases, while the literal pin records what the
     published envelope said when the contract was written.
     """
-    assert product_version() == _pyproject_version() == "1.5.5"
+    assert product_version() == _pyproject_version() == "1.5.7"
 
 
 def _router_parser():

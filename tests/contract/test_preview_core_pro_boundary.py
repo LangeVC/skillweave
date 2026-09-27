@@ -57,6 +57,7 @@ SDK_OWNED_SCHEMA_FILENAMES = (
 # lifecycle contract. Their presence is the legitimate Core set; anything in
 # SDK_OWNED_SCHEMA_FILENAMES appearing under Core schemas/ is drift.
 CORE_OWNED_SCHEMA_FILENAMES = (
+    "assessment-receipt.schema.json",
     "dispatch-handoff.schema.json",
     "dispatch-sequence.schema.json",
     "dispatch-trace.schema.json",
@@ -64,6 +65,7 @@ CORE_OWNED_SCHEMA_FILENAMES = (
     "dual-review-attestation.schema.json",
     "gate-1312-manifest.schema.json",
     "harness-capability.schema.json",
+    "launch-receipt.schema.json",
     "prompt-sequence.schema.json",
     "run-state.schema.json",
     "transfer-entry.schema.json",
