@@ -1,0 +1,240 @@
+# SkillWeave Lifecycle Support Matrix
+#
+# SW-160-BREADTH-001. The canonical, cross-referenced support matrix.
+#
+# This file is DATA — a human-readable overview of every category, lifecycle
+# phase, evidence class and irreversible surface the SkillWeave lifecycle
+# supports.  Every entry is cross-checked against the canonical contracts
+# (schemas/lifecycle-contracts/contract-lock.json, src/skillweave/lifecycle.py,
+# src/skillweave/runtime/__init__.py) at test time; the matrix is never an
+# unrelated list.
+#
+# A consumer that finds an unsupported category, phase, evidence class or
+# surface here should open an issue — the matrix documents the closed set.
+
+meta:
+  title: "SkillWeave Lifecycle Support Matrix"
+  version: "1.0.0"
+  contract_set: "skillweave-lifecycle-contracts"
+  contract_set_version: "1.0.0"
+  canonical_sources:
+    categories: "schemas/lifecycle-contracts/contract-lock.json → vocabulary.categories"
+    kernel_stages: "schemas/lifecycle-contracts/contract-lock.json → vocabulary.kernelStages"
+    topologies: "schemas/lifecycle-contracts/contract-lock.json → vocabulary.topologies"
+    human_coupling: "schemas/lifecycle-contracts/contract-lock.json → vocabulary.humanCoupling"
+    change_surfaces: "schemas/lifecycle-contracts/contract-lock.json → vocabulary.changeSurfaces"
+    lifecycle_phases: "src/skillweave/lifecycle.py → PHASES"
+    lifecycle_bundles: "src/skillweave/lifecycle.py → BUNDLES"
+    evidence_strengths: "schemas/lifecycle-contracts/evidence-contract.schema.json → $defs.evidenceStrength.enum"
+    irreversible_surfaces: "src/skillweave/runtime/__init__.py → IRREVERSIBLE_SURFACES"
+
+# ── Work categories (11, closed vocabulary) ─────────────────────────────────
+#
+# Every category is a first-class work type with no custom-code exception.
+# Unknown categories fail closed with a typed reason (UnknownCategoryError).
+categories:
+  - id: research
+    description: "Exploration and knowledge synthesis; claims backed by attributed sources"
+    topologies: [linear, exploratory, iterative]
+    default_human_coupling: collaborative
+    example_profile: profiles/research-synthesis.v1.yaml
+  - id: decide
+    description: "Decision-making under uncertainty; structured trade-off analysis"
+    topologies: [linear, dag]
+    default_human_coupling: approval_required
+    example_profile: null
+  - id: design
+    description: "Creative and architectural design; UX, system design, visual design"
+    topologies: [iterative, exploratory]
+    default_human_coupling: collaborative
+    example_profile: null
+  - id: author
+    description: "Content authoring and documentation; narrative, specification, knowledge-base entries"
+    topologies: [linear, iterative]
+    default_human_coupling: supervised
+    example_profile: null
+  - id: facilitate
+    description: "Facilitation and workshop delivery; structured collaboration, decision recording"
+    topologies: [linear, human_cadenced]
+    default_human_coupling: human_led
+    example_profile: null
+  - id: build
+    description: "Software and system construction; implementation, testing, integration"
+    topologies: [iterative, dag]
+    default_human_coupling: supervised
+    example_profile: profiles/software-delivery.v2.yaml
+  - id: transform
+    description: "Data and system transformation; migration, refactoring, format conversion"
+    topologies: [linear, dag]
+    default_human_coupling: supervised
+    example_profile: null
+  - id: assure
+    description: "Quality assurance and validation; testing, auditing, compliance checking"
+    topologies: [linear, dag]
+    default_human_coupling: supervised
+    example_profile: null
+  - id: operate
+    description: "Production operation and maintenance; monitoring, incident response, SRE"
+    topologies: [reactive, continuous]
+    default_human_coupling: supervised
+    example_profile: null
+  - id: publish
+    description: "Publication and release; distribution, announcement, changelog"
+    topologies: [linear, continuous]
+    default_human_coupling: approval_required
+    example_profile: null
+  - id: learn
+    description: "Learning and skill acquisition; study, practice, assessment, reflection"
+    topologies: [linear, iterative]
+    default_human_coupling: autonomous
+    example_profile: null
+
+# ── Lifecycle phases (7, canonical order) ───────────────────────────────────
+#
+# Mapped onto kernel stages (K0-K6) for domain-neutral consumption.
+lifecycle_phases:
+  - id: discovery
+    order: 1
+    kernel_stage: K0
+    phase_type: optional
+    skills: [skillweave-discovery, skillweave-blueprint, skillweave-council]
+  - id: blueprint
+    order: 2
+    kernel_stage: K1
+    phase_type: recommended
+    skills: [skillweave-blueprint, skillweave-promptchain-generate, skillweave-promptchain-validate]
+  - id: design
+    order: 3
+    kernel_stage: K2
+    phase_type: optional
+    skills: [skillweave-design, frontend-design]
+  - id: build
+    order: 4
+    kernel_stage: K3
+    phase_type: core
+    skills: [skillweave-promptchain-execute, skillweave-releasechain, skillweave-observe]
+  - id: release
+    order: 5
+    kernel_stage: K4
+    phase_type: core
+    skills: [skillweave-releasechain, skillweave-observe]
+  - id: launch
+    order: 6
+    kernel_stage: K5
+    phase_type: optional
+    skills: [skillweave-launch]
+  - id: post-release
+    order: 7
+    kernel_stage: K6
+    phase_type: optional
+    skills: [skillweave-post-release, skillweave-repo-health, skillweave-observe, skillweave-discovery]
+
+# ── Lifecycle bundles ───────────────────────────────────────────────────────
+lifecycle_bundles:
+  - id: full-lifecycle
+    phases: [discovery, blueprint, design, build, release, launch, post-release]
+  - id: discovery-to-blueprint
+    phases: [discovery, blueprint]
+  - id: design-and-build
+    phases: [design, build]
+  - id: release-and-launch
+    phases: [release, launch]
+  - id: post-release-improvement
+    phases: [post-release, blueprint, build]
+
+# ── Kernel stages (7, domain-neutral) ──────────────────────────────────────
+kernel_stages: [K0, K1, K2, K3, K4, K5, K6]
+
+# ── Execution topologies (7, closed) ────────────────────────────────────────
+topologies:
+  - id: linear
+    description: "Sequential, one-step-at-a-time execution"
+  - id: iterative
+    description: "Repeated refinement cycles converging on a result"
+  - id: dag
+    description: "Directed acyclic graph of parallel and sequenced work"
+  - id: reactive
+    description: "Event-driven execution responding to external triggers"
+  - id: continuous
+    description: "Uninterrupted streaming or polling execution"
+  - id: exploratory
+    description: "Branching investigation with backtracking and dead ends"
+  - id: human_cadenced
+    description: "Human-paced execution with synchronous checkpoints"
+
+# ── Human-coupling levels (5, closed) ──────────────────────────────────────
+human_coupling:
+  - id: autonomous
+    description: "No human-in-the-loop; agent acts independently"
+    gates_irreversible: false
+  - id: supervised
+    description: "Human oversight with ability to intervene"
+    gates_irreversible: false
+  - id: approval_required
+    description: "Explicit human approval needed before action"
+    gates_irreversible: true
+  - id: collaborative
+    description: "Human and agent work together interactively"
+    gates_irreversible: true
+  - id: human_led
+    description: "Human directs each step; agent follows"
+    gates_irreversible: true
+
+# ── Change surfaces (12, closed) ────────────────────────────────────────────
+change_surfaces:
+  - id: code
+    irreversible: false
+  - id: configuration
+    irreversible: false
+  - id: infrastructure
+    irreversible: false
+  - id: data
+    irreversible: false
+  - id: documents
+    irreversible: false
+  - id: knowledge
+    irreversible: false
+  - id: public_channel
+    irreversible: true
+  - id: external_system
+    irreversible: false
+  - id: organization
+    irreversible: true
+  - id: human
+    irreversible: true
+  - id: finance
+    irreversible: true
+  - id: legal
+    irreversible: true
+
+# ── Irreversible surfaces (5) ──────────────────────────────────────────────
+irreversible_surfaces:
+  - organization
+  - human
+  - finance
+  - legal
+  - public_channel
+
+# ── Evidence strengths (3, closed) ──────────────────────────────────────────
+evidence:
+  strengths:
+    - id: declared
+      description: "Claimed without independent reproduction"
+      rank: 1
+    - id: reproduced
+      description: "Independently reproduced by another evaluator"
+      rank: 2
+    - id: independently_verified
+      description: "Verified by a third party with no shared interest"
+      rank: 3
+
+# ── Supported evidence requirement kinds ────────────────────────────────────
+# Evidence kinds are open (pattern-validated, not enum-closed). The list below
+# documents every kind used by the shipped WorkProfile fixtures.
+evidence_kinds:
+  - source-citation
+  - contradiction-analysis
+  - independent-review
+  - test-results
+  - review-attestation
+  - build-artifact
