@@ -2,6 +2,10 @@
 # Minimal build-format sequence used by the review-brief unit tests. Three
 # lanes across two phases: a parallel lane, a serialized lane, and a
 # top-level operator lane, so extract_lanes exercises every grouping.
+#
+# Multi-document: first doc = first review candidate, second doc = re-review
+# candidate. The second-worktree fixture judges the second candidate
+# independently, without prompt edits.
 session_boundary: batch
 sequence_id: seq-sw151-brief-test
 sequence_type: build
@@ -58,3 +62,51 @@ phases:
         modifies: ["src/alpha.py"]
         gates:
           - "gamma gate"
+---
+# Second candidate — re-review fixture. Same lane IDs but different base SHA,
+# branch, and criteria. The second-worktree fixture judges this candidate
+# independently, without prompt edits.
+session_boundary: batch
+sequence_id: seq-sw151-re-review
+sequence_type: build
+execution_mode: ralph_attended
+worktree: langevc/wt-sw151-re
+branch: feature/sw-151-brief-fix-v2
+base: main b83b34b
+state_file: .brief-re-state.md
+runner_shell: bash -eo pipefail
+phases:
+  - level: 0
+    name: setup
+    session: separate
+    dispatches_total: 1
+    parallel_lanes:
+      - id: lane-alpha
+        criteria:
+          - "alpha criterion one"
+          - "alpha criterion two (re-review: verify fix applied)"
+          - "alpha criterion three (re-review: no regression)"
+        dispatches: ["ALPHA-001", "ALPHA-002"]
+        points: 3
+        worktree: langevc/wt-alpha-re
+        branch: feat/alpha-fix
+        creates: "src/alpha.py"
+        tests: "tests/test_alpha.py"
+        verification:
+          - "run tests/test_alpha.py"
+          - "confirm fix addresses prior review finding"
+          - "spot-check src/alpha.py against the brief"
+  - level: 1
+    name: verify
+    session: separate
+    dispatches_total: 1
+    serialized_lanes:
+      - id: lane-gamma
+        criteria:
+          - "gamma criterion one (re-review)"
+          - "gamma criterion two (re-review)"
+        dispatches: ["GAMMA-001"]
+        points: 8
+        worktree: langevc/wt-gamma-re
+        branch: feat/gamma-fix
+        modifies: ["src/alpha.py"]
