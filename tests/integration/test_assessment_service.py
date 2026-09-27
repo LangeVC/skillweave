@@ -418,6 +418,27 @@ def test_cli_exits_two_for_a_malformed_subject(tmp_path, capsys):
     assert "Traceback" not in captured.err
 
 
+@pytest.mark.parametrize("bad_path", [12345, None, True, "bad\u0000x"])
+def test_cli_exits_two_for_a_malformed_source_path(tmp_path, capsys, bad_path):
+    # A source path is joined onto the root inside the service, so a non-string
+    # (or NUL-bearing) path would raise TypeError/ValueError *past* the CLI's
+    # ``except AssessmentError`` -- a raw traceback with exit 1, a code that
+    # collides with the documented ``unavailable`` outcome. The request boundary
+    # must refuse it as a usage error (exit 2, no traceback) instead.
+    document = _request_document(_request([SourceSpec(path="whatever.txt")]))
+    document["sources"] = [{"path": bad_path, "sha256": None}]
+    request_path = tmp_path / "request.json"
+    request_path.write_text(json.dumps(document), encoding="utf-8")
+
+    exit_code = assess_mod.main(["--root", str(tmp_path), "--request", str(request_path)])
+
+    assert exit_code == assess_mod.EXIT_ERROR
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "ERROR:" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_cli_is_routed_by_the_main_router(tmp_path, capsys, monkeypatch):
     # The subcommand is reachable through the unified router, not only via its
     # own module -- the four registration seams must all be threaded.

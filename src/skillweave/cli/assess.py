@@ -93,6 +93,24 @@ def _opt_str(document: dict, key: str) -> Optional[str]:
     return value
 
 
+def _path_str(entry: dict, key: str, label: str) -> str:
+    """Return ``entry[key]`` as a usable path string, or refuse it here.
+
+    ``resolve_source`` joins this value onto the root, so a non-string (or a
+    string carrying a NUL byte, which the filesystem layer rejects) would raise
+    ``TypeError``/``ValueError`` deep inside the service -- past the CLI's
+    ``except AssessmentError`` and out as a raw traceback with an exit code that
+    collides with the documented ``unavailable`` outcome. Refusing it at the
+    request boundary keeps the promise that a malformed request is exit 2.
+    """
+    value = entry.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{label}.{key} must be a non-empty string, got {value!r}")
+    if "\x00" in value:
+        raise ValueError(f"{label}.{key} must not contain a NUL byte")
+    return value
+
+
 def _build_request(document: Any) -> AssessmentRequest:
     """Turn a JSON request document into a typed :class:`AssessmentRequest`.
 
@@ -105,7 +123,12 @@ def _build_request(document: Any) -> AssessmentRequest:
     sources = []
     for index, entry in enumerate(document.get("sources") or []):
         entry = _as_mapping(entry, f"sources[{index}]")
-        sources.append(SourceSpec(path=entry["path"], sha256=entry.get("sha256")))
+        sources.append(
+            SourceSpec(
+                path=_path_str(entry, "path", f"sources[{index}]"),
+                sha256=entry.get("sha256"),
+            )
+        )
 
     findings = []
     for index, entry in enumerate(document.get("findings") or []):
