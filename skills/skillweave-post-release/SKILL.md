@@ -42,6 +42,18 @@ Jede Retrospektive folgt dieser Struktur:
 
 Action Items use P1 (blocker), P2 (next iteration), P3 (backlog) priority.
 
+## Persistence
+
+Retrospective reports are persisted automatically under the substrate contract:
+
+- **Path:** `.skillweave/retrospectives/vX.Y.Z.md` (where X.Y.Z is the release version)
+- **Durability:** DURABLE — retrospectives survive a fresh workspace
+- **Disclosure:** SEALED — not disclosed outside the machine unless synced
+
+Retrospectives authored at `.skillweave/retrospectives/vX.Y.Z.md` are carried to
+the configured planning repository under `.skillweave/planning/retrospectives/`
+via the planning-sync backing store. No manual copy is required.
+
 ## Observe Integration
 
 - `command="retrospective"` kann einen observe-report einbetten:
