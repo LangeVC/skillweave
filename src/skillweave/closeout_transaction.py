@@ -679,6 +679,7 @@ class CloseoutTransaction:
         prior_records = read_journal(self.journal_path)
         prior = _latest_states(prior_records)
         resume = bool(prior_records)
+        completed_in_pass = set()
 
         for authorization in authorizations:
             if not isinstance(authorization, CleanupAuthorization):
@@ -687,6 +688,10 @@ class CloseoutTransaction:
                     f"{type(authorization).__name__}"
                 )
             identity = authorization.identity
+            if identity.key in completed_in_pass:
+                continue
+            completed_in_pass.add(identity.key)
+
             path = identity.path_under(collection)
             existing = prior.get(identity.key)
 
