@@ -387,6 +387,9 @@ class EventType(str, Enum):
     PROCESS_TERMINAL = "process_terminal"
     EVIDENCE_RECORDED = "evidence_recorded"
     LANE_TERMINAL = "lane_terminal"
+    INTERVENTION_RESTART = "intervention_restart"
+    INTERVENTION_MALFORMED = "intervention_malformed"
+    INTERVENTION_DESYNC = "intervention_desync"
 
 
 class ProcessStatus(str, Enum):

@@ -826,6 +826,7 @@ class DispatchRun:
     observer_mode: Optional[str] = None
     remediation_plan: Optional[dict[str, Any]] = None
     budget_receipt: Optional[dict[str, Any]] = None
+    intervention_closeout: Optional[dict[str, Any]] = None
 
     @property
     def job_records(self) -> list[dict[str, Any]]:
@@ -1515,6 +1516,18 @@ class OperatorDispatchApplication:
         if cleanup_error is not None:
             raise cleanup_error
 
+        # ── Intervention closeout: provider-free telemetry consumption ────
+        intervention_closeout: Optional[dict[str, Any]] = None
+        try:
+            from skillweave.telemetry_intervention import InterventionCloseout
+
+            tee_events = _replay_tee_events(tee)
+            closeout = InterventionCloseout()
+            closeout.consume(tee_events)
+            intervention_closeout = closeout.snapshot()
+        except Exception:  # noqa: BLE001
+            intervention_closeout = None
+
         return DispatchRun(
             run_id=run_id,
             wave=wave,
@@ -1532,6 +1545,7 @@ class OperatorDispatchApplication:
             observer_mode=observer_mode,
             remediation_plan=getattr(self, "_remediation_plan", None),
             budget_receipt=getattr(self, "_budget_receipt", None),
+            intervention_closeout=intervention_closeout,
         )
 
     # -- lane execution helpers --------------------------------------------
