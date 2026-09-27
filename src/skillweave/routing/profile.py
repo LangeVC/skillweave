@@ -220,6 +220,7 @@ class Limits:
     min_models_required: int = 2
     on_model_failure: str = "skip"
     heartbeat_interval: float = 5.0
+    max_turns: int = 0
 
     _VALID_FAILURE_BEHAVIOUR = frozenset({"skip", "retry", "abort"})
 
@@ -234,12 +235,18 @@ class Limits:
         heartbeat_interval = cls._validate_heartbeat_interval(
             data.get("heartbeat_interval", 5.0)
         )
+        max_turns = int(data.get("max_turns", 0))
+        if max_turns < 0:
+            raise RoutingProfileError(
+                f"max_turns must be non-negative, got {max_turns}"
+            )
         return cls(
             timeout=float(data.get("timeout", 60.0)),
             max_retries=int(data.get("max_retries", 1)),
             min_models_required=int(data.get("min_models_required", 2)),
             on_model_failure=behaviour,
             heartbeat_interval=heartbeat_interval,
+            max_turns=max_turns,
         )
 
     @staticmethod
@@ -333,6 +340,7 @@ class RoutingProfile:
                 "min_models_required": self.limits.min_models_required,
                 "on_model_failure": self.limits.on_model_failure,
                 "heartbeat_interval": self.limits.heartbeat_interval,
+                "max_turns": self.limits.max_turns,
             },
             "roles": {
                 key: _role_to_dict(role) for key, role in self.roles.items()

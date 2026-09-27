@@ -61,6 +61,10 @@ from skillweave.dispatch.profile_resolution import (
     ResolvedDispatch,
     resolve_dispatch_profile,
 )
+from skillweave.dispatch.remediation import (
+    RemediationPlan,
+    plan_remediation,
+)
 from skillweave.routing.harness import HarnessError
 from skillweave.trace.contracts import (
     AppendOnlyReceiptLog,
@@ -820,6 +824,8 @@ class DispatchRun:
     integrator_assignment: Optional[Any] = None
     observer: Optional[dict[str, Any]] = None
     observer_mode: Optional[str] = None
+    remediation_plan: Optional[dict[str, Any]] = None
+    budget_receipt: Optional[dict[str, Any]] = None
 
     @property
     def job_records(self) -> list[dict[str, Any]]:
@@ -972,6 +978,8 @@ class DispatchRun:
             "scope": "wave",
             "observer": self.observer,
             "observer_mode": self.observer_mode,
+            "remediation_plan": self.remediation_plan,
+            "budget_receipt": self.budget_receipt,
             "transport_compatibility": "none (no stable 1.4 contract)",
         }
 
@@ -1376,6 +1384,28 @@ class OperatorDispatchApplication:
             policy = _failure_policy_of(resolved)
             max_retries = _max_retries_of(resolved)
 
+            # ── Remediation plan: split multi-domain failures ──────────────
+            failed_entries = [
+                {"lane_id": ln.id, "repo": ln.repo or "", "base": ln.base or ""}
+                for ln in failed
+            ]
+            remediation = plan_remediation(failed_entries, failure_round=rounds)
+            self._remediation_plan = remediation.to_dict()
+
+            # ── Budget receipt: severity/scope-derived max-turns ───────────
+            limits = getattr(resolved, "limits", None)
+            max_turns = getattr(limits, "max_turns", 0) if limits is not None else 0
+            self._budget_receipt = {
+                "max_turns": max_turns,
+                "severity_scope": _derive_severity_scope(
+                    declaration=declaration,
+                    failed_count=len(failed),
+                    multi_domain=remediation.multi_domain,
+                ),
+                "correction_rounds_consumed": rounds,
+                "remaining_turns": max(0, max_turns - rounds) if max_turns > 0 else None,
+            }
+
             def _typed(failed_lanes: list[Any]) -> list[Any]:
                 return [ln for ln in failed_lanes if self._typed_failure.get(ln.id, False)]
 
@@ -1500,6 +1530,8 @@ class OperatorDispatchApplication:
             integrator_assignment=enforcement.integrator_assignment,
             observer=observer_receipt,
             observer_mode=observer_mode,
+            remediation_plan=getattr(self, "_remediation_plan", None),
+            budget_receipt=getattr(self, "_budget_receipt", None),
         )
 
     # -- lane execution helpers --------------------------------------------
@@ -2418,6 +2450,31 @@ def _max_retries_of(resolved: ResolvedDispatch) -> int:
         return 0
     retries = getattr(limits, "max_retries", 0)
     return int(retries) if retries is not None else 0
+
+
+def _max_turns_of(resolved: ResolvedDispatch) -> int:
+    """The configured max-turns budget (profile ``limits.max_turns``)."""
+    limits = getattr(resolved, "limits", None)
+    if limits is None:
+        return 0
+    max_turns = getattr(limits, "max_turns", 0)
+    return int(max_turns) if max_turns is not None else 0
+
+
+def _derive_severity_scope(
+    *,
+    declaration: SequenceDeclaration,
+    failed_count: int,
+    multi_domain: bool,
+) -> str:
+    """Derive a severity/scope label from the dispatch state.
+
+    Used for the budget receipt: reflects whether the failure is isolated to
+    one domain or spans multiple, and how many lanes are affected.
+    """
+    if multi_domain:
+        return f"multi_domain_{failed_count}_of_{len(declaration.lanes)}"
+    return f"single_domain_{failed_count}_of_{len(declaration.lanes)}"
 
 
 def _typed_process_failure(children: list[Any]) -> bool:
