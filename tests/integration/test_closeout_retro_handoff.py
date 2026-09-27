@@ -304,6 +304,79 @@ def test_sync_retrospective_refuses_a_persistence_without_a_root():
         sync_retrospective(object(), "1.0.0", "x")
 
 
+def test_sync_retrospective_writes_durably_via_fsync_and_atomic_replace(tmp_path, monkeypatch):
+    """The durable write is fsync-ed to a temp file and atomically renamed.
+
+    A bare ``write_text`` leaves a torn file on crash and is not provably on
+    disk. This pins the durable shape: contents go to a sibling temp file, are
+    ``fsync``-ed, and are ``os.replace``-d into place — never truncating the
+    destination in the open.
+    """
+    import os
+
+    from skillweave.post_release import retrospective as mod
+
+    real_replace = os.replace
+    fsynced_fds: list[int] = []
+    real_fsync = os.fsync
+    replaced: list[tuple[str, str]] = []
+
+    def spy_fsync(fd: int) -> None:
+        fsynced_fds.append(fd)
+        return real_fsync(fd)
+
+    def spy_replace(src, dst) -> None:
+        replaced.append((str(src), str(dst)))
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(mod.os, "fsync", spy_fsync)
+    monkeypatch.setattr(mod.os, "replace", spy_replace)
+
+    persistence = SkillWeavePersistence(str(tmp_path))
+    document = "# Retrospective 9.9.9\n\n- durable\n"
+    sync_retrospective(persistence, "9.9.9", document)
+
+    written = Path(persistence.skillweave_dir) / RETRO_AREA / "v9.9.9.md"
+    assert written.is_file()
+    assert written.read_text() == document
+
+    # Contents were flushed to disk before the rename, and the rename was atomic.
+    assert fsynced_fds, "the document was not fsync-ed before being made visible"
+    assert len(replaced) == 1
+    src, dst = replaced[0]
+    assert dst == str(written)
+    assert Path(src).parent == written.parent, "temp file is not a same-dir sibling"
+    assert Path(src).suffix == ".tmp"
+
+    # No temp residue is left behind on success.
+    leftovers = [p.name for p in written.parent.iterdir() if p.name.endswith(".tmp")]
+    assert leftovers == [], leftovers
+
+
+def test_atomic_write_leaves_no_partial_document_when_the_write_fails(tmp_path):
+    """A failed write never exposes a torn document and cleans up its temp file."""
+    from skillweave.post_release.retrospective import atomic_write_text
+
+    target = tmp_path / "retrospectives" / "v1.0.0.md"
+    atomic_write_text(target, "complete")
+    assert target.read_text() == "complete"
+
+    class _Boom(Exception):
+        pass
+
+    class _ExplodingDocument(str):
+        def encode(self, *args, **kwargs):  # noqa: D401 - sabotage the payload
+            raise _Boom("disk full mid-write")
+
+    with pytest.raises(_Boom):
+        atomic_write_text(target, _ExplodingDocument("partial"))
+
+    # The previous complete document is intact — no torn state became visible.
+    assert target.read_text() == "complete"
+    leftovers = [p.name for p in target.parent.iterdir() if p.name.endswith(".tmp")]
+    assert leftovers == [], leftovers
+
+
 def test_handoff_seals_receipt_writes_document_and_syncs_the_durable_area():
     """The whole Step A handoff, through an explicit writer."""
     retro = _retro()
