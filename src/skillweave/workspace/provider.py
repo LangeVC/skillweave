@@ -160,6 +160,23 @@ class GitWorktreeProvider(WorkspaceProvider):
                 f"worktree HEAD '{head}' != pinned base '{resolved}'"
             )
 
+        # A ``git worktree add -b <branch> <path> <sha>`` creates the branch
+        # but leaves the worktree on a detached HEAD at ``<sha>``. Check out
+        # the branch so the worktree is *on* the declared branch (not detached)
+        # and the topology eligibility gate (``assess_eligibility``) passes.
+        # When the worktree is already on the branch (some git versions behave
+        # differently), this is a no-op.
+        self._git("checkout", branch, cwd=target)
+
+        # After checkout, verify we are no longer detached and are on the
+        # declared branch.
+        current_branch = self._git("rev-parse", "--abbrev-ref", "HEAD", cwd=target)
+        if current_branch != branch:
+            raise WorkspaceProviderError(
+                f"worktree is on '{current_branch}' after checkout, "
+                f"expected '{branch}'"
+            )
+
         attestation = Attestation(
             base_sha=resolved,
             branch=branch,

@@ -1,0 +1,96 @@
+# Contract CI — Cross-Repository Contract Validation (SW-160-CONTRACT-003)
+#
+# Validates the contract boundary between SkillWeave Core, the SDK, and
+# external consumers:
+#
+#   1. SDK, Core and external consumer pin full tested SHAs.
+#   2. Positive fixtures validate in all participating repositories.
+#   3. An intentional SDK drift makes the consumer gate red.
+#   4. Contract CI does not depend on an unpublished local checkout.
+#
+# The SDK is resolved from its pinned version in pyproject.toml, cloned from
+# the public mirror — never from a sibling checkout or unpublished path.
+
+name: Contract CI — Cross-Repo Contract Validation
+
+on:
+  push:
+    branches: [main, "feature/*", "ci/*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  contract-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: https://github.com/actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest PyYAML jsonschema referencing
+
+      - name: Resolve pinned SDK version from pyproject.toml
+        id: sdk-pin
+        run: |
+          SDK_PIN="$(python3 -c "
+import re
+with open('pyproject.toml') as f:
+    text = f.read()
+m = re.search(r'\"skillweave-sdk==([^\"]+)\"', text)
+print(m.group(1) if m else '')
+")"
+          if [ -z "${SDK_PIN}" ]; then
+            echo "::error::Could not resolve skillweave-sdk pin from pyproject.toml"
+            exit 1
+          fi
+          echo "SDK pin: v${SDK_PIN}"
+          echo "version=${SDK_PIN}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out pinned SDK from the public mirror
+        run: |
+          SDK_VERSION="${{ steps.sdk-pin.outputs.version }}"
+          TAG="v${SDK_VERSION}"
+          # Clone from the public mirror — no unpublished checkout, no sibling
+          # path dependency. The mirror is the published source an external
+          # consumer pulls from.
+          if ! git clone --depth 1 --branch "${TAG}" \
+            https://github.com/LangeVC/skillweave-sdk.git /tmp/skillweave-sdk 2>/dev/null; then
+            # Fallback: shallow clone then checkout tag (handles cases where
+            # the tag is not the default branch tip).
+            git clone --depth 50 https://github.com/LangeVC/skillweave-sdk.git /tmp/skillweave-sdk
+            cd /tmp/skillweave-sdk
+            if ! git checkout "${TAG}"; then
+              echo "::error::SDK tag ${TAG} not found on the public mirror"
+              exit 1
+            fi
+          fi
+          SDK_SHA="$(cd /tmp/skillweave-sdk && git rev-parse HEAD)"
+          echo "SDK checked out at: ${TAG} -> ${SDK_SHA}"
+          echo "SKILLWEAVE_SDK_DIR=/tmp/skillweave-sdk" >> "$GITHUB_ENV"
+
+      - name: Verify SDK is from a published source (not a local checkout)
+        run: |
+          cd /tmp/skillweave-sdk
+          REMOTE="$(git remote get-url origin)"
+          case "${REMOTE}" in
+            *github.com*) echo "SDK origin: ${REMOTE} — published source" ;;
+            *)
+              echo "::error::SDK origin ${REMOTE} is not a published source"
+              exit 1
+              ;;
+          esac
+
+      - name: Run cross-repo contract CI tests
+        env:
+          SKILLWEAVE_SDK_DIR: /tmp/skillweave-sdk
+        run: |
+          python3 -m pytest tests/integration/test_cross_repo_contract_ci.py \
+            -v --tb=short 2>&1

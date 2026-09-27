@@ -83,6 +83,32 @@ from .dispatch import (  # noqa: F401
 # qualified one.
 from .dispatch import dispatch as dispatch_role  # noqa: F401
 
+# The generic runner/harness adapter interface (SW-158): the core states its
+# capability requirement and complexity, the router seam decides the model mix
+# and dispatch strategy, and an adapter plugin honours the decision. The
+# interface names no concrete harness; the OpenClaude plugin lives at the
+# bottom of the same module, registered by the composition root.
+from .harness_adapter import (  # noqa: F401
+    HARNESS_CAPABILITIES,
+    STRATEGY_CAPABILITIES,
+    STRATEGY_INLINE,
+    STRATEGY_PARALLEL,
+    STRATEGY_SINGLE,
+    AdapterRequest,
+    CapabilityRequirement,
+    DispatchStrategy,
+    FaigateRouter,
+    HarnessAdapter,
+    HarnessAdapterError,
+    HarnessAdapterRegistry,
+    HarnessOutcome,
+    HarnessPlan,
+    OpenClaudeAdapter,
+    RouterSeam,
+    register_plugins,
+    tier_for_complexity,
+)
+
 __all__ = [
     "RoleDefinition",
     "RoutingProfile",
@@ -138,4 +164,22 @@ __all__ = [
     "launch_from_role",
     "run_in_place",
     "tokenize_launch",
+    "HARNESS_CAPABILITIES",
+    "STRATEGY_INLINE",
+    "STRATEGY_SINGLE",
+    "STRATEGY_PARALLEL",
+    "STRATEGY_CAPABILITIES",
+    "HarnessAdapterError",
+    "tier_for_complexity",
+    "CapabilityRequirement",
+    "AdapterRequest",
+    "DispatchStrategy",
+    "RouterSeam",
+    "FaigateRouter",
+    "HarnessPlan",
+    "HarnessOutcome",
+    "HarnessAdapter",
+    "HarnessAdapterRegistry",
+    "register_plugins",
+    "OpenClaudeAdapter",
 ]
