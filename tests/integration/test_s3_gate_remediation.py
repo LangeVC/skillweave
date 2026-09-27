@@ -266,6 +266,29 @@ def test_spawn_requires_an_authorizing_role():
         build_remediation_spawns(plan, role="")
 
 
+def test_ambiguous_lane_in_one_domain_fails_closed():
+    """Two blockers for the same lane+domain cannot be attributed; refuse them.
+
+    Last-wins would silently auto-spawn a lane carrying the wrong frozen
+    subject and criteria, so the plan must fail closed instead.
+    """
+    log = "\n".join(
+        [
+            f"{REVIEW_BLOCKER} gate=S3-Gate lane=lane-x repo=org/app "
+            f"base={_SHA_A} subject={_SHA_B} criteria=alpha",
+            f"{REVIEW_BLOCKER} gate=S3-Gate lane=lane-x repo=org/app "
+            f"base={_SHA_A} subject={_SHA_C} criteria=beta",
+        ]
+    )
+    plan = plan_remediation_from_s3_gate(log)
+    with pytest.raises(S3GateRemediationError):
+        build_remediation_spawns(plan)
+    seam = _RecordingSeam()
+    with pytest.raises(S3GateRemediationError):
+        remediate_from_s3_gate(log, seam=seam)
+    assert seam.spawns == []
+
+
 # ── Criterion 2: no human needed for standard blockers ───────────────────────
 
 
@@ -349,6 +372,7 @@ def _run_all() -> int:
         test_spawn_id_is_stable_across_identical_calls,
         test_inert_seam_records_intents_without_launching,
         test_spawn_requires_an_authorizing_role,
+        test_ambiguous_lane_in_one_domain_fails_closed,
         test_standard_blocker_needs_no_human,
         test_major_blocker_needs_no_human,
         test_non_standard_severity_escalates_and_spawns_nothing,

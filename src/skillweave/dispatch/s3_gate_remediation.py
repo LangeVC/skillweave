@@ -429,9 +429,25 @@ def _spawn_id(lane_id: str, base_sha: str, subject_sha: str, failure_round: int)
 
 
 def _blocker_index(plan: S3RemediationPlan) -> dict[tuple[str, str], S3GateBlocker]:
+    """Map each ``(lane, domain)`` to its blocker, failing closed on collision.
+
+    The planner models a micro-lane by ``(lane_id, domain)`` alone, so two
+    blockers that share both but differ in subject or criteria cannot be told
+    apart when a spawn is built. Rather than let last-wins silently start a
+    lane carrying the wrong frozen subject, refuse the ambiguous plan.
+    """
     index: dict[tuple[str, str], S3GateBlocker] = {}
     for blocker in plan.blockers:
-        index[(blocker.lane_id, blocker.domain.key)] = blocker
+        key = (blocker.lane_id, blocker.domain.key)
+        existing = index.get(key)
+        if existing is not None:
+            raise S3GateRemediationError(
+                f"ambiguous S3-Gate output: lane {blocker.lane_id!r} in domain "
+                f"{blocker.domain.key!r} has more than one REVIEW_BLOCKER "
+                f"(subjects {existing.subject_sha!r} and {blocker.subject_sha!r}); "
+                f"a micro-lane cannot be attributed to one of them"
+            )
+        index[key] = blocker
     return index
 
 
