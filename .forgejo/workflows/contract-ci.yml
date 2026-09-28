@@ -41,12 +41,12 @@ jobs:
         id: sdk-pin
         run: |
           SDK_PIN="$(python3 -c "
-import re
-with open('pyproject.toml') as f:
-    text = f.read()
-m = re.search(r'\"skillweave-sdk==([^\"]+)\"', text)
-print(m.group(1) if m else '')
-")"
+          import re
+          with open('pyproject.toml') as f:
+              text = f.read()
+          m = re.search(r'\"skillweave-sdk==([^\"]+)\"', text)
+          print(m.group(1) if m else '')
+          ")"
           if [ -z "${SDK_PIN}" ]; then
             echo "::error::Could not resolve skillweave-sdk pin from pyproject.toml"
             exit 1
