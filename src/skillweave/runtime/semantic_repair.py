@@ -188,6 +188,11 @@ def _apply_repair(
     replacement = _candidate_paths(evidence)
     if not replacement:
         return None
+    # A repair is a 1:1 substitution: the single offending entry is swapped for
+    # the single best grounded candidate. Substituting *all* candidates (or any
+    # number other than one) would widen the declared write set, which the
+    # bounded repair must never do.
+    substitute = replacement[0]
 
     for lane_field in failure.implicated_fields:
         declared = _lane_field(plan, lane_field)
@@ -195,10 +200,10 @@ def _apply_repair(
             continue
         new_field: list[str] = []
         for path in declared:
-            if path == offending:
-                new_field.extend(replacement)
-            else:
-                new_field.append(path)
+            new_field.append(substitute if path == offending else path)
+        # Dropping duplicates keeps the write set from growing if the candidate
+        # was already declared elsewhere in the same field.
+        new_field = list(dict.fromkeys(new_field))
         if new_field == declared:
             continue
         repaired = dict(plan)
@@ -254,6 +259,25 @@ class BoundedRepairer:
                     f"repair:{attempt.attempt}:{attempt.failure_fingerprint}"
                 ),
             )
+
+    def seed_prior_attempts(self, payloads: list[dict[str, Any]]) -> None:
+        """Load earlier attempts for this run into the loop's memory.
+
+        The repairer is deliberately short-lived; the append-only journal is
+        the durable ledger. Seeding from it makes the repeated-fingerprint and
+        attempt/budget holds survive across calls — otherwise a caller that
+        builds a fresh repairer per iteration could repair and re-dispatch the
+        same failure forever.
+        """
+        fields = set(RepairAttempt.__dataclass_fields__)
+        for payload in payloads:
+            if not isinstance(payload, dict):
+                continue
+            known = {k: v for k, v in payload.items() if k in fields}
+            try:
+                self.attempts.append(RepairAttempt(**known))
+            except TypeError:
+                continue
 
     def repair(
         self,
@@ -648,6 +672,28 @@ def detect_surface_failure(
     return None
 
 
+def _journaled_attempts(journal: Any, run_id: str) -> list[dict[str, Any]]:
+    """Attempt payloads already recorded for this run, oldest first.
+
+    The journal is the durable ledger; a fresh :class:`BoundedRepairer` is
+    short-lived. Reading the ledger back is what keeps the repeated-fingerprint
+    and attempt/budget holds meaningful across calls to
+    :func:`repair_plan_from_grounding`.
+    """
+    if journal is None:
+        return []
+    try:
+        events = journal.get_events(run_id)
+    except Exception:
+        return []
+    payloads: list[dict[str, Any]] = []
+    for event in events:
+        payload = getattr(event, "payload", None)
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    return payloads
+
+
 def repair_plan_from_grounding(
     plan: dict[str, Any],
     repo_root: Any,
@@ -664,7 +710,9 @@ def repair_plan_from_grounding(
     """Diagnose + repair a task plan from grounding evidence in one call.
 
     This is the integration seam: it grounds the failure from the repository,
-    then runs :class:`BoundedRepairer` with the same evidence.
+    then runs :class:`BoundedRepairer` with the same evidence. Prior attempts
+    recorded in the journal for this ``journal_run_id`` seed the loop, so a
+    failure already seen is held rather than repaired (and re-dispatched) again.
     """
     target = current_target_digest
     failure = detect_surface_failure(plan, repo_root, target_digest=target)
@@ -674,6 +722,7 @@ def repair_plan_from_grounding(
         journal=journal,
         journal_run_id=journal_run_id,
     )
+    repairer.seed_prior_attempts(_journaled_attempts(journal, journal_run_id))
     evidence = failure.evidence if failure else []
     return repairer.repair(
         plan,

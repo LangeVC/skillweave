@@ -347,6 +347,63 @@ def test_attempt_ledger_records_before_after_command_and_dispatch(tmp_path):
     assert payload["dispatch_identity"] == "dispatch:lane-T-11:1"
 
 
+def test_repair_substitutes_one_candidate_and_never_widens_write_scope(tmp_path):
+    """A 1-element write set stays 1 element, even with many candidates.
+
+    Substituting every grounded candidate would broaden the lane's declared
+    write scope — exactly the authority expansion a bounded repair must refuse.
+    """
+    from skillweave.runtime.preflight import failure_for_missing_path
+
+    plan = {"id": "T-12", "lane": {"modifies": ["src/missing.py"]}}
+    failure = failure_for_missing_path(
+        path="src/missing.py", task_id="T-12", lane_field="modifies",
+        target_digest=digest_target(plan),
+        evidence=[
+            {"kind": "missing_target", "path": "src/missing.py", "task_id": "T-12"},
+            {"kind": "grounding_candidate", "path": "src/real_module.py"},
+            {"kind": "grounding_candidate", "path": "src/notes.md"},
+        ],
+    )
+    repairer = BoundedRepairer(max_attempts=5, authorize=_yes)
+    outcome = repairer.repair(
+        plan, failure, role="ops", current_target_digest=digest_target(plan),
+    )
+    assert outcome.repaired
+    repaired = outcome.repaired_plan["lane"]["modifies"]
+    assert repaired == ["src/real_module.py"]
+    assert len(repaired) == len(plan["lane"]["modifies"])
+
+
+def test_repeated_fingerprint_holds_across_fresh_repairers(tmp_path):
+    """The durable journal, not instance state, enforces the fingerprint hold.
+
+    ``repair_plan_from_grounding`` builds a fresh repairer per call, so the
+    hold must be reconstructed from the append-only ledger; otherwise a loop
+    would re-repair and re-dispatch the same failure forever.
+    """
+    repo = _repo(tmp_path)
+    plan = {"id": "T-13", "lane": {"modifies": ["src/missing.py"]}}
+    target = digest_target(plan)
+    journal = EventJournal(":memory:")
+
+    first = repair_plan_from_grounding(
+        plan, repo, role="ops", current_target_digest=target, authorize=_yes,
+        redispatch=lambda p: "dispatch:T-13:1",
+        journal=journal, journal_run_id="loop-run",
+    )
+    assert first.repaired
+
+    second = repair_plan_from_grounding(
+        plan, repo, role="ops", current_target_digest=target, authorize=_yes,
+        redispatch=lambda p: "dispatch:T-13:2",
+        journal=journal, journal_run_id="loop-run",
+    )
+    assert second.held
+    assert second.hold_reason == HoldReason.REPEATED_FINGERPRINT.value
+    assert second.dispatch_identity is None
+
+
 def test_grounding_evidence_is_bounded_and_relative(tmp_path):
     repo = _repo(tmp_path)
     evidence = collect_grounding_evidence(repo)
