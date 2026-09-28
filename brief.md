@@ -1,39 +1,37 @@
-# SW-159-WORK-001 — Generic work contracts
+# SW-159-BP-TICKET-001 — Conditional planning handshake
 
-Role: Ops. Repository: skillweave. Expected model: byteplus-deepseek-flash-41.
+Role: Ops. Repository: skillweave. Expected model: byteplus-deepseek-flash.
 
 ## Outcome
 
-Define generic subject, evidence, capability, authority, and exact-brief contracts for Git and non-Git work.
+Add an authority-aware planning ticket handshake before final PRD emission.
 
 ## Required result
 
-- Add discriminated SubjectRef variants for repository, CMS/content, configuration, deployment, and incident subjects.
-- Bind EvidenceReceipt to SubjectRef without forcing Git fields on non-Git subjects.
-- Define WorkContract authority, write scope, irreversible actions, verification, rollback, budget, methodology, and policy.
-- Resolve capabilities through catalogue/profile with declared, detected, and runtime-attested states; keep harness/router/provider/model IDs out of skills and generic packs.
-- Pass exact submitted brief bytes or immutable content-addressed reference to every worker.
-- Fail before mutation when worker/adherence brief digests differ.
-- Preserve existing Git dispatch and evidence consumers.
+- Terminal states are exactly linked, created, not_applicable, and needs_authority, each with evidence.
+- Link or create only when an authoritative writable planning board exists.
+- Continue with not_applicable when no planning repository exists.
+- Stop before mutation with needs_authority when a board exists but write authority does not.
+- Prevent duplicate-title and concurrent-create duplication.
 
 ## S0 — Pin
 
-Fetch and verify the clean assigned worktree at the frozen product controller base. Record full SHAs and model identity evidence. Stop on mismatch.
+Fetch, use the integrated grounded candidate, verify clean assigned worktree, and record full SHAs plus model identity evidence.
 
 ## S1 — Bounded fan-out
 
-Run three read-only subagents in parallel: existing contracts/consumers; exact-byte dispatch path; adversarial authority/backward-compatibility tests. Maximum 40 lines each. Main worker reproduces findings.
+Run three read-only subagents in parallel: planning-repo detection; mutation/authority boundary; duplicate/concurrency fixture design. At most 40 lines each. Recheck all load-bearing claims.
 
 ## S2 — Build
 
-Implement versioned contracts and minimum compatibility adapters. Keep scope within dispatch/application, runtime contracts, schemas needed by this task, and focused tests.
+Implement the handshake module and integration tests only. Never mutate a real backlog/doing/done board during tests.
 
 ## S3 — Verify
 
-Run Git compatibility, non-Git subject, capability-attestation, exact-byte, digest-mismatch, and authority fixtures under bash -eo pipefail. Persist commands, exits, key output, and hashes.
+Run all four terminal states plus duplicate-title and concurrent-create fixtures under bash -eo pipefail. Persist producer command, exit, key output, and evidence digest.
 
 ## S4 — Publish
 
 Commit and push only the assigned branch. No merge, tag, release, cleanup, or self-review. Emit:
 
-OPS_READY_FOR_REVIEW SW-159-WORK-001 <full-sha> GENERIC_WORK_CONTRACT_PASS
+OPS_READY_FOR_REVIEW SW-159-BP-TICKET-001 <full-sha> PLANNING_HANDSHAKE_PASS
