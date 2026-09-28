@@ -16,7 +16,28 @@ from .registry import (
     MerkleSegment, _compute_merkle_root, _compute_segment_hash,
     RawArtifactStore, ArtifactIntegrityError,
 )
-from .preflight import SessionEnvelope, PreflightResult, run_preflight
+from .preflight import (
+    SessionEnvelope,
+    PreflightResult,
+    PreflightFailure,
+    FailureClass,
+    Retryability,
+    classify_failure,
+    digest_target,
+    failure_for_missing_path,
+    failure_for_wrong_language,
+    run_preflight,
+)
+from .semantic_repair import (
+    BoundedRepairer,
+    HoldReason,
+    RepairAttempt,
+    RepairOutcome,
+    collect_grounding_evidence,
+    detect_surface_failure,
+    language_of,
+    repair_plan_from_grounding,
+)
 from .handoff import ColdStartBundle, HandoffBroker, HandoffOffer, HandoffError
 from .observer import (
     OutputType, ObserverOutput, ObserverState, ObserverLease,
