@@ -641,6 +641,21 @@ def _check_graph_consistency(
             f"conflict for problem {problem_id!r} is recorded but no contradiction between "
             f"its sources is present"
         )
+    # A recorded conflict must cite exactly the source paths that contradict:
+    # a phantom, missing or extra path would misattribute which documents
+    # disagree, so the conflict is refused rather than emitted as a wrong
+    # citation.
+    recorded_paths = {
+        c["problem_id"]: set(c["sources"]) for c in conflicts
+    }
+    for problem_id, group in detected.items():
+        expected = {s["path"] for s in group}
+        if recorded_paths[problem_id] != expected:
+            raise UnresolvedConflictError(
+                f"conflict for problem {problem_id!r} cites "
+                f"{sorted(recorded_paths[problem_id])} but the contradicting sources are "
+                f"{sorted(expected)}"
+            )
 
 
 # ── Building and sealing ─────────────────────────────────────────────────────

@@ -352,6 +352,30 @@ def test_recording_a_conflict_with_no_contradiction_fails_closed():
         canonicalize(graph)
 
 
+def test_conflict_citing_a_phantom_source_path_fails_closed():
+    # The conflict is real (both sources contradict for PRB-001), but the
+    # recorded citation names a path that contributes nothing: the emitted
+    # mapping would misattribute which documents disagree.
+    a, b = _contradictory_pair()
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "trace_link_version": TRACE_LINK_VERSION,
+        "grounding": [
+            {"path": _DISCOVERY_PATH, "sha256": "a" * 64},
+            {"path": "other.md", "sha256": "b" * 64},
+        ],
+        "sources": [a.to_dict(), b.to_dict()],
+        "links": [TraceLink("PRB-001", DISPOSITION_TASK, target="TASK-1").to_dict()],
+        "conflicts": [
+            {"problem_id": "PRB-001", "sources": ["other.md", "zzz.md"], "resolved": False}
+        ],
+        "mandatory_problems": [],
+    }
+    core["digest"] = compute_digest(core)
+    with pytest.raises(UnresolvedConflictError):
+        canonicalize(core)
+
+
 def test_a_resolved_conflict_claim_is_refused():
     a, b = _contradictory_pair()
     core = {
