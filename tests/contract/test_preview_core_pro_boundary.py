@@ -58,6 +58,7 @@ SDK_OWNED_SCHEMA_FILENAMES = (
 # SDK_OWNED_SCHEMA_FILENAMES appearing under Core schemas/ is drift.
 CORE_OWNED_SCHEMA_FILENAMES = (
     "assessment-receipt.schema.json",
+    "discovery-trace.schema.json",
     "dispatch-handoff.schema.json",
     "dispatch-sequence.schema.json",
     "dispatch-trace.schema.json",

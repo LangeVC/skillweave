@@ -48,6 +48,7 @@ from skillweave.dispatch import cli as dispatch
 from skillweave.cli import observe as observe_mod
 from skillweave.cli import planning_sync as planning_sync_mod
 from skillweave.cli import assess as assess_mod
+from skillweave.runlifecycle import cli as runlifecycle_cli
 
 # ── Entry exit semantics (SW-156-ENTRY-003) ─────────────────────────────────
 
@@ -163,6 +164,30 @@ def _build_parser(prog: str = "skillweave") -> argparse.ArgumentParser:
         add_help=False,
     )
 
+    # `start` subcommand -- async run lifecycle
+    subparsers.add_parser(
+        "start",
+        help="Start a command, optionally as a durable async run",
+        parents=[runlifecycle_cli.build_start_parser()],
+        add_help=False,
+    )
+
+    # `inspect` subcommand -- async run state/events inspection
+    subparsers.add_parser(
+        "inspect",
+        help="Inspect a run's state and events (snapshot or follow)",
+        parents=[runlifecycle_cli.build_inspect_parser()],
+        add_help=False,
+    )
+
+    # `kill` subcommand -- async run kill
+    subparsers.add_parser(
+        "kill",
+        help="Kill a run by its ID and recorded PID",
+        parents=[runlifecycle_cli.build_kill_parser()],
+        add_help=False,
+    )
+
     return parser
 
 
@@ -208,6 +233,12 @@ def main(
         return planning_sync_mod.main(subcommand_argv(args_list))
     elif args.command == "assess":
         return assess_mod.main(subcommand_argv(args_list))
+    elif args.command == "start":
+        return runlifecycle_cli.main_start(subcommand_argv(args_list))
+    elif args.command == "inspect":
+        return runlifecycle_cli.main_inspect(subcommand_argv(args_list))
+    elif args.command == "kill":
+        return runlifecycle_cli.main_kill(subcommand_argv(args_list))
     else:
         parser.print_help()
         return 1
@@ -221,7 +252,7 @@ def subcommand_argv(args_list: Sequence[str]) -> list:
     from the subcommand's own index is correct for both call styles.
     """
     for index, token in enumerate(args_list):
-        if token in ("onboard", "entry", "dispatch", "run", "rework", "planning-sync", "assess"):
+        if token in ("onboard", "entry", "dispatch", "run", "rework", "planning-sync", "assess", "start", "inspect", "kill"):
             return list(args_list[index + 1:])
     return []
 
