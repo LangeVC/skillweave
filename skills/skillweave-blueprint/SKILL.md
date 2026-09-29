@@ -354,6 +354,9 @@ Based on interview responses, creates a structured PRD with:
 - System architecture diagram
 - Data model overview
 - Integration points
+- Data boundaries: every crossing of storage, process, adapter, telemetry or public-api
+  requires an exact versioned data contract (artifact, versioning, producer,
+  consumer, compatibility). Prose alone is not a contract.
 
 ## 8. Success Metrics (Binary & Testable)
 - [Metric 1]: Target value, measurement method
@@ -424,10 +427,55 @@ Creates a task list in Ralph Loop format for execution:
       "dependsOn": ["ARCH-001"],
       "type": "feature",
       "passes": false
+    },
+    {
+      "id": "DATA-001",
+      "title": "Persist user sessions to the session store",
+      "description": "Crosses the storage boundary: writes session records to the session store and reads them back at request time.",
+      "acceptanceCriteria": [
+        "Session record written on login and read on the next request",
+        "Old session records remain readable after a schema addition"
+      ],
+      "priority": "high",
+      "estimatedEffort": "5",
+      "dependsOn": ["ARCH-001"],
+      "type": "feature",
+      "passes": false,
+      "boundaries": [
+        {
+          "kind": "storage",
+          "data_contract": {
+            "artifact": "session record",
+            "versioning": "schema v2; v1 records remain readable",
+            "producer": "auth service",
+            "consumer": "request middleware",
+            "compatibility": "backward compatible: new optional fields only",
+            "subject_kind": "configuration"
+          }
+        }
+      ]
     }
   ]
 }
 ```
+
+### Data-boundary contract (required for any boundary crossing)
+
+A task that crosses an architectural boundary MUST declare a `boundaries`
+array; a task with no data-boundary change omits it and validates unchanged.
+
+- **Contract-requiring kinds:** `storage`, `process`, `adapter`, `telemetry`,
+  `public-api`. Any other kind is refused — a boundary is never guessed.
+- **Every boundary requires a `data_contract`** carrying all five fields:
+  `artifact`, `versioning`, `producer`, `consumer`, `compatibility`. A missing
+  or blank field is an *undefined required field* and fails with a
+  task-specific diagnostic.
+- **Prose is not a contract.** A boundary whose `data_contract` is a bare
+  string (e.g. `"data_contract": "the session store"`) is refused.
+- `subject_kind` is optional and must use the WorkContract subject vocabulary
+  (`repository`, `content`, `configuration`, `deployment`, `incident`).
+
+Validation: `skillweave.blueprint.data_boundary_contract.validate_prd_data_boundaries(prd)`.
 
 ### Phase 4: Memory System Setup
 Creates memory files for Ralph Loop execution:
